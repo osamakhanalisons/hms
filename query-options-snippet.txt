@@ -1,0 +1,121 @@
+> C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1813:declare interface QueryOptions<TQueryFnData = unknown, TError = DefaultError, TData = TQueryFnData, TQueryKey extends QueryKey = QueryKey, TPageParam = never> {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1814:    /**
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1815:     * If `false`, failed queries will not retry by default.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1816:     * If `true`, failed queries will retry infinitely.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1817:     * If set to an integer number, e.g. 3, failed queries will retry until the failed query count meets that number.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1818:     * If set to a function `(failureCount, error) => boolean` failed queries will retry until the function returns false.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1819:     */
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1820:    retry?: RetryValue<TError>;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1821:    retryDelay?: RetryDelayValue<TError>;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1822:    networkMode?: NetworkMode;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1823:    /**
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1824:     * The time in milliseconds that unused/inactive cache data remains in memory.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1825:     * When a query's cache becomes unused or inactive, that cache data will be garbage collected after this duration.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1826:     * When different garbage collection times are specified, the longest one will be used.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1827:     * Setting it to `Infinity` will disable garbage collection.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1828:     */
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1829:    gcTime?: number;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1830:    queryFn?: QueryFunction<TQueryFnData, TQueryKey, TPageParam> | SkipToken;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1831:    persister?: QueryPersister<TQueryFnData, NoInfer<TQueryKey>, TPageParam>;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1832:    queryHash?: string;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1833:    queryKey?: TQueryKey;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1834:    queryKeyHashFn?: QueryKeyHashFunction<TQueryKey>;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1835:    initialData?: TData | InitialDataFunction<TData>;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1836:    initialDataUpdatedAt?: number | (() => number | undefined);
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1837:    behavior?: QueryBehavior<TQueryFnData, TError, TData, TQueryKey>;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1838:    /**
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1839:     * Set this to `false` to disable structural sharing between query results.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1840:     * Set this to a function which accepts the old and new data and returns resolved data of the same type to implement custom structural sharing logic.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1841:     * Defaults to `true`.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1842:     */
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1843:    structuralSharing?: boolean | ((oldData: unknown | undefined, newData: unknown) => unknown);
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1844:    _defaulted?: boolean;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1845:    _type?: 'infinite';
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1846:    /**
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1847:     * Additional payload to be stored on each query.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1848:     * Use this property to pass information that can be used in other places.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1849:     */
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1850:    meta?: QueryMeta;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1851:    /**
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1852:     * Maximum number of pages to store in the data of an infinite query.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1853:     */
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1854:    maxPages?: number;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1855:}
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1856:export { QueryOptions }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1857:export { QueryOptions as QueryOptions_alias_1 }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1858:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1859:declare type QueryPersister<T = unknown, TQueryKey extends QueryKey = QueryKey, TPageParam = never> = [TPageParam] extends [never] ? (queryFn: QueryFunction<T, TQueryKey, never>, context: QueryFunctionContext<TQueryKey>, query: Query) => T | Promise<T> : (queryFn: QueryFunction<T, TQueryKey, TPageParam>, context: QueryFunctionContext<TQueryKey>, query: Query) => T | Promise<T>;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1860:export { QueryPersister }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1861:export { QueryPersister as QueryPersister_alias_1 }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1862:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1863:declare interface QueryState<TData = unknown, TError = DefaultError> {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1864:    data: TData | undefined;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1865:    dataUpdateCount: number;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1866:    dataUpdatedAt: number;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1867:    error: TError | null;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1868:    errorUpdateCount: number;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1869:    errorUpdatedAt: number;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1870:    fetchFailureCount: number;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1871:    fetchFailureReason: TError | null;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1872:    fetchMeta: FetchMeta | null;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1873:    isInvalidated: boolean;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1874:    status: QueryStatus;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1875:    fetchStatus: FetchStatus;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1876:}
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1877:export { QueryState }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1878:export { QueryState as QueryState_alias_1 }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1879:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1880:declare type QueryStatus = 'pending' | 'error' | 'success';
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1881:export { QueryStatus }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1882:export { QueryStatus as QueryStatus_alias_1 }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1883:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1884:export declare interface QueryStore {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1885:    has: (queryHash: string) => boolean;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1886:    set: (queryHash: string, query: Query) => void;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1887:    get: (queryHash: string) => Query | undefined;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1888:    delete: (queryHash: string) => void;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1889:    values: () => IterableIterator<Query>;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1890:}
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1891:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1892:export declare type QueryTypeFilter = 'all' | 'active' | 'inactive';
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1893:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1894:declare type ReducibleStreamedQueryParams<TQueryFnData, TData, TQueryKey extends QueryKey> = BaseStreamedQueryParams<TQueryFnData, TQueryKey> & {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1895:    reducer: (acc: TData, chunk: TQueryFnData) => TData;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1896:    initialValue: TData;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1897:};
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1898:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1899:declare interface RefetchOptions extends ResultOptions {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1900:    /**
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1901:     * If set to `true`, a currently running request will be cancelled before a new request is made
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1902:     *
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1903:     * If set to `false`, no refetch will be made if there is already a request running.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1904:     *
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1905:     * Defaults to `true`.
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1906:     */
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1907:    cancelRefetch?: boolean;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1908:}
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1909:export { RefetchOptions }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1910:export { RefetchOptions as RefetchOptions_alias_1 }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1911:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1912:declare interface RefetchQueryFilters<TQueryKey extends QueryKey = QueryKey> extends QueryFilters<TQueryKey> {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1913:}
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1914:export { RefetchQueryFilters }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1915:export { RefetchQueryFilters as RefetchQueryFilters_alias_1 }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1916:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1917:declare interface Register {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1918:}
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1919:export { Register }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1920:export { Register as Register_alias_1 }
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1921:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1922:declare interface Rejected {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1923:    status: 'rejected';
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1924:    reason: unknown;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1925:}
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1926:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1927:export declare type RejectedThenable<T> = Promise<T> & Rejected;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1928:
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1929:export declare abstract class Removable {
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1930:    #private;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1931:    gcTime: number;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1932:    destroy(): void;
+  C:\xampp\htdocs\NEW-AT-BMS V 1.1\node_modules\@tanstack\query-core\build\legacy\_tsup-dts-rollup.d.ts:1933:    protected scheduleGc(): void;
