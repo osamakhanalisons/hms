@@ -35,6 +35,7 @@ interface AuthState {
     password: string;
     fullName: string;
     societyName?: string;
+    societyCode?: string;
     role: AppRole;
   }) => Promise<void>;
 }
@@ -98,8 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signInFn({ data: { email, password } });
       await loadUserData();
     },
-    signUp: async ({ email, password, fullName, societyName, role }) => {
-      await signUpFn({ data: { email, password, fullName, societyName, role } });
+    signUp: async ({ email, password, fullName, societyName, societyCode, role }) => {
+      await signUpFn({ data: { email, password, fullName, societyName, societyCode, role: role as "resident" | "tenant" } });
       await loadUserData();
     },
   };

@@ -4,24 +4,25 @@ import crypto from "node:crypto";
 
 import { getDb } from "../db.server";
 
-import { getSessionUser, getUserTenantId } from "./auth-helper";
+import { getSessionUser, getUserTenantId, getTenantScoping } from "./auth-helper";
 
-export const getDocumentsFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
-  const userId = await getSessionUser(request);
-  if (!userId) throw new Error("Unauthorized");
-  const tenantId = await getUserTenantId(userId);
-  if (!tenantId) return [];
+export const getDocumentsFn = createServerFn({ method: "GET" })
+  .validator(z.object({ tenantId: z.string().optional() }).optional())
+  .handler(async ({ data, request }) => {
+    const userId = await getSessionUser(request);
+    if (!userId) throw new Error("Unauthorized");
 
-  const db = getDb();
-  const [rows] = (await db.query(
-    `SELECT d.*, p.full_name AS uploader_name
+    const db = getDb();
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "d.tenant_id");
+    const [rows] = (await db.query(
+      `SELECT d.*, p.full_name AS uploader_name
        FROM documents d
        LEFT JOIN profiles p ON p.id = d.uploaded_by
-       WHERE d.tenant_id = ? ORDER BY d.created_at DESC`,
-    [tenantId],
-  )) as any[];
-  return rows;
-});
+       WHERE ${sqlFilter} ORDER BY d.created_at DESC`,
+      sqlParams,
+    )) as any[];
+    return rows;
+  });
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -52,13 +53,42 @@ export const uploadDocumentFn = createServerFn({ method: "POST" })
       throw new Error("File too large (max 10MB)");
     }
 
+    const ALLOWED_EXTENSIONS = [
+      ".pdf", ".doc", ".docx", 
+      ".jpg", ".jpeg", ".png", ".gif", ".webp",
+      ".xls", ".xlsx",
+      ".txt", ".csv",
+      ".zip"
+    ];
+
+    const BLOCKED_EXTENSIONS = [
+      ".exe", ".php", ".js", ".ts", ".py", ".sh", ".bat", 
+      ".cmd", ".ps1", ".vbs", ".jar", ".html", ".htm"
+    ];
+
+    const originalFileName = file.name || name || "";
+    const fileExt = path.extname(originalFileName).toLowerCase();
+
+    if (!fileExt || BLOCKED_EXTENSIONS.includes(fileExt)) {
+      throw new Error(
+        `File type "${fileExt || "unknown"}" is not allowed. Blocked for security reasons.`
+      );
+    }
+
+    if (!ALLOWED_EXTENSIONS.includes(fileExt)) {
+      throw new Error(
+        `File type not supported. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}`
+      );
+    }
+
     // Ensure uploads directory exists
     const uploadsDir = path.join(process.cwd(), "public", "uploads", "documents");
     await fs.mkdir(uploadsDir, { recursive: true });
 
     // Generate unique filename
-    const ext = path.extname(file.name) || "";
+    const ext = fileExt;
     const uniqueFilename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
+
     const filePath = path.join(uploadsDir, uniqueFilename);
     const fileUrl = `/uploads/documents/${uniqueFilename}`;
 

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { getEventsFn, rsvpEventFn, createEventFn } from "@/lib/api/community";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -109,11 +110,11 @@ function EventsPage() {
       title="Event Calendar"
       subtitle="Keep track of society events, social gatherings, and recreational programs"
       actions={
-        isAdmin ? (
+        <PermissionGate moduleKey="events" action="create" fallback={null}>
           <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" /> Create Event
           </Button>
-        ) : undefined
+        </PermissionGate>
       }
     >
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10 space-y-6">

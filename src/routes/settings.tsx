@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Check,
@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 import { CATEGORY_ORDER, MODULES } from "@/lib/modules";
 import { getFormsForModule } from "@/lib/forms-registry";
 import { useAuth } from "@/hooks/use-auth";
-import { updateProfileFn } from "@/lib/api/db-functions";
+import { updateProfileFn, changePasswordFn } from "@/lib/api/db-functions";
 import { roleLabel } from "@/lib/role-access";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTenantUsersFn, assignUserRoleFn, removeUserRoleFn, getCustomRolesFn, createCustomRoleFn, deleteCustomRoleFn, createTenantUserFn, updateTenantUserFn, deleteTenantUserFn, updateCustomRoleFn, type CustomRole } from "@/lib/api/roles";
@@ -35,8 +35,11 @@ import {
   getRolePermissionsFn,
   updateRolePermissionsFn,
   PERMISSION_ROLES,
+  PERMISSION_MODULES,
   type PermissionRole,
 } from "@/lib/api/permissions";
+import { SYSTEM_ROLES, TENANT_ASSIGNABLE_ROLES, getRoleLabel, type SystemRoleDef } from "@/lib/roles-constants";
+
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
@@ -46,35 +49,51 @@ type RoleOption = {
   name: string;
   label: string;
   isCustom: boolean;
+  /** Present only for custom roles */
   id?: string;
+  /** Society name — shown in Super Admin all-societies mode to disambiguate
+   *  custom roles that happen to share the same name across tenants. */
+  societyLabel?: string;
 };
 
-const STATIC_ROLE_OPTIONS: RoleOption[] = [
-  { name: "super_admin", label: "Super Admin", isCustom: false },
-  { name: "society_admin", label: "Society Admin", isCustom: false },
-  { name: "finance_head", label: "Finance Head", isCustom: false },
-  { name: "maintenance_head", label: "Maintenance Head", isCustom: false },
-  { name: "security_head", label: "Security Head", isCustom: false },
-  { name: "resident", label: "Resident", isCustom: false },
-  { name: "tenant", label: "Tenant", isCustom: false },
-  { name: "guard", label: "Guard", isCustom: false },
-  { name: "technician", label: "Technician", isCustom: false },
-];
+/**
+ * Build the role dropdown option list.
+ *
+ * @param customRoles    Tenant-scoped custom roles fetched from the server.
+ * @param isSuperAdmin   When true, include platform-only roles (super_admin).
+ *                       Society Admins must pass false so super_admin is
+ *                       never visible in the tenant-level dialog.
+ */
+function getRoleOptions(
+  customRoles: CustomRole[],
+  isSuperAdmin: boolean,
+): RoleOption[] {
+  // Derive system options from the single canonical source.
+  const systemOptions: RoleOption[] = (isSuperAdmin ? SYSTEM_ROLES : TENANT_ASSIGNABLE_ROLES).map(
+    (role: SystemRoleDef) => ({
+      name: role.name,
+      label: role.label,
+      isCustom: false,
+    }),
+  );
 
-function getRoleOptions(customRoles: CustomRole[]) {
-  const customOptions = customRoles.map((role) => ({
+  const customOptions: RoleOption[] = customRoles.map((role) => ({
     name: role.name,
     label: role.label || role.name,
     isCustom: true,
     id: role.id,
+    // Expose tenant_id for display — consumers can resolve the society name.
+    societyLabel: role.tenant_id ?? undefined,
   }));
-  return [...STATIC_ROLE_OPTIONS, ...customOptions];
+
+  return [...systemOptions, ...customOptions];
 }
 
-function getRoleLabelFromOptions(role: string, customRoles: CustomRole[]) {
+/** Returns the display label for a role name, checking custom roles first. */
+function getRoleLabelFromOptions(role: string, customRoles: CustomRole[]): string {
   const custom = customRoles.find((item) => item.name === role);
   if (custom) return custom.label;
-  return role.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  return getRoleLabel(role);
 }
 
 export const Route = createFileRoute("/settings")({
@@ -97,19 +116,28 @@ const DEFAULT_ENABLED = new Set(
 );
 
 function SettingsPage() {
-  const { user, profile, primaryRole, roles, refresh } = useAuth();
+  // ✅ STEP 1: ALL HOOKS AT THE TOP (before any conditional returns)
+  const { user, profile, primaryRole, roles, refresh, session, loading } = useAuth();
+  const navigate = useNavigate();
+
   const [activeTab, setActiveTab] = useState<
     "profile" | "workspace" | "modules" | "notifications" | "integrations" | "users" | "permissions"
   >("profile");
 
   const isAdmin = roles.includes("super_admin") || roles.includes("society_admin");
 
+  // All useState hooks MUST be at top
   const [enabled, setEnabled] = useState<Set<string>>(new Set(DEFAULT_ENABLED));
   const [q, setQ] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [societyName, setSocietyName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // Notification Preferences states
   const [emailAlerts, setEmailAlerts] = useState(true);
@@ -123,6 +151,7 @@ function SettingsPage() {
   const [twilioConnected, setTwilioConnected] = useState(false);
   const [slackConnected, setSlackConnected] = useState(false);
 
+  // All useEffect and useMemo hooks at top
   useEffect(() => {
     setFullName(profile?.full_name ?? "");
     setPhone(profile?.phone ?? "");
@@ -137,6 +166,37 @@ function SettingsPage() {
     );
   }, [q]);
 
+  // ✅ STEP 2: Auth redirect logic in useEffect
+  useEffect(() => {
+    if (!loading && !session) {
+      navigate({ to: "/auth" });
+    }
+  }, [loading, session, navigate]);
+
+  // Auto-redirect if non-admin tries to access admin-only tab
+  useEffect(() => {
+    const adminOnlyTabs = ["workspace", "modules", "integrations", "permissions", "users"];
+    if (!isAdmin && adminOnlyTabs.includes(activeTab)) {
+      setActiveTab("profile");
+      toast.info("That section is admin-only. Showing your profile instead.");
+    }
+  }, [isAdmin, activeTab]);
+
+  // ✅ STEP 3: Conditional renders AFTER all hooks
+  if (loading) {
+    return (
+      <AppShell title="Loading">
+        <div className="flex h-[50vh] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </AppShell>
+    );
+  }
+
+  // Don't render if not authenticated (useEffect will redirect)
+  if (!session) return null;
+
+  // Regular functions (not hooks) can be after conditional returns
   const toggle = (key: string) =>
     setEnabled((prev) => {
       const next = new Set(prev);
@@ -159,6 +219,35 @@ function SettingsPage() {
     }
   };
 
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword) {
+      toast.error("Please enter your current password");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await changePasswordFn({ data: { currentPassword, newPassword } });
+      toast.success("Password updated successfully");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to change password");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const totalEnabled = enabled.size;
 
   return (
@@ -172,8 +261,10 @@ function SettingsPage() {
             Settings
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Configure your personal profile details, society preferences, active module keys,
-            notifications and integration tokens.
+            {isAdmin
+              ? "Configure your personal profile details, society preferences, active module keys, notifications and integration tokens."
+              : "Manage your profile, notification preferences and account settings."
+            }
           </p>
         </header>
 
@@ -181,28 +272,27 @@ function SettingsPage() {
         <div className="flex gap-1 border-b overflow-x-auto whitespace-nowrap scrollbar-none">
           {(
             [
-              { id: "profile", label: "Profile", icon: User },
-              { id: "workspace", label: "Workspace", icon: Building },
-              { id: "modules", label: "Modules", icon: Settings },
-              { id: "notifications", label: "Notifications", icon: Bell },
-              { id: "integrations", label: "Integrations", icon: Link2 },
-              { id: "permissions", label: "Role Permissions", icon: Lock },
-              { id: "users", label: "Users & Roles", icon: User },
+              { id: "profile", label: "Profile", icon: User, adminOnly: false },
+              { id: "workspace", label: "Workspace", icon: Building, adminOnly: true },
+              { id: "modules", label: "Modules", icon: Settings, adminOnly: true },
+              { id: "notifications", label: "Notifications", icon: Bell, adminOnly: false },
+              { id: "integrations", label: "Integrations", icon: Link2, adminOnly: true },
+              { id: "permissions", label: "Role Permissions", icon: Lock, adminOnly: true },
+              { id: "users", label: "Users & Roles", icon: User, adminOnly: true },
             ] as const
           ).filter((tab) => {
-            if (tab.id === "users" || tab.id === "permissions") return isAdmin;
-            return true;
+            // Show tab only if: not admin-only OR user is admin
+            return !tab.adminOnly || isAdmin;
           }).map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all flex items-center gap-2 -mb-[2px] ${
-                  activeTab === tab.id
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-all flex items-center gap-2 -mb-[2px] ${activeTab === tab.id
                     ? "border-primary text-primary font-semibold"
                     : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 <Icon className="size-4" />
                 <span>{tab.label}</span>
@@ -214,48 +304,102 @@ function SettingsPage() {
         {/* Tab Contents */}
         <div className="space-y-6">
           {activeTab === "profile" && (
-            <Card className="border-border/70 shadow-soft">
-              <CardHeader>
-                <CardTitle className="text-base font-bold font-serif">Account Profile</CardTitle>
-                <CardDescription className="text-xs">
-                  Manage public identity credentials linked with your portal login
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="full_name">Full Name</Label>
-                    <Input
-                      id="full_name"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                    />
+            <div className="space-y-6">
+              <Card className="border-border/70 shadow-soft">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold font-serif">Account Profile</CardTitle>
+                  <CardDescription className="text-xs">
+                    Manage public identity credentials linked with your portal login
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="full_name">Full Name</Label>
+                      <Input
+                        id="full_name"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input
+                        id="phone"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="+92 300 1234567"
+                      />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>Account Login Email</Label>
+                      <Input
+                        value={user?.email ?? ""}
+                        disabled
+                        className="bg-muted text-muted-foreground"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input
-                      id="phone"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+92 300 1234567"
-                    />
+                  <div className="flex justify-end pt-2 border-t mt-4">
+                    <Button size="sm" onClick={saveProfile} disabled={saving} className="gap-2">
+                      {saving && <Loader2 className="size-3.5 animate-spin" />} Save Profile
+                    </Button>
                   </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label>Account Login Email</Label>
-                    <Input
-                      value={user?.email ?? ""}
-                      disabled
-                      className="bg-muted text-muted-foreground"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end pt-2 border-t mt-4">
-                  <Button size="sm" onClick={saveProfile} disabled={saving} className="gap-2">
-                    {saving && <Loader2 className="size-3.5 animate-spin" />} Save Profile
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70 shadow-soft">
+                <CardHeader>
+                  <CardTitle className="text-base font-bold font-serif">Change Password</CardTitle>
+                  <CardDescription className="text-xs">
+                    Update your account security password
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handlePasswordChange} className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="current_password">Current Password</Label>
+                        <Input
+                          id="current_password"
+                          type="password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="new_password">New Password</Label>
+                        <Input
+                          id="new_password"
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          required
+                          minLength={6}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="confirm_password">Confirm New Password</Label>
+                        <Input
+                          id="confirm_password"
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          required
+                          minLength={6}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end pt-2 border-t mt-4">
+                      <Button type="submit" size="sm" disabled={changingPassword} className="gap-2">
+                        {changingPassword && <Loader2 className="size-3.5 animate-spin" />} Update Password
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {activeTab === "workspace" && (
@@ -596,6 +740,8 @@ interface TenantUser { id: string; full_name: string; email: string; roles: stri
 
 function UserRolesTable() {
   const queryClient = useQueryClient();
+  const { roles } = useAuth();
+  const isSuperAdmin = roles.includes("super_admin");
   const [searchTerm, setSearchTerm] = useState("");
   const { data: users = [], isLoading, error } = useQuery<TenantUser[], Error>({ queryKey: ["tenant-users"], queryFn: getTenantUsersFn });
   const { data: customRoles = [] } = useQuery<CustomRole[], Error>({ queryKey: ["custom-roles"], queryFn: getCustomRolesFn });
@@ -625,6 +771,7 @@ function UserRolesTable() {
         </div>
         <AddUserDialog
           customRoles={customRoles}
+          isSuperAdmin={isSuperAdmin}
           onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenant-users"] })}
         />
       </div>
@@ -676,7 +823,7 @@ function UserRolesTable() {
   );
 }
 
-function AddUserDialog({ customRoles, onSuccess }: { customRoles: CustomRole[]; onSuccess: () => void }) {
+function AddUserDialog({ customRoles, isSuperAdmin, onSuccess }: { customRoles: CustomRole[]; isSuperAdmin: boolean; onSuccess: () => void }) {
   const [open, setOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -685,7 +832,9 @@ function AddUserDialog({ customRoles, onSuccess }: { customRoles: CustomRole[]; 
   const [showCredentials, setShowCredentials] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password: string } | null>(null);
 
-  const roleOptions = useMemo(() => getRoleOptions(customRoles), [customRoles]);
+  // Super Admin sees ALL system roles (including platform-only super_admin).
+  // Society Admin sees only tenant-assignable roles — super_admin is hidden.
+  const roleOptions = useMemo(() => getRoleOptions(customRoles, isSuperAdmin), [customRoles, isSuperAdmin]);
 
   useEffect(() => {
     if (!open) {
@@ -841,12 +990,14 @@ function EditUserDialog({ user, customRoles, onSuccess }: { user: TenantUser; cu
     setSelectedRole("");
   }, [user]);
 
+  // EditUserDialog is only accessible to admins. Super Admin can assign
+  // platform-only roles here; society_admins cannot assign super_admin.
+  const { roles: authRoles } = useAuth();
+  const canAssignSuperAdmin = authRoles.includes("super_admin");
+
   const allRoles = useMemo(
-    () => [
-      ...STATIC_ROLE_OPTIONS,
-      ...customRoles.map((role) => ({ name: role.name, label: role.label || role.name, isCustom: true, id: role.id })),
-    ],
-    [customRoles],
+    () => getRoleOptions(customRoles, canAssignSuperAdmin),
+    [customRoles, canAssignSuperAdmin],
   );
 
   const availableRoles = useMemo(
@@ -1056,9 +1207,9 @@ function EditCustomRoleDialog({ role, onSuccess }: { role: CustomRole; onSuccess
   );
 
   const { data: rolePermissions, isFetching } = useQuery<RolePermissionResponse[], Error>({
-    queryKey: ["role-permissions", role.name],
+    queryKey: ["role-permissions", role.name, role.tenant_id],
     queryFn: async () => {
-      return await getRolePermissionsFn({ data: { role: role.name } });
+      return await getRolePermissionsFn({ data: { role: role.name, tenantId: role.tenant_id } });
     },
     enabled: open,
   });
@@ -1095,7 +1246,7 @@ function EditCustomRoleDialog({ role, onSuccess }: { role: CustomRole; onSuccess
   const updateMutation = useMutation({
     mutationFn: async (values: { roleId: string; name: string; permissions: RolePermissionRow[] }) => {
       await updateCustomRoleFn({ data: { roleId: values.roleId, name: values.name } });
-      await updateRolePermissionsFn({ data: { role: values.name, permissions: values.permissions } });
+      await updateRolePermissionsFn({ data: { role: values.name, permissions: values.permissions, tenantId: role.tenant_id } });
     },
     onSuccess: () => {
       toast.success("Role and permissions updated successfully");
@@ -1393,32 +1544,14 @@ function RoleCreateDialog({ open, onOpenChange, onCreate }: { open: boolean; onO
 
 
 
-const ALL_PERMISSION_MODULES = [
-  { key: "property", label: "Property" },
-  { key: "residents", label: "Residents" },
-  { key: "notifications", label: "Notifications" },
-  { key: "documents", label: "Documents" },
-  { key: "reports", label: "Reports" },
-  { key: "ledger", label: "Ledger" },
-  { key: "payments", label: "Payments" },
-  { key: "budget", label: "Budget" },
-  { key: "complaints", label: "Complaints" },
-  { key: "maintenance", label: "Maintenance" },
-  { key: "vendors", label: "Vendors" },
-  { key: "assets", label: "Assets" },
-  { key: "visitor", label: "Visitor" },
-  { key: "gate", label: "Security" },
-  { key: "parking", label: "Parking" },
-  { key: "notice_board", label: "Notice Board" },
-  { key: "community_forum", label: "Forum" },
-  { key: "polls", label: "Polls" },
-  { key: "events", label: "Events" },
-  { key: "amenities", label: "Amenities" },
-  { key: "governance", label: "Governance" },
-  { key: "utility_meters", label: "Utility Meters" },
-] as const;
+/**
+ * Re-use the single canonical list from permissions.ts — do NOT duplicate it here.
+ * Previously this file had its own ALL_PERMISSION_MODULES constant; it has been
+ * removed and replaced with a local alias that points to the imported source.
+ */
+const ALL_PERMISSION_MODULES = PERMISSION_MODULES;
 
-type RolePermissionModuleKey = (typeof ALL_PERMISSION_MODULES)[number]["key"];
+type RolePermissionModuleKey = (typeof PERMISSION_MODULES)[number]["key"];
 
 type RolePermissionRow = {
   module_key: RolePermissionModuleKey;
@@ -1448,9 +1581,20 @@ function hasFullRowAccess(row: RolePermissionRow) {
 }
 
 function togglePermissionField(rows: RolePermissionRow[], moduleKey: RolePermissionModuleKey, field: PermissionField) {
-  return rows.map((row) =>
-    row.module_key === moduleKey ? { ...row, [field]: !row[field] } : row,
-  );
+  return rows.map((row) => {
+    if (row.module_key !== moduleKey) return row;
+    const nextValue = !row[field];
+    const updated = { ...row, [field]: nextValue };
+
+    if (field === "can_view" && !nextValue) {
+      updated.can_create = false;
+      updated.can_edit = false;
+      updated.can_delete = false;
+    } else if ((field === "can_create" || field === "can_edit" || field === "can_delete") && nextValue) {
+      updated.can_view = true;
+    }
+    return updated;
+  });
 }
 
 function togglePermissionRow(rows: RolePermissionRow[], moduleKey: RolePermissionModuleKey) {
@@ -1463,7 +1607,17 @@ function togglePermissionRow(rows: RolePermissionRow[], moduleKey: RolePermissio
 
 function togglePermissionColumn(rows: RolePermissionRow[], field: PermissionField) {
   const nextValue = !rows.every((row) => row[field]);
-  return rows.map((row) => ({ ...row, [field]: nextValue }));
+  return rows.map((row) => {
+    const updated = { ...row, [field]: nextValue };
+    if (field === "can_view" && !nextValue) {
+      updated.can_create = false;
+      updated.can_edit = false;
+      updated.can_delete = false;
+    } else if ((field === "can_create" || field === "can_edit" || field === "can_delete") && nextValue) {
+      updated.can_view = true;
+    }
+    return updated;
+  });
 }
 
 function toggleEveryPermission(rows: RolePermissionRow[]) {
@@ -1483,6 +1637,10 @@ type RolePermissionResponse = {
 
 function RolePermissionsEditor() {
   const queryClient = useQueryClient();
+  const { roles: authRoles } = useAuth();
+  // The permissions editor is admin-only. Super Admin should see all roles
+  // (including super_admin) so they can inspect/document platform-level access.
+  const isSuperAdmin = authRoles.includes("super_admin");
   const [selectedRole, setSelectedRole] = useState<PermissionRole>("society_admin");
   const [permissions, setPermissions] = useState<RolePermissionRow[]>(
     buildBlankPermissionRows(),
@@ -1494,7 +1652,7 @@ function RolePermissionsEditor() {
     queryFn: getCustomRolesFn,
   });
 
-  const roleOptions = useMemo(() => getRoleOptions(customRoles), [customRoles]);
+  const roleOptions = useMemo(() => getRoleOptions(customRoles, isSuperAdmin), [customRoles, isSuperAdmin]);
   const selectedRoleOption = roleOptions.find((role) => role.name === selectedRole);
   const isCustomRole = customRoles.some((role) => role.name === selectedRole);
 
@@ -1534,16 +1692,16 @@ function RolePermissionsEditor() {
     },
   });
 
-  const mergePermissions = (rows: Array<{ module_key: RolePermissionModuleKey; can_view: boolean; can_create: boolean; can_edit: boolean; can_delete: boolean }>) => {
+  const mergePermissions = (rows: Array<{ module_key: RolePermissionModuleKey; can_view: any; can_create: any; can_edit: any; can_delete: any }>) => {
     return ALL_PERMISSION_MODULES.map((module) => {
       const saved = rows.find((row) => row.module_key === module.key);
       return {
         module_key: module.key,
         label: module.label,
-        can_view: saved?.can_view ?? false,
-        can_create: saved?.can_create ?? false,
-        can_edit: saved?.can_edit ?? false,
-        can_delete: saved?.can_delete ?? false,
+        can_view: saved ? Boolean(saved.can_view) : false,
+        can_create: saved ? Boolean(saved.can_create) : false,
+        can_edit: saved ? Boolean(saved.can_edit) : false,
+        can_delete: saved ? Boolean(saved.can_delete) : false,
       };
     });
   };
@@ -1567,12 +1725,10 @@ function RolePermissionsEditor() {
   useEffect(() => {
     if (rolePermissions) {
       setPermissions(mergePermissions(rolePermissions));
+    } else {
+      setPermissions(buildBlankPermissionRows());
     }
-  }, [rolePermissions]);
-
-  useEffect(() => {
-    setPermissions(buildBlankPermissionRows());
-  }, [selectedRole]);
+  }, [selectedRole, rolePermissions]);
 
   const saveMutation = useMutation({
     mutationFn: updateRolePermissionsFn,
@@ -1581,6 +1737,12 @@ function RolePermissionsEditor() {
       queryClient.invalidateQueries({ queryKey: ["role-permissions", selectedRole] });
     },
   });
+
+  const isDirty = useMemo(() => {
+    if (!rolePermissions) return false;
+    const initial = mergePermissions(rolePermissions);
+    return JSON.stringify(permissions) !== JSON.stringify(initial);
+  }, [permissions, rolePermissions]);
 
   return (
     <div className="space-y-6">
@@ -1600,7 +1762,12 @@ function RolePermissionsEditor() {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex flex-wrap items-center gap-2 justify-end">
+        <div className="flex flex-wrap items-center gap-3 justify-end">
+          {isDirty && (
+            <span className="text-xs text-amber-600 font-semibold animate-pulse mr-1">
+              Unsaved changes
+            </span>
+          )}
           <Button variant="outline" onClick={() => setRoleDialogOpen(true)} className="gap-2">
             <Plus className="size-4" /> Create New Role
           </Button>

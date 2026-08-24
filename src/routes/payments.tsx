@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { useAuth } from "@/hooks/use-auth";
 import { getPaymentsFn, recordPaymentFn, getDailySummaryFn } from "@/lib/api/payments";
 import { getUnitsFn } from "@/lib/api/property";
@@ -79,6 +80,7 @@ function PaymentsPage() {
   const { data: summary = { todayCollected: 0, count: 0 } } = useQuery({
     queryKey: ["dailySummary"],
     queryFn: async () => getDailySummaryFn(),
+    enabled: isAdmin,
   });
 
   const recordPayment = useMutation({
@@ -128,43 +130,45 @@ function PaymentsPage() {
     >
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-10 space-y-6">
         {/* KPI Row */}
-        <section className="grid gap-4 sm:grid-cols-3">
-          <Card className="border-border/70 shadow-soft">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Today's Collection
+        {isAdmin && (
+          <section className="grid gap-4 sm:grid-cols-3">
+            <Card className="border-border/70 shadow-soft">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Today's Collection
+                  </div>
+                  <div className="text-2xl font-serif font-bold mt-1">
+                    ₨{summary.todayCollected.toLocaleString("en-PK", { minimumFractionDigits: 2 })}
+                  </div>
                 </div>
-                <div className="text-2xl font-serif font-bold mt-1">
-                  ₨{summary.todayCollected.toLocaleString("en-PK", { minimumFractionDigits: 2 })}
+                <div className="size-10 bg-success/10 text-success rounded-full flex items-center justify-center">
+                  <Coins className="size-5" />
                 </div>
-              </div>
-              <div className="size-10 bg-success/10 text-success rounded-full flex items-center justify-center">
-                <Coins className="size-5" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-border/70 shadow-soft">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Transactions Logged
-                </div>
-                <div className="text-2xl font-serif font-bold mt-1">{summary.count}</div>
-              </div>
-              <div className="size-10 bg-primary-soft text-primary rounded-full flex items-center justify-center">
-                <CircleDollarSign className="size-5" />
-              </div>
-            </CardContent>
-          </Card>
-          {isAdmin && (
-            <Card className="border-border/70 shadow-soft flex items-center justify-center p-5">
-              <Button onClick={() => setRecordDialogOpen(true)} className="w-full gap-1.5 h-10">
-                <Plus className="size-4" /> Record Payment
-              </Button>
+              </CardContent>
             </Card>
-          )}
-        </section>
+            <Card className="border-border/70 shadow-soft">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Transactions Logged
+                  </div>
+                  <div className="text-2xl font-serif font-bold mt-1">{summary.count}</div>
+                </div>
+                <div className="size-10 bg-primary-soft text-primary rounded-full flex items-center justify-center">
+                  <CircleDollarSign className="size-5" />
+                </div>
+              </CardContent>
+            </Card>
+            <PermissionGate moduleKey="payments" action="create" fallback={null}>
+              <Card className="border-border/70 shadow-soft flex items-center justify-center p-5">
+                <Button onClick={() => setRecordDialogOpen(true)} className="w-full gap-1.5 h-10">
+                  <Plus className="size-4" /> Record Payment
+                </Button>
+              </Card>
+            </PermissionGate>
+          </section>
+        )}
 
         {/* History Grid */}
         <Card className="border-border/70 shadow-soft">
@@ -284,7 +288,7 @@ function PaymentsPage() {
                   <SelectContent>
                     {units.map((u: any) => (
                       <SelectItem key={u.id} value={u.id}>
-                        Unit {u.unit_number}
+                        {u.full_path || `Unit ${u.unit_number} ${u.building_name && `(${u.building_name})`} ${u.block_name && `Block ${u.block_name}`}`}
                       </SelectItem>
                     ))}
                   </SelectContent>

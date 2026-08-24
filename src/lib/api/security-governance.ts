@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId } from "./auth-helper";
+import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole } from "./auth-helper";
 
 // ─── Session Helpers ──────────────────────────────────────────────────────────
 
@@ -37,6 +37,11 @@ export const createGateTerminalFn = createServerFn({ method: "POST" })
     const tenantId = await getUserTenantId(userId);
     if (!tenantId) throw new Error("No tenant");
 
+    const userRoles = await getUserRoles(userId);
+    if (!isAdminRole(userRoles)) {
+      throw new Error("Forbidden - Admin access required");
+    }
+
     const db = getDb();
     const id = crypto.randomUUID();
     await db.query(
@@ -59,6 +64,11 @@ export const updateGateTerminalStatusFn = createServerFn({ method: "POST" })
     const tenantId = await getUserTenantId(userId);
     if (!tenantId) throw new Error("No tenant");
 
+    const userRoles = await getUserRoles(userId);
+    if (!isAdminRole(userRoles)) {
+      throw new Error("Forbidden - Admin access required");
+    }
+
     const db = getDb();
     await db.query("UPDATE gate_terminals SET status = ? WHERE id = ? AND tenant_id = ?", [
       data.status,
@@ -67,6 +77,7 @@ export const updateGateTerminalStatusFn = createServerFn({ method: "POST" })
     ]);
     return { success: true };
   });
+
 
 // ─── Guard Patrols ───────────────────────────────────────────────────────────
 

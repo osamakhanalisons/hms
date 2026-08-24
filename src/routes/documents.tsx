@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -141,9 +142,11 @@ function DocumentsPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={() => setOpen(true)} className="gap-2">
-            <Plus className="size-4" /> Upload Document
-          </Button>
+          <PermissionGate moduleKey="documents" action="create" fallback={null}>
+            <Button onClick={() => setOpen(true)} className="gap-2">
+              <Plus className="size-4" /> Upload Document
+            </Button>
+          </PermissionGate>
         </div>
 
         <Card>
@@ -213,17 +216,19 @@ function DocumentsPage() {
                           <FileDown className="size-4" />
                         </a>
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          if (confirm("Are you sure you want to delete this document?")) {
+                      <PermissionGate moduleKey="documents" action="delete" fallback={null}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            if (confirm("Are you sure you want to delete this document?")) {
                             deleteDoc.mutate({ id: d.id });
                           }
                         }}
-                      >
-                        <Trash2 className="size-4 text-destructive" />
-                      </Button>
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </PermissionGate>
                     </div>
                   </div>
                 ))}

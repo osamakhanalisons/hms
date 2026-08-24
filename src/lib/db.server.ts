@@ -1,4 +1,5 @@
 import mysql from "mysql2/promise";
+import crypto from "node:crypto";
 
 let pool: mysql.Pool | null = null;
 
@@ -56,7 +57,6 @@ export async function initDb() {
     ) ENGINE=InnoDB;
   `);
 
-  // Profiles
   await db.query(`
     CREATE TABLE IF NOT EXISTS profiles (
       id VARCHAR(36) PRIMARY KEY,
@@ -67,7 +67,8 @@ export async function initDb() {
       tenant_id VARCHAR(36) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (id) REFERENCES users(id) ON DELETE CASCADE
+      FOREIGN KEY (id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL
     ) ENGINE=InnoDB;
   `);
 
@@ -129,6 +130,23 @@ export async function initDb() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB;
   `);
+
+  // ─── TENANTS: safe column additions for multi-society management ──────────
+  try {
+    await db.query(`ALTER TABLE tenants ADD COLUMN contact_email VARCHAR(255) NULL`);
+  } catch (_) { /* column already exists */ }
+  try {
+    await db.query(`ALTER TABLE tenants ADD COLUMN contact_phone VARCHAR(64) NULL`);
+  } catch (_) { /* column already exists */ }
+  try {
+    await db.query(`ALTER TABLE tenants ADD COLUMN address TEXT NULL`);
+  } catch (_) { /* column already exists */ }
+  try {
+    await db.query(`ALTER TABLE tenants ADD COLUMN code VARCHAR(64) NULL`);
+  } catch (_) { /* column already exists */ }
+  try {
+    await db.query(`ALTER TABLE tenants ADD UNIQUE KEY uniq_tenant_code (code)`);
+  } catch (_) { /* constraint already exists */ }
 
   // Module registry (canonical list — seeded once)
   await db.query(`
@@ -246,7 +264,6 @@ export async function initDb() {
       FOREIGN KEY (building_id) REFERENCES buildings(id) ON DELETE CASCADE
     ) ENGINE=InnoDB;
   `);
-
   await db.query(`
     CREATE TABLE IF NOT EXISTS units (
       id VARCHAR(36) PRIMARY KEY,
@@ -261,7 +278,14 @@ export async function initDb() {
       bedrooms TINYINT NULL,
       status ENUM('occupied','vacant','renovation','locked') NOT NULL DEFAULT 'vacant',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (floor_id) REFERENCES floors(id) ON DELETE CASCADE,
+      FOREIGN KEY (building_id) REFERENCES buildings(id) ON DELETE CASCADE,
+      FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE,
+      FOREIGN KEY (society_id) REFERENCES societies(id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      UNIQUE KEY uniq_tenant_unit (tenant_id, block_id, building_id, floor_id, unit_number),
+      INDEX idx_units_tenant_hierarchy (tenant_id, block_id, building_id, floor_id)
     ) ENGINE=InnoDB;
   `);
 
@@ -401,7 +425,7 @@ export async function initDb() {
       id VARCHAR(36) PRIMARY KEY,
       tenant_id VARCHAR(36) NOT NULL,
       unit_id VARCHAR(36) NULL,
-      submitted_by VARCHAR(36) NOT NULL,
+      submitted_by VARCHAR(36) NULL,
       assigned_to VARCHAR(36) NULL,
       category ENUM('electrical','plumbing','security','cleaning','lift','water','civil','hvac','other','general') NOT NULL DEFAULT 'other',
       priority ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
@@ -423,7 +447,7 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS complaint_comments (
       id VARCHAR(36) PRIMARY KEY,
       complaint_id VARCHAR(36) NOT NULL,
-      author_id VARCHAR(36) NOT NULL,
+      author_id VARCHAR(36) NULL,
       body TEXT NOT NULL,
       is_internal BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -450,7 +474,7 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS notices (
       id VARCHAR(36) PRIMARY KEY,
       tenant_id VARCHAR(36) NOT NULL,
-      author_id VARCHAR(36) NOT NULL,
+      author_id VARCHAR(36) NULL,
       title VARCHAR(255) NOT NULL,
       body TEXT NOT NULL,
       is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
@@ -531,6 +555,91 @@ export async function initDb() {
     ) ENGINE=InnoDB;
   `);
 
+  // ── Auto-migrations for vendors, rfqs, quotations, purchase_orders ──
+  try {
+    const [vCols] = (await db.query(`SHOW COLUMNS FROM vendors`)) as any[];
+    const vColNames = new Set(vCols.map((c: any) => c.Field));
+    const vColumnsToAdd = [
+      { name: "address", sql: "ALTER TABLE vendors ADD COLUMN address TEXT NULL" },
+      { name: "tax_id", sql: "ALTER TABLE vendors ADD COLUMN tax_id VARCHAR(64) NULL" },
+      { name: "contact_person", sql: "ALTER TABLE vendors ADD COLUMN contact_person VARCHAR(128) NULL" },
+      { name: "bank_details", sql: "ALTER TABLE vendors ADD COLUMN bank_details TEXT NULL" },
+      { name: "status", sql: "ALTER TABLE vendors ADD COLUMN status ENUM('active','inactive') NOT NULL DEFAULT 'active'" },
+      { name: "updated_at", sql: "ALTER TABLE vendors ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+    ];
+    for (const col of vColumnsToAdd) {
+      if (!vColNames.has(col.name)) await db.query(col.sql);
+    }
+  } catch (err) { console.error("Vendors table migration error:", err); }
+
+  try {
+    const [rfqCols] = (await db.query(`SHOW COLUMNS FROM rfqs`)) as any[];
+    const rfqColNames = new Set(rfqCols.map((c: any) => c.Field));
+    const rfqColumnsToAdd = [
+      { name: "due_date", sql: "ALTER TABLE rfqs ADD COLUMN due_date DATE NULL" },
+      { name: "budget_amount", sql: "ALTER TABLE rfqs ADD COLUMN budget_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00" },
+      { name: "awarded_vendor_id", sql: "ALTER TABLE rfqs ADD COLUMN awarded_vendor_id VARCHAR(36) NULL" },
+      { name: "awarded_quotation_id", sql: "ALTER TABLE rfqs ADD COLUMN awarded_quotation_id VARCHAR(36) NULL" },
+      { name: "updated_at", sql: "ALTER TABLE rfqs ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+    ];
+    for (const col of rfqColumnsToAdd) {
+      if (!rfqColNames.has(col.name)) await db.query(col.sql);
+    }
+  } catch (err) { console.error("RFQs table migration error:", err); }
+
+  try {
+    const [qCols] = (await db.query(`SHOW COLUMNS FROM quotations`)) as any[];
+    const qColNames = new Set(qCols.map((c: any) => c.Field));
+    const qColumnsToAdd = [
+      { name: "delivery_timeline", sql: "ALTER TABLE quotations ADD COLUMN delivery_timeline VARCHAR(128) NULL" },
+      { name: "valid_until", sql: "ALTER TABLE quotations ADD COLUMN valid_until DATE NULL" },
+      { name: "quotation_number", sql: "ALTER TABLE quotations ADD COLUMN quotation_number VARCHAR(64) NULL" },
+      { name: "updated_at", sql: "ALTER TABLE quotations ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+    ];
+    for (const col of qColumnsToAdd) {
+      if (!qColNames.has(col.name)) await db.query(col.sql);
+    }
+  } catch (err) { console.error("Quotations table migration error:", err); }
+
+  try {
+    const [poCols] = (await db.query(`SHOW COLUMNS FROM purchase_orders`)) as any[];
+    const poColNames = new Set(poCols.map((c: any) => c.Field));
+    const poColumnsToAdd = [
+      { name: "po_number", sql: "ALTER TABLE purchase_orders ADD COLUMN po_number VARCHAR(64) NULL" },
+      { name: "rfq_id", sql: "ALTER TABLE purchase_orders ADD COLUMN rfq_id VARCHAR(36) NULL" },
+      { name: "quotation_id", sql: "ALTER TABLE purchase_orders ADD COLUMN quotation_id VARCHAR(36) NULL" },
+      { name: "notes", sql: "ALTER TABLE purchase_orders ADD COLUMN notes TEXT NULL" },
+      { name: "updated_at", sql: "ALTER TABLE purchase_orders ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+    ];
+    for (const col of poColumnsToAdd) {
+      if (!poColNames.has(col.name)) await db.query(col.sql);
+    }
+  } catch (err) { console.error("Purchase orders table migration error:", err); }
+
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS vendor_invoices (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      vendor_id VARCHAR(36) NOT NULL,
+      purchase_order_id VARCHAR(36) NULL,
+      invoice_number VARCHAR(64) NOT NULL,
+      invoice_date DATE NOT NULL,
+      due_date DATE NOT NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      paid_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      status ENUM('draft','pending','partially_paid','paid','overdue','cancelled') NOT NULL DEFAULT 'pending',
+      notes TEXT NULL,
+      recorded_by VARCHAR(36) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
+      FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE SET NULL,
+      UNIQUE KEY uniq_vendor_inv (tenant_id, invoice_number)
+    ) ENGINE=InnoDB;
+  `);
+
   // ─── BUDGETS MODULE ───────────────────────────────────────────────────────
 
   await db.query(`
@@ -561,30 +670,201 @@ export async function initDb() {
   // ─── ASSETS & MAINTENANCE MODULES ─────────────────────────────────────────
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS inventory_items (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      sku VARCHAR(64) NOT NULL,
+      category VARCHAR(128) NOT NULL DEFAULT 'General',
+      unit_of_measure VARCHAR(32) NOT NULL DEFAULT 'pcs',
+      quantity DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      reorder_level DECIMAL(12,2) NOT NULL DEFAULT 10.00,
+      unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      location VARCHAR(128) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      UNIQUE KEY uniq_sku (tenant_id, sku)
+    ) ENGINE=InnoDB;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      item_id VARCHAR(36) NOT NULL,
+      movement_type ENUM('in','out','adjustment','return') NOT NULL,
+      quantity DECIMAL(12,2) NOT NULL,
+      reference VARCHAR(128) NULL,
+      notes TEXT NULL,
+      created_by VARCHAR(36) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+  `);
+
+  // ─── PROJECTS MODULE ──────────────────────────────────────────────────────
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT NULL,
+      status ENUM('planning','in_progress','on_hold','completed','cancelled') NOT NULL DEFAULT 'planning',
+      budget_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      start_date DATE NULL,
+      end_date DATE NULL,
+      owner_id VARCHAR(36) NULL,
+      resident_visible BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL,
+      INDEX idx_proj_tenant_status (tenant_id, status)
+    ) ENGINE=InnoDB;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS project_milestones (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      project_id VARCHAR(36) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      due_date DATE NULL,
+      status ENUM('planned','in_progress','completed') NOT NULL DEFAULT 'planned',
+      notes TEXT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      INDEX idx_milestone_tenant_proj (tenant_id, project_id)
+    ) ENGINE=InnoDB;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS project_expenses (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      project_id VARCHAR(36) NOT NULL,
+      vendor_id VARCHAR(36) NULL,
+      title VARCHAR(255) NOT NULL,
+      amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      expense_date DATE NOT NULL,
+      invoice_number VARCHAR(128) NULL,
+      notes TEXT NULL,
+      created_by VARCHAR(36) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL,
+      INDEX idx_expense_tenant_proj (tenant_id, project_id)
+    ) ENGINE=InnoDB;
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS assets (
       id VARCHAR(36) PRIMARY KEY,
       tenant_id VARCHAR(36) NOT NULL,
       name VARCHAR(255) NOT NULL,
-      location VARCHAR(255) NULL,
+      category VARCHAR(64) NOT NULL DEFAULT 'general',
+      location VARCHAR(128) NULL,
       serial_number VARCHAR(128) NULL,
+      purchase_date DATE NULL,
+      purchase_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      current_valuation DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      status ENUM('active','under_maintenance','decommissioned','scrapped') NOT NULL DEFAULT 'active',
       warranty_expires_at DATE NULL,
+      has_amc BOOLEAN NOT NULL DEFAULT FALSE,
+      amc_vendor_id VARCHAR(36) NULL,
+      amc_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      amc_start_date DATE NULL,
+      amc_expires_at DATE NULL,
+      notes TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (amc_vendor_id) REFERENCES vendors(id) ON DELETE SET NULL,
+      INDEX idx_assets_tenant_status (tenant_id, status),
+      INDEX idx_assets_tenant_category (tenant_id, category)
     ) ENGINE=InnoDB;
   `);
+
+  // ── Migrations: safely add columns if table already existed without them ──
+  try {
+    const [existingCols] = (await db.query(`SHOW COLUMNS FROM assets`)) as any[];
+    const existingColNames = new Set(existingCols.map((c: any) => c.Field));
+
+    const columnsToAdd: { name: string; sql: string }[] = [
+      { name: "category", sql: "ALTER TABLE assets ADD COLUMN category VARCHAR(64) NOT NULL DEFAULT 'general'" },
+      { name: "location", sql: "ALTER TABLE assets ADD COLUMN location VARCHAR(128) NULL" },
+      { name: "serial_number", sql: "ALTER TABLE assets ADD COLUMN serial_number VARCHAR(128) NULL" },
+      { name: "purchase_date", sql: "ALTER TABLE assets ADD COLUMN purchase_date DATE NULL" },
+      { name: "purchase_cost", sql: "ALTER TABLE assets ADD COLUMN purchase_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00" },
+      { name: "current_valuation", sql: "ALTER TABLE assets ADD COLUMN current_valuation DECIMAL(12,2) NOT NULL DEFAULT 0.00" },
+      { name: "status", sql: "ALTER TABLE assets ADD COLUMN status ENUM('active','under_maintenance','decommissioned','scrapped') NOT NULL DEFAULT 'active'" },
+      { name: "warranty_expires_at", sql: "ALTER TABLE assets ADD COLUMN warranty_expires_at DATE NULL" },
+      { name: "has_amc", sql: "ALTER TABLE assets ADD COLUMN has_amc BOOLEAN NOT NULL DEFAULT FALSE" },
+      { name: "amc_vendor_id", sql: "ALTER TABLE assets ADD COLUMN amc_vendor_id VARCHAR(36) NULL" },
+      { name: "amc_cost", sql: "ALTER TABLE assets ADD COLUMN amc_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00" },
+      { name: "amc_start_date", sql: "ALTER TABLE assets ADD COLUMN amc_start_date DATE NULL" },
+      { name: "amc_expires_at", sql: "ALTER TABLE assets ADD COLUMN amc_expires_at DATE NULL" },
+      { name: "notes", sql: "ALTER TABLE assets ADD COLUMN notes TEXT NULL" },
+      { name: "updated_at", sql: "ALTER TABLE assets ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+    ];
+
+    for (const col of columnsToAdd) {
+      if (!existingColNames.has(col.name)) {
+        await db.query(col.sql);
+      }
+    }
+  } catch (migErr) {
+    console.error("Assets table migration error:", migErr);
+  }
+
+
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS maintenance_schedules (
       id VARCHAR(36) PRIMARY KEY,
       asset_id VARCHAR(36) NOT NULL,
       tenant_id VARCHAR(36) NOT NULL,
+      title VARCHAR(255) NULL,
       frequency ENUM('daily','weekly','monthly','quarterly','annual') NOT NULL,
       task_description TEXT NOT NULL,
       next_due_date DATE NOT NULL,
+      assigned_vendor_id VARCHAR(36) NULL,
+      assigned_technician_id VARCHAR(36) NULL,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      notes TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (assigned_vendor_id) REFERENCES vendors(id) ON DELETE SET NULL,
+      INDEX idx_maint_sched_tenant (tenant_id, is_active)
     ) ENGINE=InnoDB;
   `);
+
+  try {
+    const [schedCols] = (await db.query(`SHOW COLUMNS FROM maintenance_schedules`)) as any[];
+    const schedColNames = new Set(schedCols.map((c: any) => c.Field));
+    const schedColumnsToAdd = [
+      { name: "title", sql: "ALTER TABLE maintenance_schedules ADD COLUMN title VARCHAR(255) NULL" },
+      { name: "assigned_vendor_id", sql: "ALTER TABLE maintenance_schedules ADD COLUMN assigned_vendor_id VARCHAR(36) NULL" },
+      { name: "assigned_technician_id", sql: "ALTER TABLE maintenance_schedules ADD COLUMN assigned_technician_id VARCHAR(36) NULL" },
+      { name: "is_active", sql: "ALTER TABLE maintenance_schedules ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE" },
+      { name: "notes", sql: "ALTER TABLE maintenance_schedules ADD COLUMN notes TEXT NULL" },
+      { name: "updated_at", sql: "ALTER TABLE maintenance_schedules ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+    ];
+    for (const col of schedColumnsToAdd) {
+      if (!schedColNames.has(col.name)) {
+        await db.query(col.sql);
+      }
+    }
+  } catch (err) {
+    console.error("Maintenance schedules migration error:", err);
+  }
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS maintenance_work_orders (
@@ -593,14 +873,48 @@ export async function initDb() {
       asset_id VARCHAR(36) NULL,
       title VARCHAR(255) NOT NULL,
       description TEXT NOT NULL,
-      status ENUM('open','assigned','in_progress','completed','verified') NOT NULL DEFAULT 'open',
+      status ENUM('open','assigned','in_progress','completed','verified','cancelled') NOT NULL DEFAULT 'open',
+      priority ENUM('low','normal','high','critical') NOT NULL DEFAULT 'normal',
       assigned_technician_id VARCHAR(36) NULL,
+      assigned_vendor_id VARCHAR(36) NULL,
       cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      estimated_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      actual_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      sla_due_at DATE NULL,
+      completed_at DATETIME NULL,
+      notes TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
-      FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL
+      FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE SET NULL,
+      FOREIGN KEY (assigned_vendor_id) REFERENCES vendors(id) ON DELETE SET NULL,
+      INDEX idx_maint_wo_tenant_status (tenant_id, status)
     ) ENGINE=InnoDB;
   `);
+
+  try {
+    const [woCols] = (await db.query(`SHOW COLUMNS FROM maintenance_work_orders`)) as any[];
+    const woColNames = new Set(woCols.map((c: any) => c.Field));
+    const woColumnsToAdd = [
+      { name: "priority", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN priority ENUM('low','normal','high','critical') NOT NULL DEFAULT 'normal'" },
+      { name: "assigned_vendor_id", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN assigned_vendor_id VARCHAR(36) NULL" },
+      { name: "assigned_technician_id", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN assigned_technician_id VARCHAR(36) NULL" },
+      { name: "estimated_cost", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN estimated_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00" },
+      { name: "actual_cost", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN actual_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00" },
+      { name: "sla_due_at", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN sla_due_at DATE NULL" },
+      { name: "completed_at", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN completed_at DATETIME NULL" },
+      { name: "notes", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN notes TEXT NULL" },
+      { name: "updated_at", sql: "ALTER TABLE maintenance_work_orders ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+    ];
+    for (const col of woColumnsToAdd) {
+      if (!woColNames.has(col.name)) {
+        await db.query(col.sql);
+      }
+    }
+  } catch (err) {
+    console.error("Maintenance work orders migration error:", err);
+  }
+
 
   // ─── VISITOR & GATE MODULES ───────────────────────────────────────────────
 
@@ -633,6 +947,52 @@ export async function initDb() {
       FOREIGN KEY (visitor_pass_id) REFERENCES visitor_passes(id) ON DELETE SET NULL
     ) ENGINE=InnoDB;
   `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS visitor_blacklist (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      phone VARCHAR(64) NULL,
+      vehicle_plate VARCHAR(32) NULL,
+      reason TEXT NOT NULL,
+      added_by VARCHAR(36) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      INDEX idx_blacklist_tenant (tenant_id)
+    ) ENGINE=InnoDB;
+  `);
+
+  try {
+    const [vpCols] = (await db.query(`SHOW COLUMNS FROM visitor_passes`)) as any[];
+    const vpColNames = new Set(vpCols.map((c: any) => c.Field));
+    const vpColumnsToAdd = [
+      { name: "visitor_type", sql: "ALTER TABLE visitor_passes ADD COLUMN visitor_type ENUM('one_time','recurring') NOT NULL DEFAULT 'one_time'" },
+      { name: "vehicle_plate", sql: "ALTER TABLE visitor_passes ADD COLUMN vehicle_plate VARCHAR(32) NULL" },
+      { name: "pre_registered", sql: "ALTER TABLE visitor_passes ADD COLUMN pre_registered BOOLEAN NOT NULL DEFAULT TRUE" },
+      { name: "expires_at", sql: "ALTER TABLE visitor_passes ADD COLUMN expires_at DATETIME NULL" },
+      { name: "notes", sql: "ALTER TABLE visitor_passes ADD COLUMN notes TEXT NULL" },
+      { name: "created_by", sql: "ALTER TABLE visitor_passes ADD COLUMN created_by VARCHAR(36) NULL" },
+      { name: "updated_at", sql: "ALTER TABLE visitor_passes ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" },
+    ];
+    for (const col of vpColumnsToAdd) {
+      if (!vpColNames.has(col.name)) await db.query(col.sql);
+    }
+  } catch (err) { console.error("Visitor passes migration error:", err); }
+
+  try {
+    const [logCols] = (await db.query(`SHOW COLUMNS FROM entry_exit_log`)) as any[];
+    const logColNames = new Set(logCols.map((c: any) => c.Field));
+    const logColumnsToAdd = [
+      { name: "verified_by", sql: "ALTER TABLE entry_exit_log ADD COLUMN verified_by VARCHAR(36) NULL" },
+      { name: "unit_id", sql: "ALTER TABLE entry_exit_log ADD COLUMN unit_id VARCHAR(36) NULL" },
+      { name: "notes", sql: "ALTER TABLE entry_exit_log ADD COLUMN notes TEXT NULL" },
+    ];
+    for (const col of logColumnsToAdd) {
+      if (!logColNames.has(col.name)) await db.query(col.sql);
+    }
+  } catch (err) { console.error("Entry exit log migration error:", err); }
+
 
   // ─── LEGACY: Form submissions ─────────────────────────────────────────────
   await db.query(`
@@ -889,7 +1249,8 @@ export async function initDb() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
       FOREIGN KEY (amenity_id) REFERENCES amenities(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_bookings_conflict (amenity_id, booking_date, status, start_time, end_time)
     ) ENGINE=InnoDB;
   `);
 
@@ -946,7 +1307,8 @@ export async function initDb() {
       scheduled_at DATETIME NOT NULL,
       status ENUM('scheduled','completed','cancelled') NOT NULL DEFAULT 'scheduled',
       meeting_minutes TEXT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
     ) ENGINE=InnoDB;
   `);
 
@@ -991,13 +1353,23 @@ export async function initDb() {
       tenant_id VARCHAR(36) NOT NULL,
       user_id VARCHAR(36) NOT NULL,
       title VARCHAR(255) NOT NULL,
-      body TEXT NOT NULL,
+      message TEXT NULL,
+      body TEXT NULL,
+      type VARCHAR(64) DEFAULT 'info',
       read_status BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB;
   `);
+
+  try {
+    await db.query(`ALTER TABLE notifications ADD COLUMN message TEXT NULL`);
+  } catch (e) {}
+  try {
+    await db.query(`ALTER TABLE notifications ADD COLUMN type VARCHAR(64) DEFAULT 'info'`);
+  } catch (e) {}
+
 
   // Upgrade maintenance table to include SLA, assigned vendor, and actual vs estimated cost tracking
   try {
@@ -1041,6 +1413,100 @@ export async function initDb() {
   try {
     await db.query(`ALTER TABLE visitor_passes ADD COLUMN expires_at TIMESTAMP NULL`);
   } catch (e) {}
+
+  // ─── Phase 2: Database Architecture Hardening Migrations ───
+  console.log("[DB] Applying Phase 2 database integrity schema changes...");
+
+  // Task 4: Drop old CASCADE constraints and alter columns to nullable
+  try {
+    await db.query("ALTER TABLE complaints DROP FOREIGN KEY fk_complaints_submitted");
+  } catch (e) {}
+  try {
+    await db.query("ALTER TABLE complaints MODIFY COLUMN submitted_by VARCHAR(36) NULL");
+  } catch (e) {}
+
+  try {
+    await db.query("ALTER TABLE complaint_comments DROP FOREIGN KEY fk_comments_author");
+  } catch (e) {}
+  try {
+    await db.query("ALTER TABLE complaint_comments MODIFY COLUMN author_id VARCHAR(36) NULL");
+  } catch (e) {}
+
+  try {
+    await db.query("ALTER TABLE notices DROP FOREIGN KEY fk_notices_author");
+  } catch (e) {}
+  try {
+    await db.query("ALTER TABLE notices MODIFY COLUMN author_id VARCHAR(36) NULL");
+  } catch (e) {}
+
+  const migrations = [
+    // Unique Constraints
+    "ALTER TABLE units ADD CONSTRAINT uniq_tenant_unit UNIQUE (tenant_id, block_id, building_id, floor_id, unit_number)",
+    "ALTER TABLE parking_slots ADD CONSTRAINT uniq_tenant_slot UNIQUE (tenant_id, block, label)",
+
+    // Indexes
+    "CREATE INDEX idx_units_tenant_hierarchy ON units (tenant_id, block_id, building_id, floor_id)",
+    "CREATE INDEX idx_residents_tenant_person ON residents (tenant_id, person_id, unit_id)",
+    "CREATE INDEX idx_ledger_tenant_unit ON ledger_entries (tenant_id, unit_id, billing_period)",
+    "CREATE INDEX idx_visitor_tenant_resident ON visitor_passes (tenant_id, resident_id, expected_at)",
+    "CREATE INDEX idx_bookings_conflict ON amenity_bookings (amenity_id, booking_date, status, start_time, end_time)",
+
+    // Foreign Keys
+    "ALTER TABLE governance_meetings ADD CONSTRAINT fk_gov_meetings_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",
+    "ALTER TABLE units ADD CONSTRAINT fk_units_floor FOREIGN KEY (floor_id) REFERENCES floors(id) ON DELETE CASCADE",
+    "ALTER TABLE units ADD CONSTRAINT fk_units_building FOREIGN KEY (building_id) REFERENCES buildings(id) ON DELETE CASCADE",
+    "ALTER TABLE units ADD CONSTRAINT fk_units_block FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE",
+    "ALTER TABLE units ADD CONSTRAINT fk_units_society FOREIGN KEY (society_id) REFERENCES societies(id) ON DELETE CASCADE",
+    "ALTER TABLE units ADD CONSTRAINT fk_units_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",
+    "ALTER TABLE profiles ADD CONSTRAINT fk_profiles_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL",
+    "ALTER TABLE residents ADD CONSTRAINT fk_residents_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",
+    "ALTER TABLE resident_vehicles ADD CONSTRAINT fk_vehicles_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",
+    "ALTER TABLE persons ADD CONSTRAINT fk_persons_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE visitor_passes ADD CONSTRAINT fk_passes_resident FOREIGN KEY (resident_id) REFERENCES residents(id) ON DELETE SET NULL",
+    "ALTER TABLE entry_exit_log ADD CONSTRAINT fk_logs_verified FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE entry_exit_log ADD CONSTRAINT fk_logs_unit FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL",
+    "ALTER TABLE entry_exit_log ADD CONSTRAINT fk_logs_gate FOREIGN KEY (gate_id) REFERENCES gate_terminals(id) ON DELETE SET NULL",
+    "ALTER TABLE ledger_entries ADD CONSTRAINT fk_ledger_head FOREIGN KEY (charge_head_id) REFERENCES charge_heads(id) ON DELETE SET NULL",
+    "ALTER TABLE ledger_entries ADD CONSTRAINT fk_ledger_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE payments ADD CONSTRAINT fk_payments_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",
+    "ALTER TABLE payments ADD CONSTRAINT fk_payments_creator FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE complaints ADD CONSTRAINT fk_complaints_unit FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL",
+    "ALTER TABLE complaints ADD CONSTRAINT fk_complaints_submitted FOREIGN KEY (submitted_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE complaints ADD CONSTRAINT fk_complaints_assigned FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE complaints ADD CONSTRAINT fk_complaints_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE complaint_comments ADD CONSTRAINT fk_comments_author FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE complaint_history ADD CONSTRAINT fk_history_changer FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE notices ADD CONSTRAINT fk_notices_author FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE notice_reads ADD CONSTRAINT fk_notice_reads_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE",
+    "ALTER TABLE rfqs ADD CONSTRAINT fk_rfqs_vendor FOREIGN KEY (awarded_vendor_id) REFERENCES vendors(id) ON DELETE SET NULL",
+    "ALTER TABLE rfqs ADD CONSTRAINT fk_rfqs_quotation FOREIGN KEY (awarded_quotation_id) REFERENCES quotations(id) ON DELETE SET NULL",
+    "ALTER TABLE quotations ADD CONSTRAINT fk_quotations_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",
+    "ALTER TABLE purchase_orders ADD CONSTRAINT fk_pos_rfq FOREIGN KEY (rfq_id) REFERENCES rfqs(id) ON DELETE SET NULL",
+    "ALTER TABLE purchase_orders ADD CONSTRAINT fk_pos_quotation FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE SET NULL",
+    "ALTER TABLE vendor_invoices ADD CONSTRAINT fk_invoices_recorded FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE budget_line_items ADD CONSTRAINT fk_line_items_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",
+    "ALTER TABLE stock_movements ADD CONSTRAINT fk_movements_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE project_expenses ADD CONSTRAINT fk_expenses_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE maintenance_schedules ADD CONSTRAINT fk_sched_technician FOREIGN KEY (assigned_technician_id) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE maintenance_work_orders ADD CONSTRAINT fk_wo_technician FOREIGN KEY (assigned_technician_id) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE visitor_blacklist ADD CONSTRAINT fk_blacklist_creator FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE form_submissions ADD CONSTRAINT fk_submissions_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",
+    "ALTER TABLE meter_readings ADD CONSTRAINT fk_readings_ledger FOREIGN KEY (ledger_entry_id) REFERENCES ledger_entries(id) ON DELETE SET NULL",
+    "ALTER TABLE meter_readings ADD CONSTRAINT fk_readings_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL",
+    "ALTER TABLE parking_allocations ADD CONSTRAINT fk_parking_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL",
+  ];
+
+  for (const sql of migrations) {
+    try {
+      await db.query(sql);
+    } catch (e: any) {
+      // Ignore if constraint or index already exists
+      if (!e.message.includes("Duplicate") && !e.message.includes("already exists") && !e.message.includes("duplicate key")) {
+        console.warn(`[DB] Migration warning/skip for: "${sql}" ->`, e.message);
+      }
+    }
+  }
+  console.log("[DB] Phase 2 database schema changes applied.");
 
   // Seed default module registry
   await seedModuleRegistry(db);
@@ -1353,6 +1819,83 @@ async function seedModuleRegistry(db: mysql.Pool) {
     );
   }
 
+  // Auto-link existing unlinked persons records with registered users matching by email
+  try {
+    await db.query(`
+      UPDATE persons p
+      INNER JOIN users u ON u.email = p.email
+      SET p.user_id = u.id
+      WHERE p.user_id IS NULL
+      AND p.email IS NOT NULL
+      AND p.email != ''
+    `);
+  } catch (err) {
+    console.error("[DB] Error running auto-link migration for persons: ", err);
+  }
+
+  // ─── AI MAINTENANCE INTELLIGENCE ───────────────────────────────────────────
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS ai_maintenance_analyses (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      analysis_type ENUM('full_insights','risk_assessment','cost_analysis','pattern_detection') NOT NULL,
+      result_data JSON NOT NULL,
+      created_by VARCHAR(36) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_ai_maint_tenant_type (tenant_id, analysis_type, created_at)
+    ) ENGINE=InnoDB;
+  `);
+
+  // ─── MULTI-SOCIETY ADMINS ──────────────────────────────────────────────────
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS society_admin_tenants (
+      id VARCHAR(36) PRIMARY KEY,
+      user_id VARCHAR(36) NOT NULL,
+      tenant_id VARCHAR(36) NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_user_tenant (user_id, tenant_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      INDEX idx_sat_user (user_id),
+      INDEX idx_sat_tenant (tenant_id)
+    ) ENGINE=InnoDB;
+  `);
+
+  // Migrate existing data if needed
+  try {
+    const [existingAdmins] = await db.query(`
+      SELECT ur.user_id, p.tenant_id
+      FROM user_roles ur
+      INNER JOIN profiles p ON p.id = ur.user_id
+      WHERE ur.role = 'society_admin'
+      AND p.tenant_id IS NOT NULL
+    `) as any[];
+
+    for (const admin of existingAdmins) {
+      const [check] = await db.query(
+        "SELECT id FROM society_admin_tenants WHERE user_id = ? AND tenant_id = ?",
+        [admin.user_id, admin.tenant_id]
+      ) as any[];
+
+      if (check.length === 0) {
+        const pivotId = crypto.randomUUID();
+        await db.query(
+          "INSERT INTO society_admin_tenants (id, user_id, tenant_id, is_active) VALUES (?, ?, ?, TRUE)",
+          [pivotId, admin.user_id, admin.tenant_id]
+        );
+        console.log(`[DB] Migrated society_admin ${admin.user_id} to tenant ${admin.tenant_id}`);
+      }
+    }
+  } catch (err) {
+    console.error("[DB] Error running society_admin migration: ", err);
+  }
+
   console.log("[DB] Module registry seeded.");
 }
+
 

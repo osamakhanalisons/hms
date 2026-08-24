@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { LedgerTable } from "@/components/ledger-table";
 import {
   getLedgerFn,
@@ -75,6 +76,13 @@ function LedgerPage() {
     queryKey: ["units"],
     queryFn: async () => getUnitsFn(),
   });
+
+  // Auto-select unit if there is only one unit available (e.g. for a resident)
+  useEffect(() => {
+    if (units && units.length === 1 && !selectedUnitId) {
+      setSelectedUnitId(units[0].id);
+    }
+  }, [units, selectedUnitId]);
 
   const { data: chargeHeads = [] } = useQuery({
     queryKey: ["chargeHeads"],
@@ -173,35 +181,41 @@ function LedgerPage() {
               <SelectContent>
                 {units.map((u: any) => (
                   <SelectItem key={u.id} value={u.id}>
-                    Unit {u.unit_number} ({u.building_name || "Villa"})
+                    {u.full_path || `Unit ${u.unit_number} ${u.building_name && `(${u.building_name})`} ${u.block_name && `Block ${u.block_name}`}`}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {selectedUnitId && (
-              <Button
-                onClick={() => setManualDialogOpen(true)}
-                variant="outline"
-                size="sm"
-                className="gap-1"
-              >
-                <PlusCircle className="size-4" /> Direct Debit
-              </Button>
+              <PermissionGate moduleKey="ledger" action="create" fallback={null}>
+                <Button
+                  onClick={() => setManualDialogOpen(true)}
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                >
+                  <PlusCircle className="size-4" /> Direct Debit
+                </Button>
+              </PermissionGate>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              onClick={() => setHeadDialogOpen(true)}
-              variant="outline"
-              size="sm"
-              className="gap-1 border-border/70"
-            >
-              <Settings className="size-4" /> Setup Charge Heads
-            </Button>
-            <Button onClick={() => setBulkDialogOpen(true)} size="sm" className="gap-1">
-              <FileSpreadsheet className="size-4" /> Run Monthly Charges
-            </Button>
+            <PermissionGate moduleKey="ledger" action="create" fallback={null}>
+              <Button
+                onClick={() => setHeadDialogOpen(true)}
+                variant="outline"
+                size="sm"
+                className="gap-1 border-border/70"
+              >
+                <Settings className="size-4" /> Setup Charge Heads
+              </Button>
+            </PermissionGate>
+            <PermissionGate moduleKey="ledger" action="create" fallback={null}>
+              <Button onClick={() => setBulkDialogOpen(true)} size="sm" className="gap-1">
+                <FileSpreadsheet className="size-4" /> Run Monthly Charges
+              </Button>
+            </PermissionGate>
           </div>
         </header>
 

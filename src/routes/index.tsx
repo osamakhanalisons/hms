@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   TrendingUp,
   ArrowUpRight,
@@ -13,7 +13,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,10 +23,15 @@ import { MODULES } from "@/lib/modules";
 import { getFormsForModule, totalFormCount } from "@/lib/forms-registry";
 import { getSubmissionsFn, getDashboardKpisFn, getRealCollectionsFn } from "@/lib/api/db-functions";
 import { useAuth } from "@/hooks/use-auth";
-import { canAccessModule, roleLabel } from "@/lib/role-access";
+import { usePermissions } from "@/hooks/use-permissions";
+import { roleLabel } from "@/lib/role-access";
 import { formatDistanceToNow, parseISO } from "date-fns";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: async ({ context }) => {
+    // Note: Authentication is handled by useAuth hook in component
+    // Server-side auth is enforced at API level via getSessionUser
+  },
   head: () => ({
     meta: [
       { title: "Dashboard — HousingOS" },
@@ -42,17 +47,19 @@ export const Route = createFileRoute("/")({
 const MODULE_NAME = Object.fromEntries(MODULES.map((m) => [m.key, m.name]));
 
 function Dashboard() {
-  const { profile, primaryRole } = useAuth();
-  const active = MODULES.filter((m) => canAccessModule(primaryRole, m.key)).length;
-  const formCount = totalFormCount();
-  const sample = MODULES.filter((m) => canAccessModule(primaryRole, m.key)).slice(0, 8);
-
+  // ✅ STEP 1: ALL HOOKS AT THE TOP (before any conditional returns)
+  const { profile, primaryRole, session, loading, roles } = useAuth();
+  const { hasModuleAccess } = usePermissions();
+  const navigate = useNavigate();
+  
+  // All data fetching hooks MUST be at top
   const { data: submissions = [] } = useQuery({
     queryKey: ["submissions", "recent"],
     queryFn: async () => {
       const data = await getSubmissionsFn({ data: { limit: 200 } });
       return data ?? [];
     },
+    enabled: !!session, // Only fetch when authenticated
   });
 
   const {
@@ -60,11 +67,13 @@ function Dashboard() {
   } = useQuery({
     queryKey: ["dashboard-kpis"],
     queryFn: () => getDashboardKpisFn(),
+    enabled: !!session, // Only fetch when authenticated
   });
 
   const { data: chartData = [] } = useQuery({
     queryKey: ["dashboard-collections"],
     queryFn: () => getRealCollectionsFn(),
+    enabled: !!session, // Only fetch when authenticated
   });
 
   const stats = useMemo(() => {
@@ -85,9 +94,37 @@ function Dashboard() {
     const modulesUsed = new Set(submissions.map((r) => r.module_key)).size;
     return { total: submissions.length, last7, last24, modulesUsed };
   }, [submissions]);
-
+  
+  // Check if user is admin
+  const isAdmin = roles.includes("super_admin") || roles.includes("society_admin");
+  
+  // Computed values (these are fine after hooks)
+  const active = MODULES.filter((m) => isAdmin || hasModuleAccess(m.key)).length;
+  const formCount = totalFormCount();
+  const sample = MODULES.filter((m) => isAdmin || hasModuleAccess(m.key)).slice(0, 8);
   const submissionCount = stats.total;
   const recent = submissions.slice(0, 6);
+  
+  // ✅ STEP 2: Auth redirect logic in useEffect (not before hooks!)
+  useEffect(() => {
+    if (!loading && !session) {
+      navigate({ to: "/auth" });
+    }
+  }, [loading, session, navigate]);
+  
+  // ✅ STEP 3: Conditional renders AFTER all hooks
+  if (loading) {
+    return (
+      <AppShell title="Loading">
+        <div className="flex h-[50vh] items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </AppShell>
+    );
+  }
+  
+  // Don't render if not authenticated (useEffect will redirect)
+  if (!session) return null;
 
   const KPIS = [
     {

@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { KanbanBoard, KanbanItem, KanbanColumn } from "@/components/kanban-board";
 import {
   getComplaintsFn,
@@ -11,7 +12,8 @@ import {
   updateComplaintStatusFn,
 } from "@/lib/api/complaints";
 import { getUnitsFn } from "@/lib/api/property";
-import { getResidentsFn } from "@/lib/api/residents";
+import { getTenantUsersFn } from "@/lib/api/roles";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,10 +65,14 @@ const COLUMNS: KanbanColumn[] = [
 ];
 
 function ComplaintsPage() {
+  const { user, roles } = useAuth();
+  const isAdmin = roles.includes("super_admin") || roles.includes("society_admin") || roles.includes("maintenance_head");
   const queryClient = useQueryClient();
   const [submitOpen, setSubmitOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+
+  const isAssignedStaff = selectedTicket && selectedTicket.assigned_to === user?.id;
 
   // Submit Form state
   const [unitId, setUnitId] = useState("");
@@ -89,10 +95,16 @@ function ComplaintsPage() {
     queryFn: async () => getUnitsFn(),
   });
 
-  // Fetch staff users (simulated by fetching society admins/residents for simplicity)
-  const { data: residents = [] } = useQuery({
-    queryKey: ["residents"],
-    queryFn: async () => getResidentsFn(),
+
+  // Fetch staff users (society admin, technicians, guards, etc.)
+  const { data: staffUsers = [] } = useQuery({
+    queryKey: ["tenant-users-staff"],
+    queryFn: async () => {
+      const allUsers = await getTenantUsersFn();
+      return allUsers.filter((u: any) =>
+        u.roles.some((r: string) => r !== "resident" && r !== "tenant")
+      );
+    },
   });
 
   const submitComplaint = useMutation({
@@ -157,7 +169,7 @@ function ComplaintsPage() {
     id: c.id,
     title: c.title,
     description: c.description,
-    meta: `Unit ${c.unit_number || "Global"} · ${format(new Date(c.created_at), "dd MMM")}`,
+    meta: `${c.full_path || "Global"} · ${format(new Date(c.created_at), "dd MMM")}`,
     badge: c.priority,
     badgeTone:
       c.priority === "critical" ? "destructive" : c.priority === "high" ? "default" : "outline",
@@ -180,9 +192,11 @@ function ComplaintsPage() {
       title="Complaint Management"
       subtitle="Track resident tickets, assign technicians, and monitor SLA breach windows"
       actions={
-        <Button onClick={() => setSubmitOpen(true)} className="gap-1.5 size-sm">
-          <Plus className="size-4" /> Raise Complaint
-        </Button>
+        <PermissionGate moduleKey="complaints" action="create" fallback={null}>
+          <Button onClick={() => setSubmitOpen(true)} className="gap-1.5 size-sm">
+            <Plus className="size-4" /> Raise Complaint
+          </Button>
+        </PermissionGate>
       }
     >
       <div className="mx-auto w-full max-w-[95rem] px-4 py-6 sm:px-8 sm:py-10">
@@ -220,7 +234,7 @@ function ComplaintsPage() {
                   <SelectContent>
                     {units.map((u: any) => (
                       <SelectItem key={u.id} value={u.id}>
-                        Unit {u.unit_number}
+                        {u.full_path || `Unit ${u.unit_number}`}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -304,8 +318,7 @@ function ComplaintsPage() {
           <DialogHeader>
             <DialogTitle className="font-serif text-lg">{selectedTicket?.title}</DialogTitle>
             <DialogDescription>
-              Raised by {selectedTicket?.submitter_name || "Resident"} for Unit{" "}
-              {selectedTicket?.unit_number || "Global"}
+              Raised by {selectedTicket?.submitter_name || "Resident"} for {selectedTicket?.full_path || "Global"}
             </DialogDescription>
           </DialogHeader>
 
@@ -330,79 +343,107 @@ function ComplaintsPage() {
               </div>
 
               {/* Assignment actions */}
-              <div className="space-y-2 border-t pt-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Assign Staff / Operator
-                </h4>
-                <div className="flex gap-2">
-                  <Select value={assigneeId} onValueChange={setAssigneeId}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Select Technician..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {residents.map((res: any) => (
-                        <SelectItem key={res.person_id} value={res.person_id}>
-                          {res.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button onClick={handleAssign} disabled={!assigneeId} size="sm" className="gap-1">
-                    <UserCheck className="size-4" /> Assign
-                  </Button>
+              {isAdmin ? (
+                <div className="space-y-2 border-t pt-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Assign Staff / Operator
+                  </h4>
+                  <div className="flex gap-2">
+                    <Select value={assigneeId} onValueChange={setAssigneeId}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Select Technician..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {staffUsers.map((u: any) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.full_name} ({u.roles.map((r: string) => r.replace("_", " ")).join(", ")})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={handleAssign} disabled={!assigneeId} size="sm" className="gap-1">
+                      <UserCheck className="size-4" /> Assign
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2 border-t pt-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Assigned Operator / Staff
+                  </h4>
+                  <div className="text-sm font-semibold text-foreground">
+                    {selectedTicket.assignee_name ? (
+                      <span>{selectedTicket.assignee_name}</span>
+                    ) : (
+                      <span className="text-muted-foreground font-normal italic">Pending Assignment</span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Workflow Actions */}
-              <div className="space-y-3 border-t pt-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Workflow Transition
-                </h4>
+              {(isAdmin || isAssignedStaff) ? (
+                <div className="space-y-3 border-t pt-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Workflow Transition
+                  </h4>
 
-                <div className="space-y-2">
-                  <label className="text-xs text-muted-foreground block font-semibold">
-                    Resolution Note (Required to resolve)
-                  </label>
-                  <Input
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Explain repairs carried out..."
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-muted-foreground block font-semibold">
+                      Resolution Note (Required to resolve)
+                    </label>
+                    <Input
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Explain repairs carried out..."
+                    />
+                  </div>
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {selectedTicket.status === "assigned" && (
-                    <Button
-                      onClick={() => handleUpdateStatus("in_progress")}
-                      size="sm"
-                      variant="outline"
-                      className="text-warning-foreground border-warning/30 bg-warning/5"
-                    >
-                      Start Progress
-                    </Button>
-                  )}
-                  {(selectedTicket.status === "assigned" ||
-                    selectedTicket.status === "in_progress") && (
-                    <Button
-                      onClick={() => handleUpdateStatus("resolved")}
-                      size="sm"
-                      disabled={!notes}
-                      className="bg-success text-success-foreground hover:bg-success/90"
-                    >
-                      Mark Resolved
-                    </Button>
-                  )}
-                  {selectedTicket.status === "resolved" && (
-                    <Button
-                      onClick={() => handleUpdateStatus("closed")}
-                      size="sm"
-                      variant="secondary"
-                    >
-                      Close Ticket
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {selectedTicket.status === "assigned" && (
+                      <Button
+                        onClick={() => handleUpdateStatus("in_progress")}
+                        size="sm"
+                        variant="outline"
+                        className="text-warning-foreground border-warning/30 bg-warning/5"
+                      >
+                        Start Progress
+                      </Button>
+                    )}
+                    {(selectedTicket.status === "assigned" ||
+                      selectedTicket.status === "in_progress") && (
+                      <Button
+                        onClick={() => handleUpdateStatus("resolved")}
+                        size="sm"
+                        disabled={!notes}
+                        className="bg-success text-success-foreground hover:bg-success/90"
+                      >
+                        Mark Resolved
+                      </Button>
+                    )}
+                    {selectedTicket.status === "resolved" && (
+                      <Button
+                        onClick={() => handleUpdateStatus("closed")}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Close Ticket
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                selectedTicket.resolution_notes && (
+                  <div className="space-y-2 border-t pt-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Resolution Note
+                    </h4>
+                    <p className="text-sm text-foreground bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-200 p-2.5 rounded-lg">
+                      {selectedTicket.resolution_notes}
+                    </p>
+                  </div>
+                )
+              )}
             </div>
           )}
         </DialogContent>

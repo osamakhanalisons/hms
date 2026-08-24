@@ -1,8 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
-import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole } from "./auth-helper";
+import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
 
 export const PERMISSION_ROLES = [
   "society_admin",
@@ -15,6 +14,7 @@ export const PERMISSION_ROLES = [
   "technician",
 ] as const;
 
+
 export const PERMISSION_MODULES = [
   { key: "property", label: "Property" },
   { key: "residents", label: "Residents" },
@@ -23,14 +23,17 @@ export const PERMISSION_MODULES = [
   { key: "reports", label: "Reports" },
   { key: "ledger", label: "Ledger" },
   { key: "payments", label: "Payments" },
+  { key: "financial_transparency", label: "Financial Transparency" },
   { key: "budget", label: "Budget" },
   { key: "complaints", label: "Complaints" },
   { key: "maintenance", label: "Maintenance" },
   { key: "vendors", label: "Vendors" },
   { key: "assets", label: "Assets" },
-  { key: "visitor", label: "Visitor" },
-  { key: "gate", label: "Security" },
+  { key: "visitor", label: "Visitors" },
+  { key: "gate", label: "Gate / Security" },
   { key: "parking", label: "Parking" },
+  { key: "guard_patrol", label: "Guard Patrol" },
+  { key: "blacklist", label: "Blacklist" },
   { key: "notice_board", label: "Notices" },
   { key: "community_forum", label: "Forum" },
   { key: "polls", label: "Polls" },
@@ -85,7 +88,7 @@ function buildDefaultPermissions(role: PermissionRole): RolePermissionRecord[] {
   };
 
   const financeModules: PermissionModuleKey[] = ["ledger", "payments", "budget", "reports"];
-  const securityModules: PermissionModuleKey[] = ["gate", "visitor", "parking"];
+  const securityModules: PermissionModuleKey[] = ["gate", "visitor", "parking", "guard_patrol", "blacklist"];
   const maintenanceModules: PermissionModuleKey[] = ["maintenance", "complaints", "vendors", "assets"];
   const residentTenantCreateModules: PermissionModuleKey[] = ["notice_board", "community_forum", "polls", "events"];
 
@@ -121,8 +124,28 @@ function buildDefaultPermissions(role: PermissionRole): RolePermissionRecord[] {
       return base;
     case "resident":
     case "tenant":
+    case "member":
+      // --- Resident/Tenant can VIEW their own profile in Residents module ---
+      viewOnly("residents");
+      // --- Finance modules (view own ledger & payments) ---
+      viewOnly("ledger");
+      viewOnly("payments");
+      viewOnly("financial_transparency");
+      // --- Utility meters (view readings) ---
+      viewOnly("utility_meters");
+      // --- Complaints: full CRUD (resident can create, track, close own) ---
       full("complaints");
-      createOnly("visitor");
+      // --- Notifications, documents, amenities: view only ---
+      viewOnly("notifications");
+      viewOnly("documents");
+      viewOnly("amenities");
+      // --- Visitor: view + create (pre-register guests) ---
+      viewOnly("visitor");
+      const visitorItem2 = base.find((row) => row.module_key === "visitor");
+      if (visitorItem2) { visitorItem2.can_view = true; visitorItem2.can_create = true; }
+      // --- Parking: view only ---
+      viewOnly("parking");
+      // --- Community modules: view + create ---
       residentTenantCreateModules.forEach((key) => {
         viewOnly(key);
         const item = base.find((row) => row.module_key === key);
@@ -163,10 +186,10 @@ function mergePermissions(role: PermissionRole, rows: RolePermissionRecord[]) {
   rows.forEach((row) => {
     const item = defaultPermissions[row.module_key];
     if (item) {
-      item.can_view = row.can_view;
-      item.can_create = row.can_create;
-      item.can_edit = row.can_edit;
-      item.can_delete = row.can_delete;
+      item.can_view = Boolean(row.can_view);
+      item.can_create = Boolean(row.can_create);
+      item.can_edit = Boolean(row.can_edit);
+      item.can_delete = Boolean(row.can_delete);
     }
   });
 
@@ -183,14 +206,77 @@ function buildFullAccess(): RolePermissionRecord[] {
   }));
 }
 
+export async function requirePermission(
+  request: Request | undefined,
+  moduleKey: string,
+  action: "view" | "create" | "edit" | "delete"
+): Promise<{ userId: string; tenantId: string; roles: string[] }> {
+  const userId = await getSessionUser(request);
+  if (!userId) throw new Error("Unauthorized");
+
+  const roles = await getUserRoles(userId);
+  let tenantId: string;
+
+  if (roles.includes("super_admin") || roles.includes("society_admin")) {
+    const scoping = await getTenantScoping(request);
+    tenantId = scoping.tenantId;
+  } else {
+    const userTenantId = await getUserTenantId(userId);
+    if (!userTenantId) throw new Error("No tenant session found");
+    tenantId = userTenantId;
+  }
+
+  if (action !== "view" && !tenantId) {
+    throw new Error("Forbidden — A specific society must be selected for this operation.");
+  }
+
+  const { getDb } = await import("../db.server");
+  const db = getDb();
+  let hasAccess = false;
+
+  for (const role of roles) {
+    const [rows] = (await db.query(
+      "SELECT module_key, can_view, can_create, can_edit, can_delete FROM role_permissions WHERE tenant_id = ? AND role = ?",
+      [tenantId, role],
+    )) as any[];
+
+    let rolePerms: RolePermissionRecord[] = [];
+    if (rows && rows.length > 0) {
+      rolePerms = mergePermissions(role, rows as RolePermissionRecord[]);
+    } else {
+      if (role === "super_admin" || role === "society_admin") {
+        rolePerms = buildFullAccess();
+      } else {
+        rolePerms = buildDefaultPermissions(role);
+      }
+    }
+
+    const modPerm = rolePerms.find((p) => p.module_key === moduleKey);
+    if (modPerm) {
+      if (action === "view" && modPerm.can_view) hasAccess = true;
+      if (action === "create" && modPerm.can_create) hasAccess = true;
+      if (action === "edit" && modPerm.can_edit) hasAccess = true;
+      if (action === "delete" && modPerm.can_delete) hasAccess = true;
+    }
+  }
+
+  if (!hasAccess) {
+    throw new Error(`Forbidden — You do not have permission to ${action} ${moduleKey}`);
+  }
+
+  return { userId, tenantId, roles };
+}
+
+
 export const getRolePermissionsFn = createServerFn({ method: "POST" })
   .validator(
     z.object({
       role: z.string().min(1),
+      tenantId: z.string().optional(),
     }),
   )
   .handler(async (ctx) => {
-    const data = ctx.data as { role: PermissionRole };
+    const data = ctx.data as { role: PermissionRole; tenantId?: string };
     const request = (ctx as any).request as Request | undefined;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
@@ -198,13 +284,15 @@ export const getRolePermissionsFn = createServerFn({ method: "POST" })
     const userRoles = await getUserRoles(userId);
     if (!isAdminRole(userRoles)) throw new Error("Forbidden");
 
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    const resolvedTenantId = (scoping.isSuperAdmin && data.tenantId) ? data.tenantId : scoping.tenantId;
+    if (!resolvedTenantId) throw new Error("Forbidden — A specific society must be selected.");
 
+    const { getDb } = await import("../db.server");
     const db = getDb();
     const [rows] = (await db.query(
       "SELECT module_key, can_view, can_create, can_edit, can_delete FROM role_permissions WHERE tenant_id = ? AND role = ?",
-      [tenantId, data.role],
+      [resolvedTenantId, data.role],
     )) as any[];
 
     if (rows.length === 0) {
@@ -214,10 +302,13 @@ export const getRolePermissionsFn = createServerFn({ method: "POST" })
     return mergePermissions(data.role, rows as RolePermissionRecord[]);
   });
 
+const booleanOrNumber = z.union([z.boolean(), z.number()]).transform((val) => Boolean(val));
+
 export const updateRolePermissionsFn = createServerFn({ method: "POST" })
   .validator(
     z.object({
       role: z.string().min(1),
+      tenantId: z.string().optional(),
       permissions: z.array(
         z.object({
           module_key: z.enum([
@@ -228,6 +319,7 @@ export const updateRolePermissionsFn = createServerFn({ method: "POST" })
             "reports",
             "ledger",
             "payments",
+            "financial_transparency",
             "budget",
             "complaints",
             "maintenance",
@@ -236,6 +328,8 @@ export const updateRolePermissionsFn = createServerFn({ method: "POST" })
             "visitor",
             "gate",
             "parking",
+            "guard_patrol",
+            "blacklist",
             "notice_board",
             "community_forum",
             "polls",
@@ -244,10 +338,10 @@ export const updateRolePermissionsFn = createServerFn({ method: "POST" })
             "governance",
             "utility_meters",
           ]),
-          can_view: z.boolean(),
-          can_create: z.boolean(),
-          can_edit: z.boolean(),
-          can_delete: z.boolean(),
+          can_view: booleanOrNumber,
+          can_create: booleanOrNumber,
+          can_edit: booleanOrNumber,
+          can_delete: booleanOrNumber,
         }),
       ),
     }),
@@ -255,6 +349,7 @@ export const updateRolePermissionsFn = createServerFn({ method: "POST" })
   .handler(async (ctx) => {
     const data = ctx.data as {
       role: PermissionRole;
+      tenantId?: string;
       permissions: Array<{
         module_key: PermissionModuleKey;
         can_view: boolean;
@@ -270,13 +365,15 @@ export const updateRolePermissionsFn = createServerFn({ method: "POST" })
     const userRoles = await getUserRoles(userId);
     if (!isAdminRole(userRoles)) throw new Error("Forbidden");
 
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    const resolvedTenantId = (scoping.isSuperAdmin && data.tenantId) ? data.tenantId : scoping.tenantId;
+    if (!resolvedTenantId) throw new Error("Forbidden — A specific society must be selected.");
 
+    const { getDb } = await import("../db.server");
     const db = getDb();
     const values = data.permissions.map((permission) => [
       crypto.randomUUID(),
-      tenantId,
+      resolvedTenantId,
       data.role,
       permission.module_key,
       permission.can_view ? 1 : 0,
@@ -309,27 +406,79 @@ export const getMyPermissionsFn = createServerFn({ method: "GET" }).handler(asyn
   if (!userId) throw new Error("Unauthorized");
 
   const userRoles = await getUserRoles(userId);
-  if (userRoles.includes("super_admin")) {
+  if (userRoles.includes("super_admin") || userRoles.includes("society_admin")) {
     return buildFullAccess();
   }
 
-  const role = userRoles[0] as PermissionRole | undefined;
-  if (!role) {
+  if (userRoles.length === 0) {
     return buildEmptyPermissions();
   }
 
-  const tenantId = await getUserTenantId(userId);
-  if (!tenantId) return buildDefaultPermissions(role);
+  let tenantId = await getUserTenantId(userId);
 
-  const db = getDb();
-  const [rows] = (await db.query(
-    "SELECT module_key, can_view, can_create, can_edit, can_delete FROM role_permissions WHERE tenant_id = ? AND role = ?",
-    [tenantId, role],
-  )) as any[];
-
-  if (rows.length === 0) {
-    return buildDefaultPermissions(role);
+  // Fallback: agar profile.tenant_id null ho, persons table se check karo
+  if (!tenantId) {
+    const { getDb } = await import("../db.server");
+    const db = getDb();
+    const [personRows] = (await db.query(
+      "SELECT tenant_id FROM persons WHERE user_id = ? AND tenant_id IS NOT NULL LIMIT 1",
+      [userId],
+    )) as any[];
+    if (personRows.length > 0) {
+      tenantId = personRows[0].tenant_id as string;
+      // Profile ko bhi fix kar do silently
+      await db.query(
+        "UPDATE profiles SET tenant_id = ? WHERE id = ? AND (tenant_id IS NULL OR tenant_id = '')",
+        [tenantId, userId],
+      );
+    }
   }
 
-  return mergePermissions(role, rows as RolePermissionRecord[]);
+  const { getDb } = await import("../db.server");
+  const db = getDb();
+  const allRoleRecords: RolePermissionRecord[] = [];
+
+  for (const role of userRoles) {
+    let rolePerms: RolePermissionRecord[] = [];
+    if (tenantId) {
+      const [rows] = (await db.query(
+        "SELECT module_key, can_view, can_create, can_edit, can_delete FROM role_permissions WHERE tenant_id = ? AND role = ?",
+        [tenantId, role],
+      )) as any[];
+      if (rows && rows.length > 0) {
+        rolePerms = mergePermissions(role, rows as RolePermissionRecord[]);
+      } else {
+        rolePerms = buildDefaultPermissions(role);
+      }
+    } else {
+      // No tenantId at all: still use defaults so resident can see something
+      rolePerms = buildDefaultPermissions(role);
+    }
+    allRoleRecords.push(...rolePerms);
+  }
+
+  // Merge all roles using OR logic (most permissive wins)
+  const mergedMap = new Map<PermissionModuleKey, RolePermissionRecord>();
+  PERMISSION_MODULES.forEach((mod) => {
+    mergedMap.set(mod.key, {
+      module_key: mod.key,
+      can_view: false,
+      can_create: false,
+      can_edit: false,
+      can_delete: false,
+    });
+  });
+
+  for (const perm of allRoleRecords) {
+    const existing = mergedMap.get(perm.module_key);
+    if (existing) {
+      existing.can_view = existing.can_view || perm.can_view;
+      existing.can_create = existing.can_create || perm.can_create;
+      existing.can_edit = existing.can_edit || perm.can_edit;
+      existing.can_delete = existing.can_delete || perm.can_delete;
+    }
+  }
+
+  return Array.from(mergedMap.values());
 });
+

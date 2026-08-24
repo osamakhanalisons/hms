@@ -11,13 +11,17 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VisitorRouteImport } from './routes/visitor'
 import { Route as VendorsRouteImport } from './routes/vendors'
+import { Route as VendorFinanceRouteImport } from './routes/vendor-finance'
 import { Route as UtilityMetersRouteImport } from './routes/utility-meters'
+import { Route as SocietiesRouteImport } from './routes/societies'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as ResidentsRouteImport } from './routes/residents'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as PropertyRouteImport } from './routes/property'
+import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PollsRouteImport } from './routes/polls'
+import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as ParkingRouteImport } from './routes/parking'
 import { Route as NotificationsRouteImport } from './routes/notifications'
@@ -25,9 +29,11 @@ import { Route as NoticesRouteImport } from './routes/notices'
 import { Route as ModulesAdminRouteImport } from './routes/modules-admin'
 import { Route as MaintenanceRouteImport } from './routes/maintenance'
 import { Route as LedgerRouteImport } from './routes/ledger'
+import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as GovernanceRouteImport } from './routes/governance'
 import { Route as ForumRouteImport } from './routes/forum'
 import { Route as FormsRouteImport } from './routes/forms'
+import { Route as FinancialTransparencyRouteImport } from './routes/financial-transparency'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as DocumentsRouteImport } from './routes/documents'
 import { Route as ComplaintsRouteImport } from './routes/complaints'
@@ -37,6 +43,7 @@ import { Route as AuditLogRouteImport } from './routes/audit-log'
 import { Route as AssetsRouteImport } from './routes/assets'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AmenitiesRouteImport } from './routes/amenities'
+import { Route as AiMaintenanceRouteImport } from './routes/ai-maintenance'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FormsIndexRouteImport } from './routes/forms.index'
 import { Route as ModulesModuleRouteImport } from './routes/modules.$module'
@@ -52,9 +59,19 @@ const VendorsRoute = VendorsRouteImport.update({
   path: '/vendors',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VendorFinanceRoute = VendorFinanceRouteImport.update({
+  id: '/vendor-finance',
+  path: '/vendor-finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UtilityMetersRoute = UtilityMetersRouteImport.update({
   id: '/utility-meters',
   path: '/utility-meters',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SocietiesRoute = SocietiesRouteImport.update({
+  id: '/societies',
+  path: '/societies',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -82,9 +99,19 @@ const PropertyRoute = PropertyRouteImport.update({
   path: '/property',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsRoute = ProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PollsRoute = PollsRouteImport.update({
   id: '/polls',
   path: '/polls',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformRoute = PlatformRouteImport.update({
+  id: '/platform',
+  path: '/platform',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PaymentsRoute = PaymentsRouteImport.update({
@@ -122,6 +149,11 @@ const LedgerRoute = LedgerRouteImport.update({
   path: '/ledger',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GovernanceRoute = GovernanceRouteImport.update({
   id: '/governance',
   path: '/governance',
@@ -135,6 +167,11 @@ const ForumRoute = ForumRouteImport.update({
 const FormsRoute = FormsRouteImport.update({
   id: '/forms',
   path: '/forms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinancialTransparencyRoute = FinancialTransparencyRouteImport.update({
+  id: '/financial-transparency',
+  path: '/financial-transparency',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventsRoute = EventsRouteImport.update({
@@ -182,6 +219,11 @@ const AmenitiesRoute = AmenitiesRouteImport.update({
   path: '/amenities',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiMaintenanceRoute = AiMaintenanceRouteImport.update({
+  id: '/ai-maintenance',
+  path: '/ai-maintenance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -205,6 +247,7 @@ const FormsModuleFormRoute = FormsModuleFormRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-maintenance': typeof AiMaintenanceRoute
   '/amenities': typeof AmenitiesRoute
   '/analytics': typeof AnalyticsRoute
   '/assets': typeof AssetsRoute
@@ -214,9 +257,11 @@ export interface FileRoutesByFullPath {
   '/complaints': typeof ComplaintsRoute
   '/documents': typeof DocumentsRoute
   '/events': typeof EventsRoute
+  '/financial-transparency': typeof FinancialTransparencyRoute
   '/forms': typeof FormsRouteWithChildren
   '/forum': typeof ForumRoute
   '/governance': typeof GovernanceRoute
+  '/inventory': typeof InventoryRoute
   '/ledger': typeof LedgerRoute
   '/maintenance': typeof MaintenanceRoute
   '/modules-admin': typeof ModulesAdminRoute
@@ -224,13 +269,17 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof NotificationsRoute
   '/parking': typeof ParkingRoute
   '/payments': typeof PaymentsRoute
+  '/platform': typeof PlatformRoute
   '/polls': typeof PollsRoute
+  '/projects': typeof ProjectsRoute
   '/property': typeof PropertyRoute
   '/reports': typeof ReportsRoute
   '/residents': typeof ResidentsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
+  '/societies': typeof SocietiesRoute
   '/utility-meters': typeof UtilityMetersRoute
+  '/vendor-finance': typeof VendorFinanceRoute
   '/vendors': typeof VendorsRoute
   '/visitor': typeof VisitorRoute
   '/modules/$module': typeof ModulesModuleRoute
@@ -239,6 +288,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-maintenance': typeof AiMaintenanceRoute
   '/amenities': typeof AmenitiesRoute
   '/analytics': typeof AnalyticsRoute
   '/assets': typeof AssetsRoute
@@ -248,8 +298,10 @@ export interface FileRoutesByTo {
   '/complaints': typeof ComplaintsRoute
   '/documents': typeof DocumentsRoute
   '/events': typeof EventsRoute
+  '/financial-transparency': typeof FinancialTransparencyRoute
   '/forum': typeof ForumRoute
   '/governance': typeof GovernanceRoute
+  '/inventory': typeof InventoryRoute
   '/ledger': typeof LedgerRoute
   '/maintenance': typeof MaintenanceRoute
   '/modules-admin': typeof ModulesAdminRoute
@@ -257,13 +309,17 @@ export interface FileRoutesByTo {
   '/notifications': typeof NotificationsRoute
   '/parking': typeof ParkingRoute
   '/payments': typeof PaymentsRoute
+  '/platform': typeof PlatformRoute
   '/polls': typeof PollsRoute
+  '/projects': typeof ProjectsRoute
   '/property': typeof PropertyRoute
   '/reports': typeof ReportsRoute
   '/residents': typeof ResidentsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
+  '/societies': typeof SocietiesRoute
   '/utility-meters': typeof UtilityMetersRoute
+  '/vendor-finance': typeof VendorFinanceRoute
   '/vendors': typeof VendorsRoute
   '/visitor': typeof VisitorRoute
   '/modules/$module': typeof ModulesModuleRoute
@@ -273,6 +329,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-maintenance': typeof AiMaintenanceRoute
   '/amenities': typeof AmenitiesRoute
   '/analytics': typeof AnalyticsRoute
   '/assets': typeof AssetsRoute
@@ -282,9 +339,11 @@ export interface FileRoutesById {
   '/complaints': typeof ComplaintsRoute
   '/documents': typeof DocumentsRoute
   '/events': typeof EventsRoute
+  '/financial-transparency': typeof FinancialTransparencyRoute
   '/forms': typeof FormsRouteWithChildren
   '/forum': typeof ForumRoute
   '/governance': typeof GovernanceRoute
+  '/inventory': typeof InventoryRoute
   '/ledger': typeof LedgerRoute
   '/maintenance': typeof MaintenanceRoute
   '/modules-admin': typeof ModulesAdminRoute
@@ -292,13 +351,17 @@ export interface FileRoutesById {
   '/notifications': typeof NotificationsRoute
   '/parking': typeof ParkingRoute
   '/payments': typeof PaymentsRoute
+  '/platform': typeof PlatformRoute
   '/polls': typeof PollsRoute
+  '/projects': typeof ProjectsRoute
   '/property': typeof PropertyRoute
   '/reports': typeof ReportsRoute
   '/residents': typeof ResidentsRoute
   '/security': typeof SecurityRoute
   '/settings': typeof SettingsRoute
+  '/societies': typeof SocietiesRoute
   '/utility-meters': typeof UtilityMetersRoute
+  '/vendor-finance': typeof VendorFinanceRoute
   '/vendors': typeof VendorsRoute
   '/visitor': typeof VisitorRoute
   '/modules/$module': typeof ModulesModuleRoute
@@ -309,6 +372,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ai-maintenance'
     | '/amenities'
     | '/analytics'
     | '/assets'
@@ -318,9 +382,11 @@ export interface FileRouteTypes {
     | '/complaints'
     | '/documents'
     | '/events'
+    | '/financial-transparency'
     | '/forms'
     | '/forum'
     | '/governance'
+    | '/inventory'
     | '/ledger'
     | '/maintenance'
     | '/modules-admin'
@@ -328,13 +394,17 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/parking'
     | '/payments'
+    | '/platform'
     | '/polls'
+    | '/projects'
     | '/property'
     | '/reports'
     | '/residents'
     | '/security'
     | '/settings'
+    | '/societies'
     | '/utility-meters'
+    | '/vendor-finance'
     | '/vendors'
     | '/visitor'
     | '/modules/$module'
@@ -343,6 +413,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ai-maintenance'
     | '/amenities'
     | '/analytics'
     | '/assets'
@@ -352,8 +423,10 @@ export interface FileRouteTypes {
     | '/complaints'
     | '/documents'
     | '/events'
+    | '/financial-transparency'
     | '/forum'
     | '/governance'
+    | '/inventory'
     | '/ledger'
     | '/maintenance'
     | '/modules-admin'
@@ -361,13 +434,17 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/parking'
     | '/payments'
+    | '/platform'
     | '/polls'
+    | '/projects'
     | '/property'
     | '/reports'
     | '/residents'
     | '/security'
     | '/settings'
+    | '/societies'
     | '/utility-meters'
+    | '/vendor-finance'
     | '/vendors'
     | '/visitor'
     | '/modules/$module'
@@ -376,6 +453,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/ai-maintenance'
     | '/amenities'
     | '/analytics'
     | '/assets'
@@ -385,9 +463,11 @@ export interface FileRouteTypes {
     | '/complaints'
     | '/documents'
     | '/events'
+    | '/financial-transparency'
     | '/forms'
     | '/forum'
     | '/governance'
+    | '/inventory'
     | '/ledger'
     | '/maintenance'
     | '/modules-admin'
@@ -395,13 +475,17 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/parking'
     | '/payments'
+    | '/platform'
     | '/polls'
+    | '/projects'
     | '/property'
     | '/reports'
     | '/residents'
     | '/security'
     | '/settings'
+    | '/societies'
     | '/utility-meters'
+    | '/vendor-finance'
     | '/vendors'
     | '/visitor'
     | '/modules/$module'
@@ -411,6 +495,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiMaintenanceRoute: typeof AiMaintenanceRoute
   AmenitiesRoute: typeof AmenitiesRoute
   AnalyticsRoute: typeof AnalyticsRoute
   AssetsRoute: typeof AssetsRoute
@@ -420,9 +505,11 @@ export interface RootRouteChildren {
   ComplaintsRoute: typeof ComplaintsRoute
   DocumentsRoute: typeof DocumentsRoute
   EventsRoute: typeof EventsRoute
+  FinancialTransparencyRoute: typeof FinancialTransparencyRoute
   FormsRoute: typeof FormsRouteWithChildren
   ForumRoute: typeof ForumRoute
   GovernanceRoute: typeof GovernanceRoute
+  InventoryRoute: typeof InventoryRoute
   LedgerRoute: typeof LedgerRoute
   MaintenanceRoute: typeof MaintenanceRoute
   ModulesAdminRoute: typeof ModulesAdminRoute
@@ -430,13 +517,17 @@ export interface RootRouteChildren {
   NotificationsRoute: typeof NotificationsRoute
   ParkingRoute: typeof ParkingRoute
   PaymentsRoute: typeof PaymentsRoute
+  PlatformRoute: typeof PlatformRoute
   PollsRoute: typeof PollsRoute
+  ProjectsRoute: typeof ProjectsRoute
   PropertyRoute: typeof PropertyRoute
   ReportsRoute: typeof ReportsRoute
   ResidentsRoute: typeof ResidentsRoute
   SecurityRoute: typeof SecurityRoute
   SettingsRoute: typeof SettingsRoute
+  SocietiesRoute: typeof SocietiesRoute
   UtilityMetersRoute: typeof UtilityMetersRoute
+  VendorFinanceRoute: typeof VendorFinanceRoute
   VendorsRoute: typeof VendorsRoute
   VisitorRoute: typeof VisitorRoute
   ModulesModuleRoute: typeof ModulesModuleRoute
@@ -458,11 +549,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VendorsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vendor-finance': {
+      id: '/vendor-finance'
+      path: '/vendor-finance'
+      fullPath: '/vendor-finance'
+      preLoaderRoute: typeof VendorFinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/utility-meters': {
       id: '/utility-meters'
       path: '/utility-meters'
       fullPath: '/utility-meters'
       preLoaderRoute: typeof UtilityMetersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/societies': {
+      id: '/societies'
+      path: '/societies'
+      fullPath: '/societies'
+      preLoaderRoute: typeof SocietiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -500,11 +605,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PropertyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects': {
+      id: '/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/polls': {
       id: '/polls'
       path: '/polls'
       fullPath: '/polls'
       preLoaderRoute: typeof PollsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform': {
+      id: '/platform'
+      path: '/platform'
+      fullPath: '/platform'
+      preLoaderRoute: typeof PlatformRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/payments': {
@@ -556,6 +675,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LedgerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/governance': {
       id: '/governance'
       path: '/governance'
@@ -575,6 +701,13 @@ declare module '@tanstack/react-router' {
       path: '/forms'
       fullPath: '/forms'
       preLoaderRoute: typeof FormsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financial-transparency': {
+      id: '/financial-transparency'
+      path: '/financial-transparency'
+      fullPath: '/financial-transparency'
+      preLoaderRoute: typeof FinancialTransparencyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/events': {
@@ -640,6 +773,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AmenitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai-maintenance': {
+      id: '/ai-maintenance'
+      path: '/ai-maintenance'
+      fullPath: '/ai-maintenance'
+      preLoaderRoute: typeof AiMaintenanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -685,6 +825,7 @@ const FormsRouteWithChildren = FormsRoute._addFileChildren(FormsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiMaintenanceRoute: AiMaintenanceRoute,
   AmenitiesRoute: AmenitiesRoute,
   AnalyticsRoute: AnalyticsRoute,
   AssetsRoute: AssetsRoute,
@@ -694,9 +835,11 @@ const rootRouteChildren: RootRouteChildren = {
   ComplaintsRoute: ComplaintsRoute,
   DocumentsRoute: DocumentsRoute,
   EventsRoute: EventsRoute,
+  FinancialTransparencyRoute: FinancialTransparencyRoute,
   FormsRoute: FormsRouteWithChildren,
   ForumRoute: ForumRoute,
   GovernanceRoute: GovernanceRoute,
+  InventoryRoute: InventoryRoute,
   LedgerRoute: LedgerRoute,
   MaintenanceRoute: MaintenanceRoute,
   ModulesAdminRoute: ModulesAdminRoute,
@@ -704,13 +847,17 @@ const rootRouteChildren: RootRouteChildren = {
   NotificationsRoute: NotificationsRoute,
   ParkingRoute: ParkingRoute,
   PaymentsRoute: PaymentsRoute,
+  PlatformRoute: PlatformRoute,
   PollsRoute: PollsRoute,
+  ProjectsRoute: ProjectsRoute,
   PropertyRoute: PropertyRoute,
   ReportsRoute: ReportsRoute,
   ResidentsRoute: ResidentsRoute,
   SecurityRoute: SecurityRoute,
   SettingsRoute: SettingsRoute,
+  SocietiesRoute: SocietiesRoute,
   UtilityMetersRoute: UtilityMetersRoute,
+  VendorFinanceRoute: VendorFinanceRoute,
   VendorsRoute: VendorsRoute,
   VisitorRoute: VisitorRoute,
   ModulesModuleRoute: ModulesModuleRoute,

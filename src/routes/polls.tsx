@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
-import { getPollsFn, castVoteFn, createPollFn } from "@/lib/api/community";
+import { PermissionGate } from "@/components/permission-gate";
+import { getPollsFn, castVoteFn, createPollFn, getPollVotersFn } from "@/lib/api/community";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Card,
@@ -62,6 +63,8 @@ function PollsPage() {
   const isAdmin = roles.includes("super_admin") || roles.includes("society_admin");
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [votersOpen, setVotersOpen] = useState(false);
+  const [votersPollId, setVotersPollId] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState("Yes, No");
   const [pollType, setPollType] = useState<any>("single");
@@ -70,6 +73,12 @@ function PollsPage() {
   const { data: polls = [], isLoading } = useQuery({
     queryKey: ["polls"],
     queryFn: () => getPollsFn(),
+  });
+
+  const { data: voters = [], isLoading: isLoadingVoters } = useQuery({
+    queryKey: ["poll-voters", votersPollId],
+    queryFn: () => getPollVotersFn({ data: { pollId: votersPollId! } }),
+    enabled: !!votersPollId && isAdmin,
   });
 
   const createMutation = useMutation({
@@ -87,11 +96,16 @@ function PollsPage() {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
+    const optionsArray = options.split(",").map(o => o.trim()).filter(Boolean);
+    if (optionsArray.length < 2) {
+      toast.error("Please provide at least 2 options separated by commas");
+      return;
+    }
     createMutation.mutate({
       data: {
         question,
         type: pollType,
-        options: options.split(",").map(o => o.trim()).filter(Boolean),
+        options: optionsArray,
         opensAt: new Date().toISOString(),
         closesAt: new Date(closesAt).toISOString(),
       }
@@ -116,11 +130,11 @@ function PollsPage() {
       title="Polls & Voting"
       subtitle="Participate in community decisions and vote on society governance initiatives"
       actions={
-        isAdmin ? (
+        <PermissionGate moduleKey="polls" action="create" fallback={null}>
           <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" /> Create Poll
           </Button>
-        ) : undefined
+        </PermissionGate>
       }
     >
       <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10 space-y-6">
@@ -223,11 +237,25 @@ function PollsPage() {
                   </CardContent>
 
                   <CardFooter className="bg-surface/30 border-t py-2 px-5 text-[10px] text-muted-foreground font-mono flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-1">
-                      <BarChart3 className="size-3.5" />
-                      <span>
-                        {totalVotes} vote{totalVotes === 1 ? "" : "s"} cast
-                      </span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        <BarChart3 className="size-3.5" />
+                        <span>
+                          {totalVotes} vote{totalVotes === 1 ? "" : "s"} cast
+                        </span>
+                      </div>
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          className="h-5 px-1.5 text-[9px] text-primary hover:bg-primary/5 hover:text-primary gap-0.5"
+                          onClick={() => {
+                            setVotersPollId(p.id);
+                            setVotersOpen(true);
+                          }}
+                        >
+                          View Voters
+                        </Button>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="size-3.5" />
@@ -308,6 +336,60 @@ function PollsPage() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {isAdmin && (
+        <Dialog open={votersOpen} onOpenChange={setVotersOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Voter Details</DialogTitle>
+              <DialogDescription>
+                List of users who voted in this poll.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+              {isLoadingVoters ? (
+                <div className="flex justify-center py-10">
+                  <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                </div>
+              ) : voters.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-10">
+                  No votes have been cast yet.
+                </p>
+              ) : (
+                <div className="divide-y divide-border border rounded-lg">
+                  {voters.map((v: any, index: number) => (
+                    <div key={index} className="flex justify-between items-center p-3 text-xs">
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-foreground">
+                          {v.voter_name || "Unknown Resident"}
+                        </p>
+                        {v.voter_email && (
+                          <p className="text-[10px] text-muted-foreground">
+                            {v.voter_email}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right space-y-0.5">
+                        <Badge variant="outline" className="font-bold text-[10px]">
+                          {v.choice}
+                        </Badge>
+                        <p className="text-[9px] text-muted-foreground font-mono">
+                          {v.created_at ? formatDistanceToNow(new Date(v.created_at)) + " ago" : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" onClick={() => setVotersOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

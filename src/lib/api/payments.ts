@@ -1,21 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import crypto from "node:crypto";
+import * as crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole } from "./auth-helper";
-
+import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
+import { requirePermission } from "./permissions";
 
 export const getPaymentsFn = createServerFn({ method: "GET" })
-  .validator(z.object({ unitId: z.string().optional() }).optional())
-  .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) return [];
-
-    const roles = await getUserRoles(userId);
+  .validator(z.object({ unitId: z.string().optional(), tenantId: z.string().optional() }).optional())
+  .handler(async ({ data, request }: any) => {
+    const { tenantId, roles, userId } = await requirePermission(request, "payments", "view");
     const isAdmin = isAdminRole(roles);
     const db = getDb();
+
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "p.tenant_id");
 
     let query = `
       SELECT p.*, u.unit_number, pr.full_name
@@ -23,9 +20,9 @@ export const getPaymentsFn = createServerFn({ method: "GET" })
       JOIN units u ON u.id = p.unit_id
       LEFT JOIN residents r ON r.unit_id = u.id AND r.is_current = TRUE
       LEFT JOIN persons pr ON pr.id = r.person_id
-      WHERE p.tenant_id = ?
+      WHERE ${sqlFilter}
     `;
-    const params: any[] = [tenantId];
+    const params: any[] = [...sqlParams];
 
     if (!isAdmin) {
       // Resident: only see payments for their own unit
@@ -52,13 +49,20 @@ export const recordPaymentFn = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     }),
   )
-  .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+  .handler(async ({ data, request }: any) => {
+    const { tenantId, userId } = await requirePermission(request, "payments", "create");
 
     const db = getDb();
+    
+    // Verify target unit belongs to tenant
+    const [unitCheck] = (await db.query(
+      "SELECT id FROM units WHERE id = ? AND tenant_id = ?",
+      [data.unitId, tenantId],
+    )) as any[];
+    if (unitCheck.length === 0) {
+      throw new Error("Invalid unit selected for this society.");
+    }
+
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
@@ -121,11 +125,8 @@ export const recordPaymentFn = createServerFn({ method: "POST" })
     }
   });
 
-export const getDailySummaryFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
-  const userId = await getSessionUser(request);
-  if (!userId) throw new Error("Unauthorized");
-  const tenantId = await getUserTenantId(userId);
-  if (!tenantId) return { todayCollected: 0, count: 0 };
+export const getDailySummaryFn = createServerFn({ method: "GET" }).handler(async ({ request }: any) => {
+  const { tenantId } = await requirePermission(request, "payments", "view");
 
   const db = getDb();
   const [rows] = (await db.query(

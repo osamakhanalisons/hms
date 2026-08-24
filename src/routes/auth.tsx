@@ -15,6 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth, type AppRole } from "@/hooks/use-auth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -36,7 +44,9 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [societyName, setSocietyName] = useState("");
+  const [societyCode, setSocietyCode] = useState("");
   const [role, setRole] = useState<AppRole>("resident");
+  const [forgotOpen, setForgotOpen] = useState(false);
   const navigate = useNavigate();
   const { session, loading: authLoading, signIn, signUp } = useAuth();
 
@@ -52,7 +62,7 @@ function AuthPage() {
         await signIn(email, password);
         toast.success("Signed in");
       } else {
-        await signUp({ email, password, fullName, societyName, role });
+        await signUp({ email, password, fullName, societyName, societyCode: societyCode || undefined, role });
         toast.success("Account created — signing you in");
       }
     } catch (err) {
@@ -104,6 +114,20 @@ function AuthPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {(role === "resident" || role === "tenant") && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="societyCode">Society Code <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Input
+                      id="societyCode"
+                      placeholder="e.g. green-pines-abc123"
+                      value={societyCode}
+                      onChange={(e) => setSocietyCode(e.target.value)}
+                    />
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Get this code from your society admin, or sign in with the credentials they provided.
+                    </p>
+                  </div>
+                )}
               </>
             )}
             <div className="grid gap-2">
@@ -117,7 +141,18 @@ function AuthPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                {mode === "signin" && (
+                  <button
+                    type="button"
+                    onClick={() => setForgotOpen(true)}
+                    className="text-[11px] font-medium text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -207,6 +242,30 @@ function AuthPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Forgot Password?</DialogTitle>
+            <DialogDescription className="space-y-3 pt-2 text-sm">
+              <p>
+                To maintain high security, self-service password recovery is disabled.
+              </p>
+              <p className="font-semibold text-foreground">
+                Please contact your Society Administrator or Management Office to reset your password.
+              </p>
+              <p className="text-xs text-muted-foreground leading-snug">
+                An administrator can reset your credentials by going to Settings &gt; Users &amp; Roles and selecting your profile.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setForgotOpen(false)} className="w-full">
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

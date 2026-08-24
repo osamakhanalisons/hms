@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { CATEGORY_ORDER, MODULES, PRIMARY_NAV } from "@/lib/modules";
 import { getFormsForModule } from "@/lib/forms-registry";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { canAccessModule, roleLabel } from "@/lib/role-access";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +30,8 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (r) => r.location.pathname });
-  const { primaryRole, profile, roles } = useAuth();
+  const { primaryRole, profile, roles, loading: authLoading } = useAuth();
+  const { hasModuleAccess, isLoading: permissionsLoading } = usePermissions();
   const { isModuleActive } = useModules();
   const [query, setQuery] = useState("");
   const [openCats, setOpenCats] = useState<Record<string, boolean>>(() =>
@@ -47,17 +49,34 @@ export function AppSidebar() {
 
   const isAdmin = roles.includes("super_admin") || roles.includes("society_admin");
 
+  const isSuperAdmin = roles.includes("super_admin");
+
   // Admin-only primary nav items
   const ADMIN_ONLY_NAV = ["/analytics", "/audit-log", "/settings", "/forms"];
 
   const visiblePrimaryNav = useMemo(
-    () => PRIMARY_NAV.filter((item) => isAdmin || !ADMIN_ONLY_NAV.includes(item.to)),
-    [isAdmin],
+    () =>
+      PRIMARY_NAV.filter((item) => {
+        // Super-admin-only items: only show to super_admin
+        if (item.superAdminOnly) return isSuperAdmin;
+        // Admin-only items: show to any admin (super or society)
+        if (ADMIN_ONLY_NAV.includes(item.to)) return isAdmin;
+        return true;
+      }),
+    [isAdmin, isSuperAdmin],
   );
 
   const visibleModules = useMemo(
-    () => MODULES.filter((m) => canAccessModule(primaryRole, m.key) && isModuleActive(m.key)),
-    [primaryRole, isModuleActive],
+    () =>
+      MODULES.filter((m) => {
+        // Admin ko sab dikhao
+        if (isAdmin) return isModuleActive(m.key);
+        // If permissions or auth are loading, don't show non-admin modules yet
+        if (permissionsLoading || authLoading) return false;
+        // Baaki roles ke liye dynamic permissions check karo
+        return hasModuleAccess(m.key) && isModuleActive(m.key);
+      }),
+    [isAdmin, hasModuleAccess, isModuleActive, permissionsLoading, authLoading],
   );
 
   const filtered = useMemo(() => {

@@ -17,8 +17,9 @@ import {
   getOccupancyReportFn,
   getComplaintResolutionReportFn,
 } from "@/lib/api/reports";
-import { BarChart3, Users, Landmark, Wrench, Download } from "lucide-react";
+import { BarChart3, Users, Landmark, Wrench, Download, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -42,20 +43,49 @@ function ReportsRoute() {
 }
 
 function ReportsPage() {
+  const { roles, loading } = useAuth();
+  
+  const canAccess = roles.some(r => 
+    ["super_admin", "society_admin", "finance_head"].includes(r)
+  );
+
   const { data: finances, isLoading: loadingFinances } = useQuery({
     queryKey: ["reports", "finances"],
     queryFn: () => getFinancialSummaryReportFn(),
+    enabled: canAccess,
   });
 
   const { data: occupancy = [], isLoading: loadingOccupancy } = useQuery({
     queryKey: ["reports", "occupancy"],
     queryFn: () => getOccupancyReportFn(),
+    enabled: canAccess,
   });
 
   const { data: complaints, isLoading: loadingComplaints } = useQuery({
     queryKey: ["reports", "complaints"],
     queryFn: () => getComplaintResolutionReportFn(),
+    enabled: canAccess,
   });
+
+  if (!loading && !canAccess) {
+    return (
+      <AppShell title="Access Denied" subtitle="Finance access required">
+        <div className="mx-auto max-w-md py-16 text-center space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <ShieldAlert className="h-8 w-8 text-red-500" />
+          </div>
+          <h2 className="text-lg font-bold font-serif">Restricted Area</h2>
+          <p className="text-xs text-muted-foreground">
+            Finance or Admin access required to view reports.
+          </p>
+          <Button onClick={() => window.history.back()} variant="outline" className="mt-4">
+            Go Back
+          </Button>
+        </div>
+      </AppShell>
+    );
+  }
+
 
   const downloadCSV = (data: any[], filename: string) => {
     if (data.length === 0) {

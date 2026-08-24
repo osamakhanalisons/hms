@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { getThreadsFn, createThreadFn, getRepliesFn, addReplyFn } from "@/lib/api/community";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -147,9 +148,11 @@ function ForumPage() {
       title="Community Forum"
       subtitle="Engage in community discussions, share notices, and connect with neighbors"
       actions={
-        <Button onClick={() => setNewThreadOpen(true)} size="sm" className="gap-1.5">
-          <Plus className="size-4" /> Start Discussion
-        </Button>
+        <PermissionGate moduleKey="community_forum" action="create" fallback={null}>
+          <Button onClick={() => setNewThreadOpen(true)} size="sm" className="gap-1.5">
+            <Plus className="size-4" /> Start Discussion
+          </Button>
+        </PermissionGate>
       }
     >
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10 space-y-6">

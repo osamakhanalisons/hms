@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { getAmenitiesFn, getBookingsFn, createBookingFn, createAmenityFn } from "@/lib/api/community";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -151,7 +152,6 @@ function AmenitiesPage() {
       data: {
         name,
         category,
-        description: description || undefined,
         capacity: capacity ? parseInt(capacity, 10) : undefined,
         chargePerSlot: hourlyRate ? parseFloat(hourlyRate) : 0,
         rules: rules || undefined,
@@ -174,11 +174,11 @@ function AmenitiesPage() {
       title="Amenities & Bookings"
       subtitle="Reserve society facilities for your events and personal use"
       actions={
-        isAdmin ? (
+        <PermissionGate moduleKey="amenities" action="create" fallback={null}>
           <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" /> Add Amenity
           </Button>
-        ) : undefined
+        </PermissionGate>
       }
     >
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-8 sm:py-10 space-y-10">

@@ -2,16 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId } from "./auth-helper";
+import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, hasAnyRole } from "./auth-helper";
+import { requirePermission } from "./permissions";
 
 
 // ─── METER RATES ───────────────────────────────────────────────────────────
 
-export const getMeterRatesFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
-  const userId = await getSessionUser(request);
-  if (!userId) throw new Error("Unauthorized");
-  const tenantId = await getUserTenantId(userId);
-  if (!tenantId) return [];
+export const getMeterRatesFn = createServerFn({ method: "GET" }).handler(async (ctx: any) => {
+  const { request } = ctx;
+  const { tenantId } = await requirePermission(request, "utility_meters", "view");
 
   const db = getDb();
   const [rows] = (await db.query(
@@ -29,11 +28,9 @@ export const upsertMeterRateFn = createServerFn({ method: "POST" })
       effectiveFrom: z.string(),
     }),
   )
-  .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
+    const { tenantId } = await requirePermission(request, "utility_meters", "create");
 
     const db = getDb();
     const id = crypto.randomUUID();
@@ -46,19 +43,37 @@ export const upsertMeterRateFn = createServerFn({ method: "POST" })
     return { id };
   });
 
+
 // ─── METER READINGS ────────────────────────────────────────────────────────
 
 export const getMeterReadingsFn = createServerFn({ method: "GET" })
   .validator(
     z.object({ unitId: z.string().optional(), meterType: z.string().optional() }).optional(),
   )
-  .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) return [];
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
+    const { tenantId, roles, userId } = await requirePermission(request, "utility_meters", "view");
+    const isStaffOrAdmin = isAdminRole(roles) || hasAnyRole(roles, ["finance_head", "maintenance_head", "society_admin"]);
 
     const db = getDb();
+
+    // Get resident's unit IDs
+    const [residentUnits] = await db.query(
+      "SELECT unit_id FROM residents WHERE person_id IN (SELECT id FROM persons WHERE user_id = ?) AND tenant_id = ?",
+      [userId, tenantId]
+    ) as any[];
+    const unitIds = residentUnits.map((ru: any) => ru.unit_id);
+
+    if (!isStaffOrAdmin) {
+      if (data?.unitId) {
+        if (!unitIds.includes(data.unitId)) {
+          throw new Error("Forbidden — You do not have access to this unit's meter readings");
+        }
+      } else {
+        if (unitIds.length === 0) return [];
+      }
+    }
+
     let query = `
       SELECT mr.*, u.unit_number, b.name AS block_name
       FROM meter_readings mr
@@ -70,6 +85,9 @@ export const getMeterReadingsFn = createServerFn({ method: "GET" })
     if (data?.unitId) {
       query += " AND mr.unit_id = ?";
       params.push(data.unitId);
+    } else if (!isStaffOrAdmin) {
+      query += " AND mr.unit_id IN (?)";
+      params.push(unitIds);
     }
     if (data?.meterType) {
       query += " AND mr.meter_type = ?";
@@ -91,13 +109,18 @@ export const recordMeterReadingFn = createServerFn({ method: "POST" })
       createLedgerEntry: z.boolean().optional().default(true),
     }),
   )
-  .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
+    const { tenantId, userId } = await requirePermission(request, "utility_meters", "create");
 
     const db = getDb();
+
+    // Verify unit belongs to tenant
+    const [[unitCheck]] = (await db.query("SELECT id FROM units WHERE id = ? AND tenant_id = ?", [
+      data.unitId,
+      tenantId,
+    ])) as any[];
+    if (!unitCheck) throw new Error("Forbidden — Unit not found or unauthorized");
 
     // Get previous reading for this unit + type
     const [prevRows] = (await db.query(
@@ -125,19 +148,28 @@ export const recordMeterReadingFn = createServerFn({ method: "POST" })
     // Auto-create ledger entry if rate is configured
     if (data.createLedgerEntry && chargedAmount > 0) {
       ledgerEntryId = crypto.randomUUID();
-      const headName = `${data.meterType.charAt(0).toUpperCase() + data.meterType.slice(1)} Bill`;
+      const description = `${data.meterType.charAt(0).toUpperCase() + data.meterType.slice(1)} Bill - ${consumption.toFixed(2)} units @ ₨${rate}/unit`;
+      
+      // Get current balance
+      const [[balanceRow]] = (await db.query(
+        `SELECT COALESCE(SUM(CASE WHEN type IN ('charge', 'adjustment') THEN amount WHEN type = 'payment' THEN -amount ELSE 0 END), 0) as current_balance
+         FROM ledger_entries WHERE tenant_id = ? AND unit_id = ?`,
+        [tenantId, data.unitId],
+      )) as any[];
+      const balanceAfter = Number(balanceRow?.current_balance || 0) + chargedAmount;
+      
       await db.query(
-        `INSERT INTO ledger_entries (id, tenant_id, unit_id, entry_type, head_name, amount, balance, due_date, notes)
+        `INSERT INTO ledger_entries (id, tenant_id, unit_id, type, amount, description, billing_period, balance_after, created_by)
          VALUES (?, ?, ?, 'charge', ?, ?, ?, ?, ?)`,
         [
           ledgerEntryId,
           tenantId,
           data.unitId,
-          headName,
           chargedAmount,
-          chargedAmount,
-          data.readingDate,
-          `${data.meterType} consumption: ${consumption.toFixed(2)} units @ ₨${rate}/unit`,
+          description,
+          data.readingDate.substring(0, 7), // YYYY-MM format
+          balanceAfter,
+          userId,
         ],
       );
     }
@@ -165,20 +197,25 @@ export const recordMeterReadingFn = createServerFn({ method: "POST" })
 
 // ─── UNIT LIST (for selector) ──────────────────────────────────────────────
 
-export const getUnitsForMetersFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
-  const userId = await getSessionUser(request);
-  if (!userId) throw new Error("Unauthorized");
-  const tenantId = await getUserTenantId(userId);
-  if (!tenantId) return [];
+export const getUnitsForMetersFn = createServerFn({ method: "GET" }).handler(async (ctx: any) => {
+  const { request } = ctx;
+  const { tenantId, roles, userId } = await requirePermission(request, "utility_meters", "view");
+  const isStaffOrAdmin = isAdminRole(roles) || hasAnyRole(roles, ["finance_head", "maintenance_head", "society_admin"]);
 
   const db = getDb();
-  const [rows] = (await db.query(
-    `SELECT u.id, u.unit_number, b.name AS block_name
-       FROM units u
-       LEFT JOIN blocks b ON b.id = u.block_id
-       WHERE u.tenant_id = ?
-       ORDER BY b.name, u.unit_number`,
-    [tenantId],
-  )) as any[];
+  let query = `
+    SELECT u.id, u.unit_number, b.name AS block_name
+    FROM units u
+    LEFT JOIN blocks b ON b.id = u.block_id
+    WHERE u.tenant_id = ?
+  `;
+  const params: any[] = [tenantId];
+  if (!isStaffOrAdmin) {
+    query += " AND u.id IN (SELECT unit_id FROM residents WHERE person_id IN (SELECT id FROM persons WHERE user_id = ?))";
+    params.push(userId);
+  }
+  query += " ORDER BY b.name, u.unit_number";
+
+  const [rows] = (await db.query(query, params)) as any[];
   return rows;
 });

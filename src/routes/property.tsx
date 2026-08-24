@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
+import { PermissionGate } from "@/components/permission-gate";
 import { PropertyTree, PropertyNode } from "@/components/property-tree";
 import {
   getPropertyTreeFn,
@@ -125,6 +126,9 @@ function PropertyPage() {
       setAddDialogOpen(false);
       resetForm();
     },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to create society");
+    },
   });
 
   const createBlock = useMutation({
@@ -134,6 +138,9 @@ function PropertyPage() {
       toast.success("Block created successfully");
       setAddDialogOpen(false);
       resetForm();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to create block");
     },
   });
 
@@ -145,6 +152,9 @@ function PropertyPage() {
       setAddDialogOpen(false);
       resetForm();
     },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to create building");
+    },
   });
 
 
@@ -152,10 +162,10 @@ function PropertyPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   // Edit mutations
-  const updateSociety = useMutation({ mutationFn: updateSocietyFn, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["propertyTree"] }); toast.success("Updated successfully"); setEditDialogOpen(false); } });
-  const updateBlock = useMutation({ mutationFn: updateBlockFn, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["propertyTree"] }); toast.success("Updated successfully"); setEditDialogOpen(false); } });
-  const updateBuilding = useMutation({ mutationFn: updateBuildingFn, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["propertyTree"] }); toast.success("Updated successfully"); setEditDialogOpen(false); } });
-  const updateUnit = useMutation({ mutationFn: updateUnitFn, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["propertyTree"] }); toast.success("Updated successfully"); setEditDialogOpen(false); } });
+  const updateSociety = useMutation({ mutationFn: updateSocietyFn, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["propertyTree"] }); toast.success("Updated successfully"); setEditDialogOpen(false); }, onError: (err: any) => { toast.error(err.message || "Failed to update society"); } });
+  const updateBlock = useMutation({ mutationFn: updateBlockFn, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["propertyTree"] }); toast.success("Updated successfully"); setEditDialogOpen(false); }, onError: (err: any) => { toast.error(err.message || "Failed to update block"); } });
+  const updateBuilding = useMutation({ mutationFn: updateBuildingFn, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["propertyTree"] }); toast.success("Updated successfully"); setEditDialogOpen(false); }, onError: (err: any) => { toast.error(err.message || "Failed to update building"); } });
+  const updateUnit = useMutation({ mutationFn: updateUnitFn, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["propertyTree"] }); toast.success("Updated successfully"); setEditDialogOpen(false); }, onError: (err: any) => { toast.error(err.message || "Failed to update unit"); } });
 
   // Delete mutations
   const deleteSociety = useMutation({ 
@@ -226,6 +236,9 @@ function PropertyPage() {
       setAddDialogOpen(false);
       resetForm();
     },
+    onError: (err: any) => {
+      toast.error(err.message || "Failed to create unit");
+    },
   });
 
   const resetForm = () => {
@@ -291,16 +304,18 @@ function PropertyPage() {
                 <CardTitle className="text-base font-bold">Property Structure</CardTitle>
                 <CardDescription className="text-xs">Recursive hierarchy layout</CardDescription>
               </div>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setAddType("society");
-                  setAddDialogOpen(true);
-                }}
-                className="size-7 p-0"
-              >
-                <Plus className="size-4" />
-              </Button>
+              <PermissionGate moduleKey="property" action="create" fallback={null}>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setAddType("society");
+                    setAddDialogOpen(true);
+                  }}
+                  className="size-7 p-0"
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </PermissionGate>
             </CardHeader>
             <CardContent className="pt-2">
               {isLoading ? (
@@ -328,8 +343,12 @@ function PropertyPage() {
 
               {selectedNode && (
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleEditNode}>Edit</Button>
-                  <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>Delete</Button>
+                  <PermissionGate moduleKey="property" action="edit" fallback={null}>
+                    <Button variant="outline" size="sm" onClick={handleEditNode}>Edit</Button>
+                  </PermissionGate>
+                  <PermissionGate moduleKey="property" action="delete" fallback={null}>
+                    <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>Delete</Button>
+                  </PermissionGate>
                 </div>
               )}
 

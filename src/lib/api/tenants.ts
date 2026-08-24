@@ -4,19 +4,38 @@ import crypto from "node:crypto";
 import { getCookie } from "vinxi/http";
 import { getEvent } from "vinxi/http";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId } from "./auth-helper";
+import { getSessionUser, getUserTenantId, requireAdmin, isAdminRole, getUserRoles } from "./auth-helper";
 
 
 
 
 // ── Get all modules with activation state for current tenant ──────────────
-export const getActiveModulesFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
+export const getActiveModulesFn = createServerFn({ method: "GET" }).handler(async (ctx) => {
+  const request = (ctx as any).request as Request | undefined;
   const userId = await getSessionUser(request);
   if (!userId) return [] as { module_key: string; is_active: boolean; is_core: boolean }[];
 
-  const tenantId = await getUserTenantId(userId);
+  let tenantId = await getUserTenantId(userId);
+
+  // Fallback: agar profile.tenant_id null ho, persons table se check karo (resident flow)
   if (!tenantId) {
-    // No tenant yet — return empty
+    const db2 = getDb();
+    const [personRows] = (await db2.query(
+      "SELECT tenant_id FROM persons WHERE user_id = ? AND tenant_id IS NOT NULL LIMIT 1",
+      [userId],
+    )) as any[];
+    if (personRows.length > 0) {
+      tenantId = personRows[0].tenant_id as string;
+      // Silently fix the profile
+      await db2.query(
+        "UPDATE profiles SET tenant_id = ? WHERE id = ? AND (tenant_id IS NULL OR tenant_id = '')",
+        [tenantId, userId],
+      );
+    }
+  }
+
+  if (!tenantId) {
+    // No tenant at all — return empty (modules-context will treat all as active)
     return [] as { module_key: string; is_active: boolean; is_core: boolean }[];
   }
 
@@ -52,20 +71,10 @@ export const toggleModuleFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
+    // Use requireAdmin helper for cleaner code
+    const { userId, tenantId } = await requireAdmin(request);
 
     const db = getDb();
-    // Must be super_admin or society_admin
-    const [roleRows] = (await db.query(
-      "SELECT role FROM user_roles WHERE user_id = ? AND role IN ('super_admin','society_admin')",
-      [userId],
-    )) as any[];
-    if (roleRows.length === 0) throw new Error("Forbidden");
-
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant associated");
-
     const id = crypto.randomUUID();
     await db.query(
       `INSERT INTO tenant_modules (id, tenant_id, module_key, is_active, activated_at, activated_by, deactivated_at, deactivated_by)

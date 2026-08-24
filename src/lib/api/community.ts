@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId } from "./auth-helper";
+import { getSessionUser, getUserTenantId, isAdminRole, getTenantScoping } from "./auth-helper";
+import { requirePermission } from "./permissions";
 
 // Lightweight API Error with status for consistent handlers
 class ApiError extends Error {
@@ -12,13 +13,23 @@ class ApiError extends Error {
   }
 }
 
-// Reusable auth helper: returns user and tenant, throws ApiError on failure
-async function requireAuth(request: Request) {
-  const userId = await getSessionUser(request);
-  if (!userId) throw new ApiError(401, "Unauthorized");
-  const tenantId = await getUserTenantId(userId);
-  if (!tenantId) throw new ApiError(404, "Not found");
-  return { userId, tenantId } as { userId: string; tenantId: string };
+// Reusable permission helper: returns user, tenant, and roles, maps standard errors to ApiError
+async function requireModulePermission(
+  request: Request | undefined,
+  moduleKey: string,
+  action: "view" | "create" | "edit" | "delete"
+) {
+  try {
+    const { userId, tenantId, roles } = await requirePermission(request, moduleKey, action);
+    return { userId, tenantId, roles };
+  } catch (err: any) {
+    if (err.message === "Unauthorized") {
+      throw new ApiError(401, "Unauthorized");
+    } else if (err.message.includes("Forbidden")) {
+      throw new ApiError(403, err.message);
+    }
+    throw new ApiError(500, err.message || "Internal server error");
+  }
 }
 
 // Strongly-typed row shapes used by tenant assertions
@@ -101,25 +112,29 @@ export interface ForumReply {
   created_at: string;
 }
 
-export const getThreadsFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
-  const { userId, tenantId } = await requireAuth(request);
-  const db = getDb();
-  try {
-    const res = await db.query(
-      `SELECT t.*, p.full_name as author_name 
-         FROM forum_threads t
-         LEFT JOIN profiles p ON t.author_id = p.id
-         WHERE t.tenant_id = ?
-         ORDER BY t.created_at DESC`,
-      [tenantId],
-    );
-    const [rows] = res as unknown as [ForumThread[], unknown];
-    return rows;
-  } catch (err: unknown) {
-    console.error('getThreadsFn error', { err, userId });
-    throw new ApiError(500, 'Internal server error');
-  }
-});
+export const getThreadsFn = createServerFn({ method: "GET" })
+  .validator(z.object({ tenantId: z.string().optional() }).optional())
+  .handler(async ({ data, request }) => {
+    const { userId } = await requireModulePermission(request, "community_forum", "view");
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "t.tenant_id");
+    const db = getDb();
+    try {
+      const res = await db.query(
+        `SELECT t.*, p.full_name as author_name 
+           FROM forum_threads t
+           LEFT JOIN profiles p ON t.author_id = p.id
+           WHERE ${sqlFilter}
+           ORDER BY t.created_at DESC
+           LIMIT 50`,
+        sqlParams,
+      );
+      const [rows] = res as unknown as [ForumThread[], unknown];
+      return rows;
+    } catch (err: unknown) {
+      console.error('getThreadsFn error', { err, userId });
+      throw new ApiError(500, 'Internal server error');
+    }
+  });
 
 export const createThreadFn = createServerFn({ method: "POST" })
   .validator(
@@ -132,7 +147,7 @@ export const createThreadFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "community_forum", "create");
     const db = getDb();
     const id = crypto.randomUUID();
     try {
@@ -160,7 +175,7 @@ export const createThreadFn = createServerFn({ method: "POST" })
 export const getRepliesFn = createServerFn({ method: "GET" })
   .validator(z.object({ threadId: z.string() }))
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "community_forum", "view");
     const db = getDb();
     await assertThreadTenant(db, data.threadId, tenantId);
     try {
@@ -169,7 +184,8 @@ export const getRepliesFn = createServerFn({ method: "GET" })
          FROM forum_replies r
          LEFT JOIN profiles p ON r.author_id = p.id
          WHERE r.thread_id = ?
-         ORDER BY r.created_at ASC`,
+         ORDER BY r.created_at ASC
+         LIMIT 100`,
         [data.threadId],
       );
       const [rows] = res as unknown as [ForumReply[], unknown];
@@ -188,7 +204,7 @@ export const addReplyFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "community_forum", "create");
     const db = getDb();
     await assertThreadTenant(db, data.threadId, tenantId);
     const id = crypto.randomUUID();
@@ -222,16 +238,23 @@ export interface Poll {
   results?: Record<string, number>;
 }
 
-export const getPollsFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
-  const { userId, tenantId } = await requireAuth(request);
-  const db = getDb();
-  try {
-    const res = await db.query(`SELECT * FROM polls WHERE tenant_id = ? ORDER BY created_at DESC`, [tenantId]);
-    const [pollsRows] = res as unknown as [any[], unknown];
-    const polls = pollsRows as any[];
+export const getPollsFn = createServerFn({ method: "GET" })
+  .validator(z.object({ tenantId: z.string().optional() }).optional())
+  .handler(async ({ data, request }) => {
+    const { userId } = await requireModulePermission(request, "polls", "view");
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "tenant_id");
+    const db = getDb();
+    try {
+      const res = await db.query(`SELECT * FROM polls WHERE ${sqlFilter} ORDER BY created_at DESC`, sqlParams);
+      const [pollsRows] = res as unknown as [any[], unknown];
+      const polls = pollsRows as any[];
     for (const poll of polls) {
       if (typeof poll.options === "string") {
-        poll.options = JSON.parse(poll.options);
+        try {
+          poll.options = JSON.parse(poll.options);
+        } catch (e) {
+          poll.options = [];
+        }
       }
 
       // Get user's vote if any
@@ -266,9 +289,32 @@ export const castVoteFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "polls", "create");
     const db = getDb();
     await assertPollTenant(db, data.pollId, tenantId);
+
+    // Voter eligibility check (Task 2)
+    const [[poll]] = await db.query("SELECT eligible_voters FROM polls WHERE id = ?", [data.pollId]) as any[];
+    if (!poll) {
+      throw new ApiError(404, "Poll not found");
+    }
+
+    const [[resident]] = await db.query(
+      `SELECT r.id, r.type FROM residents r
+       JOIN persons p ON r.person_id = p.id
+       WHERE p.user_id = ? AND r.tenant_id = ? AND r.is_current = TRUE
+       LIMIT 1`,
+      [userId, tenantId]
+    ) as any[];
+
+    if (!resident) {
+      throw new ApiError(403, "Voter not eligible (current resident profile required).");
+    }
+
+    if (poll.eligible_voters === "owners" && resident.type !== "owner") {
+      throw new ApiError(403, "Voter not eligible (owners only).");
+    }
+
     try {
       await db.query(
         `INSERT INTO poll_votes (id, poll_id, user_id, choice)
@@ -301,13 +347,16 @@ export interface EventItem {
   rsvp_counts?: { yes: number; no: number; maybe: number };
 }
 
-export const getEventsFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
-  const { userId, tenantId } = await requireAuth(request);
-  const db = getDb();
-  try {
-    const res = await db.query(`SELECT * FROM events WHERE tenant_id = ? ORDER BY starts_at ASC`, [tenantId]);
-    const [eventRows] = res as unknown as [any[], unknown];
-    const events = eventRows as any[];
+export const getEventsFn = createServerFn({ method: "GET" })
+  .validator(z.object({ tenantId: z.string().optional() }).optional())
+  .handler(async ({ data, request }) => {
+    const { userId } = await requireModulePermission(request, "events", "view");
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "tenant_id");
+    const db = getDb();
+    try {
+      const res = await db.query(`SELECT * FROM events WHERE ${sqlFilter} ORDER BY starts_at ASC`, sqlParams);
+      const [eventRows] = res as unknown as [any[], unknown];
+      const events = eventRows as any[];
     for (const ev of events) {
       // Get user's RSVP status
       const rsvpRes = await db.query(`SELECT status FROM event_rsvps WHERE event_id = ? AND user_id = ?`, [ev.id, userId]);
@@ -342,11 +391,51 @@ export const rsvpEventFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "events", "create");
     const db = getDb();
     await assertEventTenant(db, data.eventId, tenantId);
+    
+    const connection = await db.getConnection();
     try {
-      await db.query(
+      await connection.beginTransaction();
+
+      // Fetch event capacity
+      const [[event]] = await connection.query(
+        "SELECT capacity, allow_rsvp FROM events WHERE id = ?",
+        [data.eventId]
+      ) as any[];
+
+      if (!event) {
+        throw new ApiError(404, "Event not found");
+      }
+
+      if (!event.allow_rsvp) {
+        throw new ApiError(400, "RSVP is not allowed for this event.");
+      }
+
+      // Enforce event capacity if set
+      if (event.capacity !== null && event.capacity !== undefined && (data.status === "yes" || data.status === "maybe")) {
+        const [rsvps] = await connection.query(
+          `SELECT user_id, guests_count FROM event_rsvps 
+           WHERE event_id = ? AND status IN ('yes', 'maybe')`,
+          [data.eventId]
+        ) as any[];
+
+        let currentTotal = 0;
+        rsvps.forEach((r: any) => {
+          if (r.user_id !== userId) {
+            currentTotal += 1 + (r.guests_count || 0);
+          }
+        });
+
+        const requestedTotal = 1 + (data.guestsCount ?? 0);
+
+        if (currentTotal + requestedTotal > event.capacity) {
+          throw new ApiError(409, `RSVP capacity exceeded. Only ${event.capacity - currentTotal} spot(s) remaining.`);
+        }
+      }
+
+      await connection.query(
         `INSERT INTO event_rsvps (id, event_id, user_id, status, guests_count, notes)
          VALUES (?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE status = ?, guests_count = ?, notes = ?`,
@@ -362,10 +451,14 @@ export const rsvpEventFn = createServerFn({ method: "POST" })
           data.notes || null,
         ],
       );
+
+      await connection.commit();
       return { success: true };
-    } catch (err: unknown) {
-      console.error('rsvpEventFn error', { err, userId, eventId: data.eventId });
-      throw new ApiError(500, 'Internal server error');
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
     }
   });
 
@@ -402,13 +495,16 @@ export interface AmenityBooking {
   created_at: string;
 }
 
-export const getAmenitiesFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
-  const { userId, tenantId } = await requireAuth(request);
-  const db = getDb();
-  try {
-    const res = await db.query(`SELECT * FROM amenities WHERE tenant_id = ? AND is_active = TRUE ORDER BY name ASC`, [tenantId]);
-    const [rows] = res as unknown as [Amenity[], unknown];
-    return rows;
+export const getAmenitiesFn = createServerFn({ method: "GET" })
+  .validator(z.object({ tenantId: z.string().optional() }).optional())
+  .handler(async ({ data, request }) => {
+    const { userId } = await requireModulePermission(request, "amenities", "view");
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "tenant_id");
+    const db = getDb();
+    try {
+      const res = await db.query(`SELECT * FROM amenities WHERE ${sqlFilter} AND is_active = TRUE ORDER BY name ASC`, sqlParams);
+      const [rows] = res as unknown as [Amenity[], unknown];
+      return rows;
   } catch (err: unknown) {
     console.error('getAmenitiesFn error', { err, userId });
     throw new ApiError(500, 'Internal server error');
@@ -416,9 +512,17 @@ export const getAmenitiesFn = createServerFn({ method: "GET" }).handler(async ({
 });
 
 export const getBookingsFn = createServerFn({ method: "GET" })
-  .validator(z.object({ myOnly: z.boolean().optional() }).optional())
+  .validator(
+    z
+      .object({
+        myOnly: z.boolean().optional(),
+        tenantId: z.string().optional(),
+      })
+      .optional(),
+  )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId } = await requireModulePermission(request, "amenities", "view");
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "b.tenant_id");
     const db = getDb();
     try {
       let query = `
@@ -426,9 +530,9 @@ export const getBookingsFn = createServerFn({ method: "GET" })
         FROM amenity_bookings b
         JOIN amenities a ON b.amenity_id = a.id
         LEFT JOIN profiles p ON b.user_id = p.id
-        WHERE b.tenant_id = ?
+        WHERE ${sqlFilter}
       `;
-      const params: unknown[] = [tenantId];
+      const params: unknown[] = [...sqlParams];
 
       if (data?.myOnly) {
         query += ` AND b.user_id = ?`;
@@ -457,13 +561,77 @@ export const createBookingFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "amenities", "view");
     const db = getDb();
     // ensure amenity belongs to tenant
     await assertAmenityTenant(db, data.amenityId, tenantId);
+    
+    // Normalize and validate time
+    function normalizeTime(t: string): string {
+      if (!t) return "00:00:00";
+      const parts = t.split(":");
+      const hrs = parts[0].padStart(2, "0");
+      const mins = (parts[1] || "00").padStart(2, "0");
+      const secs = (parts[2] || "00").padStart(2, "0");
+      return `${hrs}:${mins}:${secs}`;
+    }
+
+    const normStart = normalizeTime(data.startTime);
+    const normEnd = normalizeTime(data.endTime);
+
+    if (normStart >= normEnd) {
+      throw new ApiError(400, "Start time must be earlier than end time.");
+    }
+
+    if (data.guestsCount !== undefined && data.guestsCount < 0) {
+      throw new ApiError(400, "Guests count cannot be negative");
+    }
+
+    const [[amenity]] = await db.query(
+      "SELECT open_time, close_time, capacity FROM amenities WHERE id = ?",
+      [data.amenityId]
+    ) as any[];
+
+    if (!amenity) {
+      throw new ApiError(404, "Amenity not found");
+    }
+
+    const normOpen = normalizeTime(amenity.open_time);
+    const normClose = normalizeTime(amenity.close_time);
+
+    if (normStart < normOpen || normEnd > normClose) {
+      throw new ApiError(400, `Booking must be within configured amenity hours (${amenity.open_time.slice(0, 5)} to ${amenity.close_time.slice(0, 5)}).`);
+    }
+
+    if (amenity.capacity !== null && amenity.capacity !== undefined) {
+      const requestedGuests = data.guestsCount ?? 0;
+      if (requestedGuests > amenity.capacity) {
+        throw new ApiError(400, `Guests count (${requestedGuests}) exceeds the amenity capacity (${amenity.capacity}).`);
+      }
+    }
+
     const id = crypto.randomUUID();
+    const connection = await db.getConnection();
     try {
-      await db.query(
+      await connection.beginTransaction();
+
+      // Double-booking check (Task 3)
+      const [conflicts] = await connection.query(
+        `SELECT id FROM amenity_bookings
+         WHERE amenity_id = ?
+           AND booking_date = ?
+           AND status IN ('pending', 'approved', 'confirmed')
+           AND start_time < ?
+           AND end_time > ?
+         LIMIT 1`,
+        [data.amenityId, data.bookingDate, data.endTime, data.startTime]
+      ) as any[];
+
+      if (conflicts.length > 0) {
+        throw new ApiError(409, "Conflicting booking exists for the selected time slot.");
+      }
+
+      await connection.query(
         `INSERT INTO amenity_bookings (id, tenant_id, amenity_id, user_id, booking_date, start_time, end_time, guests_count, purpose, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
         [
@@ -478,10 +646,14 @@ export const createBookingFn = createServerFn({ method: "POST" })
           data.purpose || null,
         ],
       );
+
+      await connection.commit();
       return { id };
-    } catch (err: unknown) {
-      console.error('createBookingFn error', { err, userId, amenityId: data.amenityId });
-      throw new ApiError(500, 'Internal server error');
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
     }
   });
 
@@ -505,7 +677,7 @@ export const createPollFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "polls", "create");
     const db = getDb();
     const id = crypto.randomUUID();
     try {
@@ -545,7 +717,7 @@ export const createEventFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "events", "create");
     const db = getDb();
     const id = crypto.randomUUID();
     try {
@@ -587,7 +759,7 @@ export const createAmenityFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const { userId, tenantId } = await requireAuth(request);
+    const { userId, tenantId } = await requireModulePermission(request, "amenities", "create");
     const db = getDb();
     const id = crypto.randomUUID();
     try {
@@ -611,6 +783,37 @@ export const createAmenityFn = createServerFn({ method: "POST" })
       return { id };
     } catch (err: unknown) {
       console.error('createAmenityFn error', { err, userId });
+      throw new ApiError(500, 'Internal server error');
+    }
+  });
+
+export const getPollVotersFn = createServerFn({ method: "GET" })
+  .validator(z.object({ pollId: z.string() }))
+  .handler(async ({ data, request }) => {
+    const { userId, tenantId, roles } = await requireModulePermission(request, "polls", "view");
+    const db = getDb();
+    
+    // Check if user is admin
+    if (!isAdminRole(roles)) {
+      throw new ApiError(403, "Forbidden — Only Admin can view voter details.");
+    }
+    
+    // Ensure poll belongs to current tenant
+    await assertPollTenant(db, data.pollId, tenantId);
+    
+    try {
+      const [rows] = await db.query(
+        `SELECT pv.choice, pv.created_at, p.full_name as voter_name, u.email as voter_email
+         FROM poll_votes pv
+         LEFT JOIN profiles p ON pv.user_id = p.id
+         LEFT JOIN users u ON pv.user_id = u.id
+         WHERE pv.poll_id = ?
+         ORDER BY pv.created_at DESC`,
+        [data.pollId]
+      ) as any[];
+      return rows;
+    } catch (err: unknown) {
+      console.error('getPollVotersFn error', { err, userId, pollId: data.pollId });
       throw new ApiError(500, 'Internal server error');
     }
   });

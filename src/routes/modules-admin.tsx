@@ -4,10 +4,13 @@ import { useModules } from "@/contexts/modules-context";
 import { AppShell } from "@/components/app-shell";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
+import { ShieldAlert } from "lucide-react";
 import { toggleModuleFn } from "@/lib/api/tenants";
 import { CATEGORY_ORDER } from "@/lib/modules";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/modules-admin")({
   head: () => ({
@@ -21,7 +24,31 @@ export const Route = createFileRoute("/modules-admin")({
 
 function ModulesAdmin() {
   const { allModules, refreshModules } = useModules();
+  const { roles, loading } = useAuth();
   const [isPending, startTransition] = useTransition();
+
+  // Admin check - CRITICAL SECURITY
+  const isAdmin = roles.some(r => r === "super_admin" || r === "society_admin");
+  
+  if (!loading && !isAdmin) {
+
+    return (
+      <AppShell title="Access Denied" subtitle="Admin access required">
+        <div className="mx-auto max-w-md py-16 text-center space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <ShieldAlert className="h-8 w-8" />
+          </div>
+          <h2 className="text-lg font-bold font-serif">Unauthorized Area</h2>
+          <p className="text-xs text-muted-foreground">
+            Only Super Admins or Society Admins can manage module configuration.
+          </p>
+          <Button onClick={() => window.history.back()} variant="outline" className="mt-4">
+            Go Back
+          </Button>
+        </div>
+      </AppShell>
+    );
+  }
 
   const handleToggle = (moduleKey: string, currentActive: boolean) => {
     startTransition(async () => {

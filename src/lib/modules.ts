@@ -52,14 +52,22 @@ export interface ModuleDef {
 
 /** Modules that have their own dedicated page routes */
 export const DEDICATED_ROUTES: Record<string, string> = {
+  platform: "/platform",
   property: "/property",
   residents: "/residents",
+  notifications: "/notifications",
+  documents: "/documents",
+  reports: "/reports",
   ledger: "/ledger",
   payments: "/payments",
+  financial_transparency: "/financial-transparency",
   budget: "/budget",
   complaints: "/complaints",
   maintenance: "/maintenance",
   vendors: "/vendors",
+  vendor_finance: "/vendor-finance",
+  inventory: "/inventory",
+  projects: "/projects",
   assets: "/assets",
   visitor: "/visitor",
   gate: "/security",
@@ -73,8 +81,7 @@ export const DEDICATED_ROUTES: Record<string, string> = {
   events: "/events",
   amenities: "/amenities",
   governance: "/governance",
-  documents: "/documents",
-  reports: "/reports",
+  ai_maintenance: "/ai-maintenance",
 };
 
 export const MODULES: ModuleDef[] = [
@@ -86,6 +93,7 @@ export const MODULES: ModuleDef[] = [
     icon: Shield,
     description: "Auth, RBAC, tenants, audit logs",
     plan: "Core",
+    route: "/platform",
   },
   {
     key: "property",
@@ -112,6 +120,7 @@ export const MODULES: ModuleDef[] = [
     icon: Bell,
     description: "Email, SMS, push, WhatsApp",
     plan: "Core",
+    route: "/notifications",
   },
   {
     key: "documents",
@@ -157,6 +166,7 @@ export const MODULES: ModuleDef[] = [
     icon: Eye,
     description: "Public income & expense statements",
     plan: "Growth",
+    route: "/financial-transparency",
   },
   {
     key: "budget",
@@ -174,6 +184,7 @@ export const MODULES: ModuleDef[] = [
     icon: FileSpreadsheet,
     description: "PO, invoice, vendor payments",
     plan: "Growth",
+    route: "/vendor-finance",
   },
   // Operations
   {
@@ -199,8 +210,9 @@ export const MODULES: ModuleDef[] = [
     name: "Inventory",
     category: "Operations",
     icon: Boxes,
-    description: "Spare parts & stock",
+    description: "Spare parts \u0026 stock",
     plan: "Growth",
+    route: "/inventory",
   },
   {
     key: "vendors",
@@ -218,6 +230,7 @@ export const MODULES: ModuleDef[] = [
     icon: KanbanSquare,
     description: "Plans, milestones, expenses",
     plan: "Professional",
+    route: "/projects",
   },
   {
     key: "assets",
@@ -363,6 +376,7 @@ export const MODULES: ModuleDef[] = [
     icon: Sparkles,
     description: "Failure prediction",
     plan: "Professional",
+    route: "/ai-maintenance",
   },
 ];
 
@@ -376,8 +390,14 @@ export const CATEGORY_ORDER: ModuleCategory[] = [
   "Intelligence",
 ];
 
-export const PRIMARY_NAV = [
+export const PRIMARY_NAV: {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  superAdminOnly?: boolean;
+}[] = [
   { to: "/", label: "Dashboard", icon: Home },
+  { to: "/societies", label: "Societies", icon: Building2, superAdminOnly: true },
   { to: "/forms", label: "Forms catalog", icon: FileText },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/audit-log", label: "Audit log", icon: ShieldCheck },

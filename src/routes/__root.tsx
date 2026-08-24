@@ -131,7 +131,7 @@ function RootComponent() {
         <AuthProvider>
           <ModulesProvider>
             <Outlet />
-            <Toaster />
+            <Toaster position="top-right" />
           </ModulesProvider>
         </AuthProvider>
       </QueryClientProvider>

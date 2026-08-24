@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getDb } from "@/lib/db.server";
-
+import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole } from "./auth-helper";
 
 
 export const getNotificationsFn = createServerFn({ method: "GET" }).handler(async ({ request }) => {
@@ -12,7 +12,7 @@ export const getNotificationsFn = createServerFn({ method: "GET" }).handler(asyn
 
   const db = getDb();
   const [rows] = (await db.query(
-    "SELECT id, title, message, type, read_status as readStatus, created_at as createdAt FROM notifications WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 50",
+    "SELECT id, title, COALESCE(message, body, '') as message, COALESCE(type, 'info') as type, read_status as readStatus, created_at as createdAt FROM notifications WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 50",
     [tenantId],
   )) as any[];
   return rows;

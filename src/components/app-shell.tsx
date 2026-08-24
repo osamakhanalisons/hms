@@ -1,7 +1,8 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Bell, HelpCircle, LogOut, Loader2 } from "lucide-react";
+import { Bell, HelpCircle, LogOut, Loader2, Building2 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { listAllSocietiesFn, getAssignedSocietiesFn } from "@/lib/api/societies";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -25,9 +26,52 @@ interface AppShellProps {
   children: ReactNode;
 }
 
+function getCookieVal(name: string): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]*)'));
+  return match ? match[2] : "";
+}
+
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
-  const { loading, session, user, profile, primaryRole, signOut } = useAuth();
+  const { loading, session, user, profile, primaryRole, roles, signOut } = useAuth();
   const navigate = useNavigate();
+
+  const isSuperAdmin = roles?.includes("super_admin") ?? false;
+  const isSocietyAdmin = roles?.includes("society_admin") ?? false;
+  const [selectedTenantId, setSelectedTenantId] = useState(() => getCookieVal("selected_tenant_id"));
+
+  const { data: societies = [] } = useQuery({
+    queryKey: ["all-societies-list"],
+    queryFn: () => listAllSocietiesFn(),
+    enabled: !!session && isSuperAdmin,
+  });
+
+  const { data: assignedSocieties = [] } = useQuery({
+    queryKey: ["assigned-societies-list"],
+    queryFn: () => getAssignedSocietiesFn(),
+    enabled: !!session && isSocietyAdmin,
+  });
+
+  useEffect(() => {
+    if (session && isSocietyAdmin && assignedSocieties.length > 0) {
+      const assignedIds = assignedSocieties.map((s: any) => s.id);
+      if (!selectedTenantId || !assignedIds.includes(selectedTenantId)) {
+        document.cookie = `selected_tenant_id=${assignedSocieties[0].id}; path=/; max-age=31536000; SameSite=Strict`;
+        setSelectedTenantId(assignedSocieties[0].id);
+        window.location.reload();
+      }
+    }
+  }, [session, isSocietyAdmin, assignedSocieties, selectedTenantId]);
+
+  const handleTenantChange = (id: string) => {
+    if (id === "all") {
+      document.cookie = "selected_tenant_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict";
+    } else {
+      document.cookie = `selected_tenant_id=${id}; path=/; max-age=31536000; SameSite=Strict`;
+    }
+    setSelectedTenantId(id === "all" ? "" : id);
+    window.location.reload();
+  };
 
   const { data: notifications = [], refetch } = useQuery({
     queryKey: ["header-notifications"],
@@ -85,7 +129,39 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              {isSuperAdmin ? (
+                <div className="flex items-center gap-1.5 mr-2">
+                  <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+                  <select
+                    value={selectedTenantId || "all"}
+                    onChange={(e) => handleTenantChange(e.target.value)}
+                    className="h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="all">All Societies (Platform-wide)</option>
+                    {societies.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.code ?? "no-code"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (isSocietyAdmin && assignedSocieties.length > 1) ? (
+                <div className="flex items-center gap-1.5 mr-2">
+                  <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+                  <select
+                    value={selectedTenantId || (assignedSocieties[0]?.id || "")}
+                    onChange={(e) => handleTenantChange(e.target.value)}
+                    className="h-8 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    {assignedSocieties.map((s: any) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.code ?? "no-code"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               {actions}
               <Button variant="ghost" size="icon" aria-label="Help">
                 <HelpCircle className="size-4" />

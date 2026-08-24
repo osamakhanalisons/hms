@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp, Users, FileCheck2, Layers, Activity } from "lucide-react";
+import { TrendingUp, Users, FileCheck2, Layers, Activity, ShieldAlert } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { getSubmissionsFn } from "@/lib/api/db-functions";
 import { useAuth } from "@/hooks/use-auth";
 import { MODULES } from "@/lib/modules";
@@ -36,8 +37,28 @@ type Row = {
 const MODULE_NAME = Object.fromEntries(MODULES.map((m) => [m.key, m.name]));
 
 function Analytics() {
-  const { primaryRole } = useAuth();
-  const isAdmin = primaryRole === "super_admin" || primaryRole === "society_admin";
+  const { primaryRole, roles } = useAuth();
+  const isAdmin = roles.some(r => r === "super_admin" || r === "society_admin");
+
+  // Admin-only access check
+  if (!isAdmin) {
+    return (
+      <AppShell title="Access Denied" subtitle="Admin access required">
+        <div className="mx-auto max-w-md py-16 text-center space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <ShieldAlert className="h-8 w-8" />
+          </div>
+          <h2 className="text-lg font-bold font-serif">Unauthorized Access</h2>
+          <p className="text-xs text-muted-foreground">
+            Only Super Admins or Society Admins can view society-wide analytics.
+          </p>
+          <Button onClick={() => window.history.back()} variant="outline" className="mt-4">
+            Go Back
+          </Button>
+        </div>
+      </AppShell>
+    );
+  }
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["analytics", "submissions", primaryRole],

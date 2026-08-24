@@ -49,16 +49,9 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isModuleActive = (key: string) => {
-    // If the system hasn't loaded modules yet, assume true for core
-    if (allModules.length === 0)
-      return [
-        "platform",
-        "property",
-        "residents",
-        "notifications",
-        "documents",
-        "reports",
-      ].includes(key);
+    // If the system hasn't loaded modules yet, assume ALL modules are active by default
+    // This ensures permissions work correctly even before module states are loaded
+    if (allModules.length === 0) return true;
     return activeModules.has(key);
   };
 

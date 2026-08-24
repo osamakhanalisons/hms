@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole } from "./auth-helper";
+import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
 
 export type CustomRole = {
   id: string;
@@ -45,23 +45,26 @@ function isTenantRoleValid(role: string, customRoles: string[]) {
 
 // Get all users for the current admin's tenant, including their roles
 export const getTenantUsersFn = createServerFn({ method: "GET" })
-  .handler(async ({ request }) => {
+  .handler(async (ctx: any) => {
+    const { request } = ctx;
     try {
       const userId = await getSessionUser(request);
       if (!userId) throw new Error("Unauthorized");
-      const tenantId = await getUserTenantId(userId);
-      if (!tenantId) throw new Error("Tenant not found");
+      const scoping = await getTenantScoping(request, undefined, "p.tenant_id");
       const adminRoles = await getUserRoles(userId);
       if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
+      if (!scoping.isSuperAdmin && !scoping.tenantId) {
+        throw new Error("Forbidden — A specific society must be selected.");
+      }
       const db = getDb();
       const [rows] = (await db.query(
         `SELECT u.id AS user_id, p.full_name, u.email, GROUP_CONCAT(r.role) AS roles
          FROM users u
          JOIN profiles p ON p.id = u.id
          LEFT JOIN user_roles r ON r.user_id = u.id
-         WHERE p.tenant_id = ?
+         WHERE ${scoping.sqlFilter}
          GROUP BY u.id, p.full_name, u.email`,
-        [tenantId]
+        scoping.sqlParams
       )) as any[];
       return rows.map((row: any) => ({
         id: row.user_id,
@@ -76,17 +79,23 @@ export const getTenantUsersFn = createServerFn({ method: "GET" })
   });
 
 export const getCustomRolesFn = createServerFn({ method: "GET" })
-  .handler(async ({ request }) => {
+  .handler(async (ctx: any) => {
+    const { request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(userId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request, undefined, "tenant_id");
+    if (!scoping.isSuperAdmin && !scoping.tenantId) {
+      throw new Error("Forbidden — A specific society must be selected.");
+    }
     const db = getDb();
     const [rows] = (await db.query(
-      "SELECT id, tenant_id, name, label, description FROM custom_roles WHERE tenant_id = ? ORDER BY created_at DESC",
-      [tenantId],
+      `SELECT id, tenant_id, name, label, description 
+       FROM custom_roles 
+       WHERE ${scoping.sqlFilter} 
+       ORDER BY created_at DESC`,
+      scoping.sqlParams,
     )) as any[];
     return rows as CustomRole[];
   });
@@ -99,13 +108,15 @@ export const createCustomRoleFn = createServerFn({ method: "POST" })
       description: z.string().optional(),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const adminId = await getSessionUser(request);
     if (!adminId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(adminId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
-    const tenantId = await getUserTenantId(adminId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    const tenantId = scoping.tenantId;
+    if (!tenantId) throw new Error("Forbidden — A specific society must be selected.");
     const name = normalizeRoleName(data.name);
     if (!name) throw new Error("Invalid role name");
     if (STATIC_ROLES.includes(name as typeof STATIC_ROLES[number])) {
@@ -129,30 +140,43 @@ export const deleteCustomRoleFn = createServerFn({ method: "POST" })
   .validator(
     z.object({ roleId: z.string().min(1) }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const adminId = await getSessionUser(request);
     if (!adminId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(adminId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
-    const tenantId = await getUserTenantId(adminId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    if (!scoping.isSuperAdmin && !scoping.tenantId) {
+      throw new Error("Forbidden — A specific society must be selected.");
+    }
     const db = getDb();
     const [roleRows] = (await db.query(
-      "SELECT name FROM custom_roles WHERE id = ? AND tenant_id = ?",
-      [data.roleId, tenantId],
+      "SELECT name, tenant_id FROM custom_roles WHERE id = ?",
+      [data.roleId],
     )) as any[];
     if (roleRows.length === 0) throw new Error("Role not found");
+
+    const targetTenantId = roleRows[0].tenant_id;
+    if (!scoping.isSuperAdmin) {
+      if (targetTenantId !== scoping.tenantId) {
+        throw new Error("Forbidden — Access to this role is restricted.");
+      }
+    } else if (scoping.tenantId && targetTenantId !== scoping.tenantId) {
+      throw new Error("Forbidden — Access to this role is restricted.");
+    }
+
     const roleName = roleRows[0].name;
     const [assignedRows] = (await db.query(
       `SELECT COUNT(*) AS count FROM user_roles
        WHERE role = ? AND user_id IN (SELECT id FROM profiles WHERE tenant_id = ?)`,
-      [roleName, tenantId],
+      [roleName, targetTenantId],
     )) as any[];
     if (assignedRows[0].count > 0) {
       throw new Error("Cannot delete role — users are assigned to this role");
     }
-    await db.query("DELETE FROM role_permissions WHERE tenant_id = ? AND role = ?", [tenantId, roleName]);
-    await db.query("DELETE FROM custom_roles WHERE id = ? AND tenant_id = ?", [data.roleId, tenantId]);
+    await db.query("DELETE FROM role_permissions WHERE tenant_id = ? AND role = ?", [targetTenantId, roleName]);
+    await db.query("DELETE FROM custom_roles WHERE id = ? AND tenant_id = ?", [data.roleId, targetTenantId]);
     return { success: true };
   });
 
@@ -163,27 +187,45 @@ export const updateCustomRoleFn = createServerFn({ method: "POST" })
       name: z.string().min(1),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const adminId = await getSessionUser(request);
     if (!adminId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(adminId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
-    const tenantId = await getUserTenantId(adminId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    if (!scoping.isSuperAdmin && !scoping.tenantId) {
+      throw new Error("Forbidden — A specific society must be selected.");
+    }
+    const db = getDb();
+    const [roleRows] = (await db.query(
+      "SELECT tenant_id FROM custom_roles WHERE id = ?",
+      [data.roleId],
+    )) as any[];
+    if (roleRows.length === 0) throw new Error("Role not found");
+
+    const targetTenantId = roleRows[0].tenant_id;
+    if (!scoping.isSuperAdmin) {
+      if (targetTenantId !== scoping.tenantId) {
+        throw new Error("Forbidden — Access to this role is restricted.");
+      }
+    } else if (scoping.tenantId && targetTenantId !== scoping.tenantId) {
+      throw new Error("Forbidden — Access to this role is restricted.");
+    }
+
     const name = normalizeRoleName(data.name);
     if (!name) throw new Error("Invalid role name");
     if (STATIC_ROLES.includes(name as typeof STATIC_ROLES[number])) {
       throw new Error("Role name conflicts with an existing system role");
     }
-    const db = getDb();
     const [existingRole] = (await db.query(
       "SELECT id FROM custom_roles WHERE tenant_id = ? AND name = ? AND id <> ?",
-      [tenantId, name, data.roleId],
+      [targetTenantId, name, data.roleId],
     )) as any[];
     if (existingRole.length > 0) throw new Error("Role name already exists");
     await db.query(
       "UPDATE custom_roles SET name = ? WHERE id = ? AND tenant_id = ?",
-      [name, data.roleId, tenantId],
+      [name, data.roleId, targetTenantId],
     );
     return { success: true, id: data.roleId, name };
   });
@@ -197,13 +239,15 @@ export const createTenantUserFn = createServerFn({ method: "POST" })
       role: z.string().min(1),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const adminId = await getSessionUser(request);
     if (!adminId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(adminId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
-    const tenantId = await getUserTenantId(adminId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    const tenantId = scoping.tenantId;
+    if (!tenantId) throw new Error("Forbidden — A specific society must be selected.");
     const db = getDb();
     const [existingEmail] = (await db.query("SELECT id FROM users WHERE email = ?", [data.email])) as any[];
     if (existingEmail.length > 0) throw new Error("Email already registered");
@@ -241,25 +285,36 @@ export const updateTenantUserFn = createServerFn({ method: "POST" })
       password: z.string().optional(),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const adminId = await getSessionUser(request);
     if (!adminId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(adminId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
-    const tenantId = await getUserTenantId(adminId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    if (!scoping.isSuperAdmin && !scoping.tenantId) {
+      throw new Error("Forbidden — A specific society must be selected.");
+    }
     const db = getDb();
 
     const [userRows] = (await db.query(
-      `SELECT u.id, u.email, r.role FROM users u
+      `SELECT u.id, u.email, p.tenant_id, r.role FROM users u
        JOIN profiles p ON p.id = u.id
        LEFT JOIN user_roles r ON r.user_id = u.id
-       WHERE u.id = ? AND p.tenant_id = ?`,
-      [data.userId, tenantId],
+       WHERE u.id = ?`,
+      [data.userId],
     )) as any[];
     if (userRows.length === 0) throw new Error("User not found");
 
-    const existingUser = userRows[0];
+    const targetTenantId = userRows[0].tenant_id;
+    if (!scoping.isSuperAdmin) {
+      if (targetTenantId !== scoping.tenantId) {
+        throw new Error("Forbidden — Access to this user is restricted.");
+      }
+    } else if (scoping.tenantId && targetTenantId !== scoping.tenantId) {
+      throw new Error("Forbidden — Access to this user is restricted.");
+    }
+
     const [emailRows] = (await db.query("SELECT id FROM users WHERE email = ? AND id <> ?", [data.email, data.userId])) as any[];
     if (emailRows.length > 0) throw new Error("Email already registered");
 
@@ -278,23 +333,35 @@ export const deleteTenantUserFn = createServerFn({ method: "POST" })
   .validator(
     z.object({ userId: z.string().min(1) }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const adminId = await getSessionUser(request);
     if (!adminId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(adminId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
-    const tenantId = await getUserTenantId(adminId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    if (!scoping.isSuperAdmin && !scoping.tenantId) {
+      throw new Error("Forbidden — A specific society must be selected.");
+    }
     const db = getDb();
 
     const [userRows] = (await db.query(
-      `SELECT u.id, r.role FROM users u
+      `SELECT u.id, p.tenant_id, r.role FROM users u
        JOIN profiles p ON p.id = u.id
        LEFT JOIN user_roles r ON r.user_id = u.id
-       WHERE u.id = ? AND p.tenant_id = ?`,
-      [data.userId, tenantId],
+       WHERE u.id = ?`,
+      [data.userId],
     )) as any[];
     if (userRows.length === 0) throw new Error("User not found");
+
+    const targetTenantId = userRows[0].tenant_id;
+    if (!scoping.isSuperAdmin) {
+      if (targetTenantId !== scoping.tenantId) {
+        throw new Error("Forbidden — Access to this user is restricted.");
+      }
+    } else if (scoping.tenantId && targetTenantId !== scoping.tenantId) {
+      throw new Error("Forbidden — Access to this user is restricted.");
+    }
 
     const assignedRoles = Array.from(new Set(userRows.map((row: any) => row.role).filter(Boolean)));
     if (assignedRoles.includes("super_admin")) {
@@ -313,27 +380,39 @@ export const assignUserRoleFn = createServerFn({ method: "POST" })
       role: z.string().min(1),
     })
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const adminId = await getSessionUser(request);
     if (!adminId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(adminId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
 
-    const tenantId = await getUserTenantId(adminId);
-    if (!tenantId) throw new Error("Tenant not found");
+    const scoping = await getTenantScoping(request);
+    if (!scoping.isSuperAdmin && !scoping.tenantId) {
+      throw new Error("Forbidden — A specific society must be selected.");
+    }
 
     const db = getDb();
     const [targetUsers] = (await db.query(
-      `SELECT u.id FROM users u
+      `SELECT u.id, p.tenant_id FROM users u
        JOIN profiles p ON p.id = u.id
-       WHERE u.id = ? AND p.tenant_id = ?`,
-      [data.userId, tenantId],
+       WHERE u.id = ?`,
+      [data.userId],
     )) as any[];
     if (targetUsers.length === 0) throw new Error("User not found");
 
+    const targetTenantId = targetUsers[0].tenant_id;
+    if (!scoping.isSuperAdmin) {
+      if (targetTenantId !== scoping.tenantId) {
+        throw new Error("Forbidden — Access to this user is restricted.");
+      }
+    } else if (scoping.tenantId && targetTenantId !== scoping.tenantId) {
+      throw new Error("Forbidden — Access to this user is restricted.");
+    }
+
     const [customRows] = (await db.query(
       "SELECT name FROM custom_roles WHERE tenant_id = ?",
-      [tenantId],
+      [targetTenantId],
     )) as any[];
     const customRoleNames = (customRows as Array<{ name: string }>).map((row) => row.name);
     if (!isTenantRoleValid(data.role, customRoleNames)) {
@@ -356,12 +435,33 @@ export const removeUserRoleFn = createServerFn({ method: "POST" })
       role: z.string().min(1),
     })
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const adminId = await getSessionUser(request);
     if (!adminId) throw new Error("Unauthorized");
     const adminRoles = await getUserRoles(adminId);
     if (!isAdminRole(adminRoles)) throw new Error("Forbidden");
+    const scoping = await getTenantScoping(request);
+    if (!scoping.isSuperAdmin && !scoping.tenantId) {
+      throw new Error("Forbidden — A specific society must be selected.");
+    }
     const db = getDb();
+    
+    const [userCheck] = await db.query(
+      "SELECT id, tenant_id FROM profiles WHERE id = ?",
+      [data.userId]
+    ) as any[];
+    if (userCheck.length === 0) throw new Error("User not found");
+
+    const targetTenantId = userCheck[0].tenant_id;
+    if (!scoping.isSuperAdmin) {
+      if (targetTenantId !== scoping.tenantId) {
+        throw new Error("Forbidden — Access to this user is restricted.");
+      }
+    } else if (scoping.tenantId && targetTenantId !== scoping.tenantId) {
+      throw new Error("Forbidden — Access to this user is restricted.");
+    }
+
     const [roleRows] = (await db.query(
       "SELECT role FROM user_roles WHERE user_id = ?",
       [data.userId]
