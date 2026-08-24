@@ -57,10 +57,18 @@ import {
   cancelVisitorPassFn,
   addToBlacklistFn,
   removeFromBlacklistFn,
+  getDomesticStaffFn,
+  createDomesticStaffFn,
+  updateDomesticStaffFn,
+  verifyDomesticStaffFn,
+  recordStaffMovementFn,
   type VisitorPassItem,
   type EntryExitLogItem,
   type BlacklistItem,
+  type DomesticStaffItem,
+  type StaffVerificationResult,
 } from "@/lib/api/visitor";
+import { Users, UserPlus, UserX, Check, Copy } from "lucide-react";
 
 export const Route = createFileRoute("/visitor")({
   head: () => ({
@@ -197,6 +205,196 @@ function VisitorPage() {
 
   // QR Code preview modal
   const [qrPass, setQrPass] = useState<VisitorPassItem | null>(null);
+
+  // Gate terminal sub tab
+  const [gateTerminalSubTab, setGateTerminalSubTab] = useState<"otp" | "staff">("otp");
+
+  // Domestic Staff states
+  const [staffSearch, setStaffSearch] = useState("");
+  const { data: staffList = [], refetch: refetchStaff, isLoading: isStaffLoading } = useQuery({
+    queryKey: ["domestic-staff", staffSearch],
+    queryFn: () => getDomesticStaffFn({ data: { search: staffSearch } }),
+    staleTime: 15_000,
+  });
+
+  // Register Staff state
+  const [addStaffOpen, setAddStaffOpen] = useState(false);
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [sName, setSName] = useState("");
+  const [sPhone, setSPhone] = useState("");
+  const [sStaffType, setSStaffType] = useState<"maid" | "driver" | "gardener" | "cook" | "nanny" | "other">("maid");
+  const [sValidFrom, setSValidFrom] = useState("");
+  const [sValidUntil, setSValidUntil] = useState("");
+  const [sAllowedDays, setSAllowedDays] = useState<string[]>(["Mon", "Tue", "Wed", "Thu", "Fri"]);
+  const [sEntryStartTime, setSEntryStartTime] = useState("08:00");
+  const [sEntryEndTime, setSEntryEndTime] = useState("17:00");
+  const [sVehiclePlate, setSVehiclePlate] = useState("");
+  const [sNotes, setSNotes] = useState("");
+  const [sResidentId, setSResidentId] = useState(""); // Only for admins
+  const [sError, setSError] = useState<string | null>(null);
+  const [isStaffSubmitting, setIsStaffSubmitting] = useState(false);
+  const [registeredStaffCode, setRegisteredStaffCode] = useState<string | null>(null);
+
+  // Gate Staff verification state
+  const [staffGateQuery, setStaffGateQuery] = useState("");
+  const [staffVerifyResult, setStaffVerifyResult] = useState<StaffVerificationResult | null>(null);
+  const [isStaffVerifying, setIsStaffVerifying] = useState(false);
+  const [staffRecordResult, setStaffRecordResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const openAddStaff = () => {
+    setEditingStaffId(null);
+    setSName(""); setSPhone(""); setSStaffType("maid");
+    setSValidFrom(""); setSValidUntil("");
+    setSAllowedDays(["Mon", "Tue", "Wed", "Thu", "Fri"]);
+    setSEntryStartTime("08:00"); setSEntryEndTime("17:00");
+    setSVehiclePlate(""); setSNotes(""); setSResidentId("");
+    setSError(null);
+    setAddStaffOpen(true);
+  };
+
+  const openEditStaff = (staff: DomesticStaffItem) => {
+    setEditingStaffId(staff.id);
+    setSName(staff.name);
+    setSPhone(staff.phone || "");
+    setSStaffType(staff.staffType);
+    setSValidFrom(staff.validFrom);
+    setSValidUntil(staff.validUntil);
+    setSAllowedDays(staff.allowedDays.split(","));
+    setSEntryStartTime(staff.entryStartTime ? staff.entryStartTime.slice(0, 5) : "");
+    setSEntryEndTime(staff.entryEndTime ? staff.entryEndTime.slice(0, 5) : "");
+    setSVehiclePlate(staff.vehiclePlate || "");
+    setSNotes(staff.notes || "");
+    setSResidentId(staff.residentId);
+    setSError(null);
+    setAddStaffOpen(true);
+  };
+
+  const handleSaveStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSError(null);
+    if (!sName.trim()) return setSError("Staff name is required");
+    if (!sValidFrom) return setSError("Valid from date is required");
+    if (!sValidUntil) return setSError("Valid until date is required");
+    if (sAllowedDays.length === 0) return setSError("At least one allowed day must be selected");
+
+    setIsStaffSubmitting(true);
+    try {
+      if (editingStaffId) {
+        await updateDomesticStaffFn({
+          data: {
+            id: editingStaffId,
+            name: sName.trim(),
+            phone: sPhone || null,
+            staffType: sStaffType,
+            validFrom: sValidFrom,
+            validUntil: sValidUntil,
+            allowedDays: sAllowedDays.join(","),
+            entryStartTime: sEntryStartTime ? `${sEntryStartTime}:00` : null,
+            entryEndTime: sEntryEndTime ? `${sEntryEndTime}:00` : null,
+            vehiclePlate: sVehiclePlate || null,
+            notes: sNotes || null,
+            isActive: true,
+          },
+        });
+      } else {
+        const res = await createDomesticStaffFn({
+          data: {
+            name: sName.trim(),
+            phone: sPhone || null,
+            staffType: sStaffType,
+            validFrom: sValidFrom,
+            validUntil: sValidUntil,
+            allowedDays: sAllowedDays.join(","),
+            entryStartTime: sEntryStartTime ? `${sEntryStartTime}:00` : null,
+            entryEndTime: sEntryEndTime ? `${sEntryEndTime}:00` : null,
+            vehiclePlate: sVehiclePlate || null,
+            notes: sNotes || null,
+            residentId: sResidentId || undefined,
+          },
+        });
+        if (res && res.staffCode) {
+          setRegisteredStaffCode(res.staffCode);
+        }
+      }
+      setAddStaffOpen(false);
+      refetchStaff();
+    } catch (err: any) {
+      setSError(err.message || "Failed to save domestic staff");
+    } finally {
+      setIsStaffSubmitting(false);
+    }
+  };
+
+  const handleToggleStaffActive = async (staff: DomesticStaffItem) => {
+    try {
+      await updateDomesticStaffFn({
+        data: {
+          id: staff.id,
+          name: staff.name,
+          phone: staff.phone,
+          staffType: staff.staffType,
+          validFrom: staff.validFrom,
+          validUntil: staff.validUntil,
+          allowedDays: staff.allowedDays,
+          entryStartTime: staff.entryStartTime,
+          entryEndTime: staff.entryEndTime,
+          vehiclePlate: staff.vehiclePlate,
+          notes: staff.notes,
+          isActive: !staff.isActive,
+        },
+      });
+      refetchStaff();
+    } catch (err: any) {
+      console.error("Failed to toggle staff active state:", err);
+    }
+  };
+
+  const handleVerifyStaffGate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStaffVerifyResult(null);
+    setStaffRecordResult(null);
+    if (!staffGateQuery.trim()) return;
+
+    setIsStaffVerifying(true);
+    try {
+      const res = await verifyDomesticStaffFn({
+        data: { query: staffGateQuery.trim() },
+      });
+      setStaffVerifyResult(res);
+    } catch (err: any) {
+      setStaffVerifyResult({
+        status: "not_found",
+        message: err.message || "Failed to search staff",
+        staff: null,
+      });
+    } finally {
+      setIsStaffVerifying(false);
+    }
+  };
+
+  const handleRecordStaffMovement = async (staffId: string, direction: "in" | "out") => {
+    setStaffRecordResult(null);
+    try {
+      await recordStaffMovementFn({
+        data: {
+          staffId,
+          direction,
+        },
+      });
+      setStaffRecordResult({
+        success: true,
+        message: `✅ Check-${direction === "in" ? "in" : "out"} recorded successfully for ${staffVerifyResult?.staff?.name}`,
+      });
+      setStaffVerifyResult(null);
+      setStaffGateQuery("");
+      refetch();
+    } catch (err: any) {
+      setStaffRecordResult({
+        success: false,
+        message: err.message || "Failed to record movement",
+      });
+    }
+  };
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ["visitor-overview", search, statusFilter, typeFilter],
@@ -382,6 +580,9 @@ function VisitorPage() {
             <TabsTrigger value="passes" className="text-xs gap-1.5">
               <UserCheck className="size-3.5" /> Visitor Passes ({passes.length})
             </TabsTrigger>
+            <TabsTrigger value="staff" className="text-xs gap-1.5">
+              <Users className="size-3.5" /> Domestic Staff ({staffList.length})
+            </TabsTrigger>
             <TabsTrigger value="gate-terminal" className="text-xs gap-1.5">
               <ShieldCheck className="size-3.5 text-primary" /> Security Gate Terminal
             </TabsTrigger>
@@ -523,6 +724,138 @@ function VisitorPage() {
             )}
           </TabsContent>
 
+          {/* DOMESTIC STAFF TAB */}
+          <TabsContent value="staff" className="space-y-6">
+            <Card className="border-border/70 shadow-soft p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="relative w-64">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search staff by name, phone, plate..."
+                    className="h-9 pl-9 text-xs"
+                    value={staffSearch}
+                    onChange={(e) => setStaffSearch(e.target.value)}
+                  />
+                </div>
+                <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={openAddStaff}>
+                  <UserPlus className="size-3.5" /> Register Domestic Staff
+                </Button>
+              </div>
+            </Card>
+
+            {isStaffLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-48 animate-pulse rounded-lg bg-muted" />
+                ))}
+              </div>
+            ) : !staffList.length ? (
+              <Card className="border-border/70 border-dashed p-12 text-center text-muted-foreground">
+                <Users className="size-10 mx-auto opacity-30 mb-2" />
+                <p className="text-sm font-medium">No domestic staff registered</p>
+                <p className="text-[11px] opacity-60 mt-1">Register recurring maids, drivers, or gardeners for your unit.</p>
+              </Card>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {staffList.map((staff) => (
+                  <Card key={staff.id} className={`border-border/70 shadow-soft transition-colors ${!staff.isActive ? "opacity-60" : ""}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Badge className={`text-[10px] uppercase font-bold ${
+                              staff.isActive ? "bg-emerald-500/10 text-emerald-600 border-transparent" : "bg-rose-500/10 text-rose-600 border-transparent"
+                            }`}>
+                              {staff.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-transparent capitalize font-semibold">
+                              {staff.staffType}
+                            </Badge>
+                          </div>
+                          <CardTitle className="font-serif text-sm font-bold truncate">
+                            {staff.name}
+                          </CardTitle>
+                          <div className="flex items-center justify-between gap-2 mt-1">
+                            <span className="text-[10px] font-mono font-bold text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/30">
+                              Staff ID: {staff.staffCode}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-5 text-muted-foreground hover:text-foreground rounded shrink-0"
+                              onClick={() => {
+                                navigator.clipboard.writeText(staff.staffCode);
+                                alert(`Copied Staff ID: ${staff.staffCode}`);
+                              }}
+                              title="Copy Staff ID"
+                            >
+                              <Copy className="size-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-xs pt-0">
+                      <div className="space-y-1 text-[11px] text-muted-foreground border-t border-border/40 pt-2">
+                        {staff.phone && (
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="size-3 shrink-0" />
+                            <span>{staff.phone}</span>
+                          </div>
+                        )}
+                        {staff.vehiclePlate && (
+                          <div className="flex items-center gap-1.5 font-medium text-foreground">
+                            <Car className="size-3 shrink-0 text-primary" />
+                            <span className="font-mono">{staff.vehiclePlate}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1.5">
+                          <Building className="size-3 shrink-0" />
+                          <span>Unit: {staff.unitNumber} ({staff.residentName})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-muted-foreground pt-0.5">
+                          <Calendar className="size-3 shrink-0" />
+                          <span>Days: {staff.allowedDays}</span>
+                        </div>
+                        {(staff.entryStartTime || staff.entryEndTime) && (
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Clock className="size-3 shrink-0" />
+                            <span>Hours: {staff.entryStartTime?.slice(0, 5) || "Any"} - {staff.entryEndTime?.slice(0, 5) || "Any"}</span>
+                          </div>
+                        )}
+                        <div className="text-[10px] text-muted-foreground pt-1 border-t border-border/20 mt-1">
+                          Valid: {staff.validFrom} to {staff.validUntil}
+                        </div>
+                        {staff.notes && (
+                          <p className="text-[10px] italic mt-1 text-muted-foreground truncate font-sans">"{staff.notes}"</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[11px] flex-1"
+                          onClick={() => openEditStaff(staff)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant={staff.isActive ? "destructive" : "default"}
+                          size="sm"
+                          className="h-7 text-[11px] flex-1"
+                          onClick={() => handleToggleStaffActive(staff)}
+                        >
+                          {staff.isActive ? "Deactivate" : "Activate"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
           {/* GATE TERMINAL VERIFICATION TAB */}
           <TabsContent value="gate-terminal" className="space-y-6">
             <Card className="border-border/70 shadow-soft max-w-xl mx-auto">
@@ -531,75 +864,181 @@ function VisitorPage() {
                   <ShieldCheck className="size-6" />
                 </div>
                 <CardTitle className="font-serif text-lg font-bold">Security Gate Verification</CardTitle>
-                <CardDescription className="text-xs">Enter the 6-digit visitor pass code to grant entry/exit access</CardDescription>
+                <CardDescription className="text-xs">Verify visitor pass codes or authenticate recurring domestic staff</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {gateResult && (
-                  <div
-                    className={`rounded-lg p-3 text-xs border ${
-                      gateResult.success
-                        ? "bg-emerald-500/10 border-emerald-300 text-emerald-700 dark:text-emerald-300"
-                        : "bg-rose-500/10 border-rose-300 text-rose-700 dark:text-rose-300"
-                    }`}
-                  >
-                    <p className="font-medium">{gateResult.message}</p>
+                <div className="flex justify-center mb-4">
+                  <div className="bg-muted p-1 rounded-lg inline-flex gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={gateTerminalSubTab === "otp" ? "secondary" : "ghost"}
+                      className="text-xs h-7 px-3"
+                      onClick={() => setGateTerminalSubTab("otp")}
+                    >
+                      Visitor OTP Pass
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={gateTerminalSubTab === "staff" ? "secondary" : "ghost"}
+                      className="text-xs h-7 px-3"
+                      onClick={() => setGateTerminalSubTab("staff")}
+                    >
+                      Domestic Staff / Maid
+                    </Button>
+                  </div>
+                </div>
+
+                {gateTerminalSubTab === "otp" ? (
+                  <>
+                    {gateResult && (
+                      <div
+                        className={`rounded-lg p-3 text-xs border ${
+                          gateResult.success
+                            ? "bg-emerald-500/10 border-emerald-300 text-emerald-700 dark:text-emerald-300"
+                            : "bg-rose-500/10 border-rose-300 text-rose-700 dark:text-rose-300"
+                        }`}
+                      >
+                        <p className="font-medium">{gateResult.message}</p>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleVerifyGatePass} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Direction</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant={gateDirection === "in" ? "default" : "outline"}
+                            className={`h-9 text-xs gap-1.5 ${gateDirection === "in" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
+                            onClick={() => setGateDirection("in")}
+                          >
+                            <ArrowRight className="size-3.5" /> ENTRY (CHECK-IN)
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={gateDirection === "out" ? "default" : "outline"}
+                            className={`h-9 text-xs gap-1.5 ${gateDirection === "out" ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}`}
+                            onClick={() => setGateDirection("out")}
+                          >
+                            <ArrowLeft className="size-3.5" /> EXIT (CHECK-OUT)
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">6-Digit Pass Code / OTP *</Label>
+                        <div className="relative">
+                          <Key className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            placeholder="e.g. 482910"
+                            className="h-11 pl-9 text-lg font-mono font-bold tracking-widest text-center"
+                            value={gateCode}
+                            maxLength={6}
+                            onChange={(e) => setGateCode(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Vehicle Plate Number (Optional)</Label>
+                        <div className="relative">
+                          <Car className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            placeholder="e.g. LE-9922, LZA-4471"
+                            className="h-9 pl-9 text-xs font-mono uppercase"
+                            value={gatePlate}
+                            onChange={(e) => setGatePlate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <Button type="submit" className="w-full h-10 text-xs font-semibold gap-1.5" disabled={isVerifying}>
+                        {isVerifying ? "Verifying..." : "Verify Pass & Record Gate Entry"}
+                      </Button>
+                    </form>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    {staffRecordResult && (
+                      <div className={`rounded-lg p-3 text-xs border ${
+                        staffRecordResult.success ? "bg-emerald-500/10 border-emerald-300 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/10 border-rose-300 text-rose-700 dark:text-rose-300"
+                      }`}>
+                        <p className="font-medium">{staffRecordResult.message}</p>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleVerifyStaffGate} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Search Staff ID / Phone / Name</Label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              placeholder="e.g. Shabana Bibi, 03001234567..."
+                              className="h-9 pl-9 text-xs"
+                              value={staffGateQuery}
+                              onChange={(e) => setStaffGateQuery(e.target.value)}
+                            />
+                          </div>
+                          <Button type="submit" size="sm" className="h-9 text-xs" disabled={isStaffVerifying}>
+                            {isStaffVerifying ? "Searching..." : "Search & Verify"}
+                          </Button>
+                        </div>
+                      </div>
+                    </form>
+
+                    {staffVerifyResult && (
+                      <Card className="border-border/60 bg-muted/20">
+                        <CardContent className="p-4 space-y-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h4 className="font-serif font-bold text-sm text-foreground">{staffVerifyResult.staff?.name || "Staff Details"}</h4>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{staffVerifyResult.staff?.staffType}</p>
+                            </div>
+                            <Badge className={`text-[10px] uppercase font-bold ${
+                              staffVerifyResult.status === "authorized" ? "bg-emerald-500/10 text-emerald-600 border-transparent" : "bg-rose-500/10 text-rose-600 border-transparent"
+                            }`}>
+                              {staffVerifyResult.status.replace("_", " ")}
+                            </Badge>
+                          </div>
+
+                          <div className="text-xs space-y-1 text-muted-foreground border-t border-border/40 pt-2">
+                            <div>Staff ID: <strong className="text-foreground font-mono">{staffVerifyResult.staff?.staffCode}</strong></div>
+                            <div>Resident: <strong className="text-foreground">{staffVerifyResult.staff?.residentName}</strong> (Unit {staffVerifyResult.staff?.unitNumber})</div>
+                            {staffVerifyResult.staff?.phone && <div>Phone: <span className="text-foreground">{staffVerifyResult.staff.phone}</span></div>}
+                            {staffVerifyResult.staff?.vehiclePlate && <div>Vehicle: <span className="font-mono text-foreground font-semibold">[{staffVerifyResult.staff.vehiclePlate}]</span></div>}
+                            {staffVerifyResult.staff?.notes && <div className="italic mt-1">Notes: "{staffVerifyResult.staff.notes}"</div>}
+                          </div>
+
+                          <p className={`text-xs font-bold ${staffVerifyResult.status === "authorized" ? "text-emerald-600" : "text-rose-600"}`}>
+                            {staffVerifyResult.message}
+                          </p>
+
+                          {staffVerifyResult.status === "authorized" && staffVerifyResult.staff && (
+                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/20">
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1 h-8"
+                                onClick={() => handleRecordStaffMovement(staffVerifyResult.staff!.id, "in")}
+                              >
+                                <ArrowRight className="size-3.5" /> Check In
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white text-xs gap-1 h-8"
+                                onClick={() => handleRecordStaffMovement(staffVerifyResult.staff!.id, "out")}
+                              >
+                                <ArrowLeft className="size-3.5" /> Check Out
+                              </Button>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 )}
-
-                <form onSubmit={handleVerifyGatePass} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Direction</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant={gateDirection === "in" ? "default" : "outline"}
-                        className={`h-9 text-xs gap-1.5 ${gateDirection === "in" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}`}
-                        onClick={() => setGateDirection("in")}
-                      >
-                        <ArrowRight className="size-3.5" /> ENTRY (CHECK-IN)
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={gateDirection === "out" ? "default" : "outline"}
-                        className={`h-9 text-xs gap-1.5 ${gateDirection === "out" ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}`}
-                        onClick={() => setGateDirection("out")}
-                      >
-                        <ArrowLeft className="size-3.5" /> EXIT (CHECK-OUT)
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">6-Digit Pass Code / OTP *</Label>
-                    <div className="relative">
-                      <Key className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="e.g. 482910"
-                        className="h-11 pl-9 text-lg font-mono font-bold tracking-widest text-center"
-                        value={gateCode}
-                        maxLength={6}
-                        onChange={(e) => setGateCode(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Vehicle Plate Number (Optional)</Label>
-                    <div className="relative">
-                      <Car className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="e.g. LE-9922, LZA-4471"
-                        className="h-9 pl-9 text-xs font-mono uppercase"
-                        value={gatePlate}
-                        onChange={(e) => setGatePlate(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <Button type="submit" className="w-full h-10 text-xs font-semibold gap-1.5" disabled={isVerifying}>
-                    {isVerifying ? "Verifying..." : "Verify Pass & Record Gate Entry"}
-                  </Button>
-                </form>
               </CardContent>
             </Card>
           </TabsContent>
@@ -869,6 +1308,153 @@ function VisitorPage() {
               <Button type="submit" variant="destructive" size="sm" disabled={isBlSubmitting}>{isBlSubmitting ? "Blacklisting..." : "Blacklist Person"}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* Register / Edit Domestic Staff Modal */}
+      <Dialog open={addStaffOpen} onOpenChange={setAddStaffOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-lg">
+              {editingStaffId ? "Edit Domestic Staff" : "Register Domestic Staff"}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Register recurring cooks, maids, or drivers with long-term gate authorization.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveStaff} className="space-y-4">
+            {sError && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{sError}</div>}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Full Name *</Label>
+              <Input placeholder="Staff member name" className="h-9 text-xs" value={sName} onChange={(e) => setSName(e.target.value)} />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Phone Number</Label>
+                <Input placeholder="+92 300 0000000" className="h-9 text-xs" value={sPhone} onChange={(e) => setSPhone(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Staff Type *</Label>
+                <Select value={sStaffType} onValueChange={(v) => setSStaffType(v as any)}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="maid" className="text-xs">Maid</SelectItem>
+                    <SelectItem value="driver" className="text-xs">Driver</SelectItem>
+                    <SelectItem value="gardener" className="text-xs">Gardener</SelectItem>
+                    <SelectItem value="cook" className="text-xs">Cook</SelectItem>
+                    <SelectItem value="nanny" className="text-xs">Nanny</SelectItem>
+                    <SelectItem value="other" className="text-xs">Other Staff</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Authorized From *</Label>
+                <Input type="date" className="h-9 text-xs" value={sValidFrom} onChange={(e) => setSValidFrom(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Authorized Until *</Label>
+                <Input type="date" className="h-9 text-xs" value={sValidUntil} onChange={(e) => setSValidUntil(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Allowed Days of Week *</Label>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => {
+                  const selected = sAllowedDays.includes(day);
+                  return (
+                    <Button
+                      key={day}
+                      type="button"
+                      variant={selected ? "default" : "outline"}
+                      className="h-7 text-[10px] px-2.5 font-semibold"
+                      onClick={() => {
+                        if (selected) {
+                          setSAllowedDays(sAllowedDays.filter((d) => d !== day));
+                        } else {
+                          setSAllowedDays([...sAllowedDays, day]);
+                        }
+                      }}
+                    >
+                      {day}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Allowed Entry Start</Label>
+                <Input type="time" className="h-9 text-xs" value={sEntryStartTime} onChange={(e) => setSEntryStartTime(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Allowed Entry End</Label>
+                <Input type="time" className="h-9 text-xs" value={sEntryEndTime} onChange={(e) => setSEntryEndTime(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Vehicle Plate (Optional)</Label>
+                <Input placeholder="e.g. LZA-4471" className="h-9 text-xs font-mono uppercase" value={sVehiclePlate} onChange={(e) => setSVehiclePlate(e.target.value)} />
+              </div>
+              {isSecurity && !editingStaffId && unitsList.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Destination Unit *</Label>
+                  <Select value={sResidentId} onValueChange={setSResidentId}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Unit" /></SelectTrigger>
+                    <SelectContent>
+                      {unitsList.map((u: any) => (
+                        <SelectItem key={u.id} value={u.id} className="text-xs">
+                          {u.fullPath || `Unit ${u.unitNumber}`} {u.residentName ? `(${u.residentName})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes / Job Details</Label>
+              <Textarea placeholder="e.g. Daily apartment cleaning and dishwashing..." className="text-xs min-h-[50px]" value={sNotes} onChange={(e) => setSNotes(e.target.value)} />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" size="sm" onClick={() => setAddStaffOpen(false)} disabled={isStaffSubmitting}>Cancel</Button>
+              <Button type="submit" size="sm" disabled={isStaffSubmitting}>
+                {isStaffSubmitting ? "Saving..." : editingStaffId ? "Save Changes" : "Register Staff"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={!!registeredStaffCode} onOpenChange={() => setRegisteredStaffCode(null)}>
+        <DialogContent className="max-w-sm text-center p-6">
+          <div className="mx-auto size-12 grid place-items-center rounded-full bg-emerald-100 text-emerald-600 mb-3">
+            <Check className="size-6" />
+          </div>
+          <DialogHeader>
+            <DialogTitle className="font-serif text-lg font-bold text-center">Staff Registered Successfully</DialogTitle>
+            <DialogDescription className="text-xs text-center mt-1">
+              The domestic staff member has been registered.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="my-4 p-3 bg-muted/40 rounded-lg border border-border/40">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Staff ID</p>
+            <p className="text-xl font-bold font-mono text-foreground tracking-wide mt-1">{registeredStaffCode}</p>
+          </div>
+          <Button className="w-full text-xs h-9" onClick={() => setRegisteredStaffCode(null)}>
+            Okay, got it
+          </Button>
         </DialogContent>
       </Dialog>
     </AppShell>

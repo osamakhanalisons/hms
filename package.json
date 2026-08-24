@@ -11,6 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "db:seed": "npx tsx scripts/seed.ts",
+    "seed:demo": "npx tsx scripts/seed-demo.ts",
+    "seed:demo:reset": "npx tsx scripts/seed-demo.ts --reset",
     "db:fix-mobile": "npx tsx scripts/apply-mobile-fix.ts",
     "fix-and-restart": "npm run db:fix-mobile && powershell -Command \"Stop-Process -Name node -Force -ErrorAction SilentlyContinue\" && npm run dev"
   },

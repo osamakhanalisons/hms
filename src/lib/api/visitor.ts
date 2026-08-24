@@ -30,6 +30,7 @@ export type EntryExitLogItem = {
   id: string;
   tenantId: string;
   visitorPassId: string | null;
+  domesticStaffId: string | null;
   visitorName: string;
   vehiclePlate: string | null;
   gateId: string | null;
@@ -233,6 +234,7 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
       id: r.id,
       tenantId: r.tenant_id,
       visitorPassId: r.visitor_pass_id ?? null,
+      domesticStaffId: r.domestic_staff_id ?? null,
       visitorName: r.visitor_name,
       vehiclePlate: r.vehicle_plate ?? null,
       gateId: r.gate_id ?? null,
@@ -577,6 +579,487 @@ export const removeFromBlacklistFn = createServerFn({ method: "POST" })
       data.blacklistId,
       tenantId,
     ]);
+
+    return { success: true };
+  });
+
+// ─── DOMESTIC STAFF MANAGEMENT ───────────────────────────────────────────────
+
+export type DomesticStaffItem = {
+  id: string;
+  tenantId: string;
+  residentId: string;
+  residentName: string;
+  unitNumber: string;
+  staffCode: string;
+  name: string;
+  phone: string | null;
+  staffType: "maid" | "driver" | "gardener" | "cook" | "nanny" | "other";
+  photoUrl: string | null;
+  validFrom: string;
+  validUntil: string;
+  allowedDays: string;
+  entryStartTime: string | null;
+  entryEndTime: string | null;
+  vehiclePlate: string | null;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export const getDomesticStaffFn = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      search: z.string().optional(),
+      tenantId: z.string().optional(),
+    }).optional()
+  )
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
+    const { tenantId: sessionTenantId, roles, userId } = await requirePermission(request, "visitor", "view");
+    const isSecurityOrAdmin = isAdminRole(roles) || hasAnyRole(roles, ["security_head", "guard", "society_admin"]);
+    
+    const db = getDb();
+
+    // Fetch resident ID(s) linked to current user
+    const [residentRows] = await db.query(
+      "SELECT id FROM residents WHERE person_id IN (SELECT id FROM persons WHERE user_id = ?) AND tenant_id = ?",
+      [userId, sessionTenantId]
+    ) as any[];
+    const residentIds = residentRows.map((r: any) => r.id);
+
+    if (!isSecurityOrAdmin && residentIds.length === 0) {
+      return [] as DomesticStaffItem[];
+    }
+
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "ds.tenant_id");
+
+    let query = `
+      SELECT ds.*, p.full_name AS resident_name, u.unit_number
+      FROM domestic_staff ds
+      JOIN residents r ON r.id = ds.resident_id
+      JOIN persons p ON p.id = r.person_id
+      JOIN units u ON u.id = r.unit_id
+      WHERE ${sqlFilter}
+    `;
+    const params: any[] = [...sqlParams];
+
+    if (!isSecurityOrAdmin) {
+      query += " AND ds.resident_id IN (?)";
+      params.push(residentIds);
+    }
+
+    if (data?.search && data.search.trim()) {
+      const q = `%${data.search.trim()}%`;
+      query += " AND (ds.name LIKE ? OR ds.phone LIKE ? OR ds.vehicle_plate LIKE ? OR ds.staff_code LIKE ?)";
+      params.push(q, q, q, q);
+    }
+
+    query += " ORDER BY ds.created_at DESC";
+
+    const [rows] = await db.query(query, params) as any[];
+
+    return rows.map((r: any) => ({
+      id: r.id,
+      tenantId: r.tenant_id,
+      residentId: r.resident_id,
+      residentName: r.resident_name,
+      unitNumber: r.unit_number,
+      staffCode: r.staff_code,
+      name: r.name,
+      phone: r.phone ?? null,
+      staffType: r.staff_type,
+      photoUrl: r.photo_url ?? null,
+      validFrom: toISO(r.valid_from).split(" ")[0],
+      validUntil: toISO(r.valid_until).split(" ")[0],
+      allowedDays: r.allowed_days,
+      entryStartTime: r.entry_start_time ?? null,
+      entryEndTime: r.entry_end_time ?? null,
+      vehiclePlate: r.vehicle_plate ?? null,
+      notes: r.notes ?? null,
+      isActive: Boolean(r.is_active),
+      createdAt: toISO(r.created_at),
+    })) as DomesticStaffItem[];
+  });
+
+export const createDomesticStaffFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      name: z.string().min(1, "Staff name is required"),
+      phone: z.string().optional().nullable(),
+      staffType: z.enum(["maid", "driver", "gardener", "cook", "nanny", "other"]),
+      validFrom: z.string().min(1, "Valid from date is required"),
+      validUntil: z.string().min(1, "Valid until date is required"),
+      allowedDays: z.string().min(1, "Allowed days are required"), // Comma-separated
+      entryStartTime: z.string().optional().nullable(),
+      entryEndTime: z.string().optional().nullable(),
+      vehiclePlate: z.string().optional().nullable(),
+      notes: z.string().optional().nullable(),
+      residentId: z.string().optional(), // For admin use
+    })
+  )
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
+    const { tenantId, roles, userId } = await requirePermission(request, "visitor", "create");
+    const isSecurityOrAdmin = isAdminRole(roles) || hasAnyRole(roles, ["security_head", "guard", "society_admin"]);
+
+    const db = getDb();
+
+    // Acquire pool connection for transaction
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Blacklist check on phone or vehicle plate
+      if (data.phone || data.vehiclePlate) {
+        const params: any[] = [tenantId];
+        let blSql = "SELECT name, reason FROM visitor_blacklist WHERE tenant_id = ? AND (";
+        const conditions: string[] = [];
+        if (data.phone) {
+          conditions.push("phone = ?");
+          params.push(data.phone.trim());
+        }
+        if (data.vehiclePlate) {
+          conditions.push("UPPER(vehicle_plate) = UPPER(?)");
+          params.push(data.vehiclePlate.trim());
+        }
+        blSql += conditions.join(" OR ") + ")";
+
+        const [blHits] = await connection.query(blSql, params) as any[];
+        if (blHits.length > 0) {
+          throw new Error(`ENTRY DENIED: This staff member or vehicle is blacklisted! Reason: "${blHits[0].reason}"`);
+        }
+      }
+
+      // Resolve Resident ID
+      let residentId: string;
+      if (!isSecurityOrAdmin) {
+        // Residents can only create for their own profile
+        const [resRows] = await connection.query(
+          "SELECT id FROM residents WHERE person_id IN (SELECT id FROM persons WHERE user_id = ?) AND tenant_id = ? AND is_current = TRUE",
+          [userId, tenantId]
+        ) as any[];
+        if (resRows.length === 0) {
+          throw new Error("Forbidden — You must be an active resident of this society to register staff.");
+        }
+        residentId = resRows[0].id;
+      } else {
+        // Admins/Security can specify any resident ID
+        if (!data.residentId) {
+          throw new Error("residentId is required for admin/security staff registration.");
+        }
+        const [resCheck] = await connection.query(
+          "SELECT id FROM residents WHERE id = ? AND tenant_id = ?",
+          [data.residentId, tenantId]
+        ) as any[];
+        if (resCheck.length === 0) {
+          throw new Error("Invalid resident ID selected for this society.");
+        }
+        residentId = data.residentId;
+      }
+
+      // Generate sequential staff code securely using SELECT ... FOR UPDATE transaction lock
+      const [seqRows] = await connection.query(
+        "SELECT staff_code FROM domestic_staff WHERE tenant_id = ? FOR UPDATE",
+        [tenantId]
+      ) as any[];
+
+      let maxSeq = 0;
+      for (const row of seqRows) {
+        const code = row.staff_code;
+        if (code && code.startsWith("DS-")) {
+          const num = parseInt(code.substring(3), 10);
+          if (!isNaN(num) && num > maxSeq) {
+            maxSeq = num;
+          }
+        }
+      }
+      const nextSeq = maxSeq + 1;
+      const staffCode = `DS-${String(nextSeq).padStart(5, "0")}`;
+
+      const id = crypto.randomUUID();
+
+      await connection.query(
+        `INSERT INTO domestic_staff (
+          id, tenant_id, resident_id, staff_code, name, phone, staff_type, valid_from, valid_until,
+          allowed_days, entry_start_time, entry_end_time, vehicle_plate, notes, is_active, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)`,
+        [
+          id,
+          tenantId,
+          residentId,
+          staffCode,
+          data.name.trim(),
+          data.phone || null,
+          data.staffType,
+          data.validFrom,
+          data.validUntil,
+          data.allowedDays,
+          data.entryStartTime || null,
+          data.entryEndTime || null,
+          data.vehiclePlate ? data.vehiclePlate.trim().toUpperCase() : null,
+          data.notes || null,
+          userId,
+        ]
+      );
+
+      await connection.commit();
+
+      return {
+        id,
+        staffCode,
+        name: data.name,
+        staffType: data.staffType,
+        residentId,
+        tenantId,
+      };
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  });
+
+export const updateDomesticStaffFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      id: z.string(),
+      name: z.string().min(1, "Staff name is required"),
+      phone: z.string().optional().nullable(),
+      staffType: z.enum(["maid", "driver", "gardener", "cook", "nanny", "other"]),
+      validFrom: z.string().min(1, "Valid from date is required"),
+      validUntil: z.string().min(1, "Valid until date is required"),
+      allowedDays: z.string().min(1, "Allowed days are required"),
+      entryStartTime: z.string().optional().nullable(),
+      entryEndTime: z.string().optional().nullable(),
+      vehiclePlate: z.string().optional().nullable(),
+      notes: z.string().optional().nullable(),
+      isActive: z.boolean(),
+    })
+  )
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
+    const { tenantId, roles, userId } = await requirePermission(request, "visitor", "edit");
+    const isSecurityOrAdmin = isAdminRole(roles) || hasAnyRole(roles, ["security_head", "guard", "society_admin"]);
+
+    const db = getDb();
+
+    // Verify staff exists and belongs to active tenant
+    const [staffRows] = await db.query(
+      "SELECT tenant_id, resident_id FROM domestic_staff WHERE id = ?",
+      [data.id]
+    ) as any[];
+    if (staffRows.length === 0) {
+      throw new Error("Domestic staff record not found.");
+    }
+    const staff = staffRows[0];
+
+    if (staff.tenant_id !== tenantId) {
+      throw new Error("Forbidden — Access denied to this staff record.");
+    }
+
+    if (!isSecurityOrAdmin) {
+      // Resident: check ownership of this record
+      const [resRows] = await db.query(
+        "SELECT id FROM residents WHERE person_id IN (SELECT id FROM persons WHERE user_id = ?) AND tenant_id = ? AND is_current = TRUE",
+        [userId, tenantId]
+      ) as any[];
+      if (resRows.length === 0 || resRows[0].id !== staff.resident_id) {
+        throw new Error("Forbidden — You can only edit your own domestic staff.");
+      }
+    }
+
+    await db.query(
+      `UPDATE domestic_staff 
+       SET name = ?, phone = ?, staff_type = ?, valid_from = ?, valid_until = ?,
+           allowed_days = ?, entry_start_time = ?, entry_end_time = ?,
+           vehicle_plate = ?, notes = ?, is_active = ?
+       WHERE id = ?`,
+      [
+        data.name.trim(),
+        data.phone || null,
+        data.staffType,
+        data.validFrom,
+        data.validUntil,
+        data.allowedDays,
+        data.entryStartTime || null,
+        data.entryEndTime || null,
+        data.vehiclePlate ? data.vehiclePlate.trim().toUpperCase() : null,
+        data.notes || null,
+        data.isActive,
+        data.id,
+      ]
+    );
+
+    return { success: true };
+  });
+
+export type StaffVerificationResult = {
+  status: "authorized" | "inactive" | "expired" | "not_allowed_today" | "outside_time" | "not_found";
+  message: string;
+  staff: {
+    id: string;
+    staffCode: string;
+    name: string;
+    staffType: string;
+    phone: string | null;
+    unitNumber: string;
+    residentName: string;
+    vehiclePlate: string | null;
+    notes: string | null;
+  } | null;
+};
+
+export const verifyDomesticStaffFn = createServerFn({ method: "POST" })
+  .validator(z.object({ query: z.string().min(1, "Search query is required") }))
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
+    const { tenantId } = await requirePermission(request, "gate", "view");
+
+    const db = getDb();
+    
+    // Search by exact phone, exact vehicle plate, exact id, or like name
+    const searchQuery = data.query.trim();
+    const [rows] = await db.query(
+      `SELECT ds.*, p.full_name AS resident_name, u.unit_number, u.id AS unit_id
+       FROM domestic_staff ds
+       JOIN residents r ON r.id = ds.resident_id
+       JOIN persons p ON p.id = r.person_id
+       JOIN units u ON u.id = r.unit_id
+       WHERE ds.tenant_id = ? AND (ds.staff_code = ? OR ds.phone = ? OR ds.name LIKE ? OR ds.id = ? OR ds.vehicle_plate = ?)
+       LIMIT 1`,
+      [tenantId, searchQuery, searchQuery, `%${searchQuery}%`, searchQuery, searchQuery]
+    ) as any[];
+
+    if (rows.length === 0) {
+      return {
+        status: "not_found",
+        message: "❌ No domestic staff member found matching your query.",
+        staff: null,
+      } satisfies StaffVerificationResult;
+    }
+
+    const s = rows[0];
+    const staffData = {
+      id: s.id,
+      staffCode: s.staff_code,
+      name: s.name,
+      staffType: s.staff_type,
+      phone: s.phone ?? null,
+      unitNumber: s.unit_number,
+      residentName: s.resident_name,
+      vehiclePlate: s.vehicle_plate ?? null,
+      notes: s.notes ?? null,
+    };
+
+    // Check 1: Active status
+    if (!s.is_active) {
+      return {
+        status: "inactive",
+        message: "❌ Access Denied: Staff authorization has been deactivated by the resident.",
+        staff: staffData,
+      } satisfies StaffVerificationResult;
+    }
+
+    // Check 2: Validity dates
+    const todayStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD local format
+    const validFrom = toISO(s.valid_from).split(" ")[0];
+    const validUntil = toISO(s.valid_until).split(" ")[0];
+    if (todayStr < validFrom || todayStr > validUntil) {
+      return {
+        status: "expired",
+        message: `❌ Access Denied: Authorization expired on ${validUntil} (valid from ${validFrom}).`,
+        staff: staffData,
+      } satisfies StaffVerificationResult;
+    }
+
+    // Check 3: Allowed days
+    const daysMap = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const currentDay = daysMap[new Date().getDay()];
+    const allowedDays = s.allowed_days.split(",");
+    if (!allowedDays.includes(currentDay)) {
+      return {
+        status: "not_allowed_today",
+        message: `❌ Access Denied: Not authorized to enter today (${currentDay}). Allowed: ${s.allowed_days}.`,
+        staff: staffData,
+      } satisfies StaffVerificationResult;
+    }
+
+    // Check 4: Time window
+    if (s.entry_start_time && s.entry_end_time) {
+      const now = new Date();
+      const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      
+      const [sh, sm, ss] = s.entry_start_time.split(":").map(Number);
+      const startSeconds = sh * 3600 + sm * 60 + (ss || 0);
+
+      const [eh, em, es] = s.entry_end_time.split(":").map(Number);
+      const endSeconds = eh * 3600 + em * 60 + (es || 0);
+
+      if (currentSeconds < startSeconds || currentSeconds > endSeconds) {
+        return {
+          status: "outside_time",
+          message: `❌ Access Denied: Outside allowed entry hours (${s.entry_start_time.slice(0, 5)} - ${s.entry_end_time.slice(0, 5)}).`,
+          staff: staffData,
+        } satisfies StaffVerificationResult;
+      }
+    }
+
+    return {
+      status: "authorized",
+      message: "✅ Authorized: Access granted.",
+      staff: staffData,
+    } satisfies StaffVerificationResult;
+  });
+
+export const recordStaffMovementFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      staffId: z.string(),
+      direction: z.enum(["in", "out"]),
+      vehiclePlate: z.string().optional().nullable(),
+      notes: z.string().optional().nullable(),
+    })
+  )
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
+    const { tenantId, userId } = await requirePermission(request, "gate", "create");
+
+    const db = getDb();
+
+    // Verify staff exists and belongs to active tenant
+    const [staffRows] = await db.query(
+      `SELECT ds.name, ds.vehicle_plate, r.unit_id 
+       FROM domestic_staff ds
+       JOIN residents r ON r.id = ds.resident_id
+       WHERE ds.id = ? AND ds.tenant_id = ?`,
+      [data.staffId, tenantId]
+    ) as any[];
+
+    if (staffRows.length === 0) {
+      throw new Error("Staff member not found or access denied.");
+    }
+
+    const s = staffRows[0];
+    const plate = data.vehiclePlate ? data.vehiclePlate.trim().toUpperCase() : s.vehicle_plate;
+
+    const logId = crypto.randomUUID();
+    await db.query(
+      `INSERT INTO entry_exit_log (id, tenant_id, domestic_staff_id, visitor_name, vehicle_plate, direction, unit_id, verified_by, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        logId,
+        tenantId,
+        data.staffId,
+        s.name,
+        plate || null,
+        data.direction,
+        s.unit_id,
+        userId,
+        data.notes || null,
+      ]
+    );
 
     return { success: true };
   });

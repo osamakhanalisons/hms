@@ -8,6 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 .env
 .env.*
+db_export.sql
+at_bms_backup.sql
 
 node_modules
 dist
@@ -17,6 +19,7 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+.mobile_app
 
 # Wrangler / Cloudflare
 .wrangler/

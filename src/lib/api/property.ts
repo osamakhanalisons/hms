@@ -189,7 +189,7 @@ export const createUnitFn = createServerFn({ method: "POST" })
       buildingId: z.string().optional(),
       floorId: z.string().optional(),
       unitNumber: z.string().min(1),
-      unitType: z.enum(["flat", "villa", "shop", "office", "penthouse", "other"]).optional(),
+      unitType: z.enum(["flat", "apartment", "villa", "house", "shop", "office", "penthouse", "other"]).optional(),
       areaSqft: z.number().optional(),
       bedrooms: z.number().int().optional(),
     }),
@@ -198,6 +198,20 @@ export const createUnitFn = createServerFn({ method: "POST" })
     const { tenantId } = await requirePermission(request, "property", "create");
 
     const db = getDb();
+
+    // Verify properties and structure constraints
+    const resolvedType = data.unitType || "flat";
+    const isApartment = resolvedType === "flat" || resolvedType === "apartment";
+
+    if (isApartment) {
+      if (!data.blockId || !data.buildingId || !data.floorId) {
+        throw new Error("Block, building, and floor are required for apartments.");
+      }
+    } else {
+      // Standalone House, Villa, Shop, etc. do not have buildings/floors
+      data.buildingId = undefined;
+      data.floorId = undefined;
+    }
 
     // Verify society belongs to tenant
     const [[society]] = (await db.query(
@@ -305,7 +319,7 @@ export const createUnitFn = createServerFn({ method: "POST" })
         data.floorId || null,
         tenantId,
         data.unitNumber,
-        data.unitType || "flat",
+        resolvedType,
         data.areaSqft || null,
         data.bedrooms || null,
       ],
@@ -444,7 +458,7 @@ export const updateUnitFn = createServerFn({ method: "POST" })
     z.object({
       id: z.string(),
       unitNumber: z.string().min(1),
-      unitType: z.enum(["flat", "villa", "shop", "office", "penthouse", "other"]).optional(),
+      unitType: z.enum(["flat", "apartment", "villa", "house", "shop", "office", "penthouse", "other"]).optional(),
       areaSqft: z.number().optional(),
       bedrooms: z.number().int().optional(),
     })
@@ -512,14 +526,40 @@ export const deleteUnitFn = createServerFn({ method: "POST" })
     const { tenantId } = await requirePermission(request, "property", "delete");
     const db = getDb();
 
+    // Safeguard 1: Occupied status check
     const [units] = await db.query("SELECT status FROM units WHERE id = ? AND tenant_id = ?", [data.id, tenantId]) as any[];
     if (units.length > 0 && units[0].status === "occupied") {
       throw new Error("Cannot delete unit because it is currently occupied. Please vacate it first.");
     }
 
+    // Safeguard 2: Active residents check
     const [residents] = await db.query("SELECT id FROM residents WHERE unit_id = ? AND tenant_id = ? LIMIT 1", [data.id, tenantId]) as any[];
     if (residents.length > 0) {
       throw new Error("Cannot delete unit because it has resident records associated with it.");
+    }
+
+    // Safeguard 3: Billing ledger check
+    const [ledger] = await db.query("SELECT id FROM ledger_entries WHERE unit_id = ? AND tenant_id = ? LIMIT 1", [data.id, tenantId]) as any[];
+    if (ledger.length > 0) {
+      throw new Error("Cannot delete unit because it has billing ledger history associated with it.");
+    }
+
+    // Safeguard 4: Payment records check
+    const [payments] = await db.query("SELECT id FROM payments WHERE unit_id = ? AND tenant_id = ? LIMIT 1", [data.id, tenantId]) as any[];
+    if (payments.length > 0) {
+      throw new Error("Cannot delete unit because it has payment records associated with it.");
+    }
+
+    // Safeguard 5: Meter readings check
+    const [readings] = await db.query("SELECT id FROM meter_readings WHERE unit_id = ? AND tenant_id = ? LIMIT 1", [data.id, tenantId]) as any[];
+    if (readings.length > 0) {
+      throw new Error("Cannot delete unit because it has utility meter reading records associated with it.");
+    }
+
+    // Safeguard 6: Parking slots check
+    const [parking] = await db.query("SELECT id FROM parking_allocations WHERE unit_id = ? AND tenant_id = ? LIMIT 1", [data.id, tenantId]) as any[];
+    if (parking.length > 0) {
+      throw new Error("Cannot delete unit because it has parking slot allocations associated with it.");
     }
 
     await db.query("DELETE FROM units WHERE id = ? AND tenant_id = ?", [data.id, tenantId]);

@@ -1,15 +1,17 @@
 import React, { useState } from "react";
-import { Folder, ChevronRight, ChevronDown, Plus, Home } from "lucide-react";
+import { Folder, ChevronRight, ChevronDown, Plus, Home, Building2 } from "lucide-react";
 import { Button } from "./ui/button";
 
 export interface PropertyNode {
   id: string;
   name: string;
-  type: "society" | "block" | "building" | "floor" | "unit";
+  type: "society" | "apartment_area" | "house_villa_area" | "block" | "building" | "floor" | "unit";
   unitNumber?: string;
   unitType?: string;
   status?: string;
   children?: PropertyNode[];
+  societyId?: string;
+  blockName?: string;
 }
 
 interface PropertyTreeProps {
@@ -83,10 +85,18 @@ function TreeNode({
             <Home className="size-3.5 shrink-0 text-muted-foreground ml-4" />
           )}
 
-          {node.type !== "unit" && <Folder className="size-3.5 shrink-0 text-muted-foreground" />}
+          {node.type !== "unit" && (
+            node.type === "apartment_area" ? (
+              <Building2 className="size-3.5 shrink-0 text-primary" />
+            ) : node.type === "house_villa_area" ? (
+              <Home className="size-3.5 shrink-0 text-primary" />
+            ) : (
+              <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+            )
+          )}
 
           <span className="truncate">
-            {node.type === "unit" ? `Unit ${node.unitNumber}` : node.name}
+            {node.type === "unit" ? (node.name || `Unit ${node.unitNumber}`) : node.name}
           </span>
 
           {node.type === "unit" && node.status && (
