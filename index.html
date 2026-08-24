@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HousingOS / AT-BMS Complete Documentation Portal</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Prism Syntax Highlighter CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Marked Markdown Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-secondary: #111827;
+      --bg-tertiary: #1f2937;
+      --border-color: #374151;
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --sidebar-width: 320px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Sidebar Styles */
+    .sidebar {
+      width: var(--sidebar-width);
+      background-color: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 24px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .logo-container i {
+      color: var(--accent);
+      font-size: 24px;
+    }
+
+    .logo-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .search-wrapper {
+      position: relative;
+      width: 100%;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 12px 10px 36px;
+      background-color: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-secondary);
+      width: 16px;
+      height: 16px;
+    }
+
+    .sidebar-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+    }
+
+    .category-group {
+      margin-bottom: 24px;
+    }
+
+    .category-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      padding-left: 8px;
+    }
+
+    .doc-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .doc-link:hover {
+      background-color: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+    }
+
+    .doc-link.active {
+      background-color: rgba(16, 185, 129, 0.15);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Main Container Styles */
+    .main-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-primary);
+    }
+
+    .main-header {
+      height: 70px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 40px;
+      background-color: rgba(17, 24, 39, 0.5);
+      backdrop-filter: blur(10px);
+    }
+
+    .active-doc-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .theme-badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      background-color: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .content-wrapper {
+      width: 100%;
+      max-width: 900px;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Markdown Rendering Styling */
+    .markdown-body {
+      line-height: 1.625;
+      font-size: 15px;
+    }
+
+    .markdown-body h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.75px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+      color: #fff;
+    }
+
+    .markdown-body h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-top: 36px;
+      margin-bottom: 16px;
+      color: #fff;
+    }
+
+    .markdown-body h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      color: #f3f4f6;
+    }
+
+    .markdown-body p {
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      margin-bottom: 20px;
+      padding-left: 24px;
+      color: var(--text-secondary);
+    }
+
+    .markdown-body li {
+      margin-bottom: 8px;
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent);
+      padding: 12px 20px;
+      background-color: var(--bg-secondary);
+      border-radius: 4px;
+      margin-bottom: 20px;
+      color: var(--text-primary);
+    }
+
+    .markdown-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .markdown-body th, .markdown-body td {
+      border: 1px solid var(--border-color);
+      padding: 10px 14px;
+      text-align: left;
+    }
+
+    .markdown-body th {
+      background-color: var(--bg-secondary);
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .markdown-body td {
+      color: var(--text-secondary);
+    }
+
+    .markdown-body tr:nth-child(even) {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    .markdown-body code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13.5px;
+      padding: 3px 6px;
+      background-color: var(--bg-tertiary);
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: #f43f5e;
+    }
+
+    .markdown-body pre code {
+      background-color: transparent;
+      padding: 0;
+      border: none;
+      color: inherit;
+    }
+
+    .markdown-body pre {
+      background-color: var(--bg-secondary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background-color: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s ease, background-color 0.2s ease;
+    }
+
+    .markdown-body pre:hover .copy-btn {
+      opacity: 1;
+    }
+
+    .copy-btn:hover {
+      background-color: var(--border-color);
+      color: var(--text-primary);
+    }
+
+    /* Scrollbars styling */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
+    }
+
+    /* Mermaid diagrams container centering */
+    .mermaid-container {
+      display: flex;
+      justify-content: center;
+      margin: 24px 0;
+      background-color: #0b0f19;
+      border: 1px solid var(--border-color);
+      padding: 20px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-container">
+        <i data-lucide="shield-check"></i>
+        <div class="logo-title">AT-BMS HousingOS</div>
+      </div>
+      <div class="search-wrapper">
+        <i data-lucide="search" class="search-icon"></i>
+        <input type="text" class="search-input" id="search" placeholder="Search documentation...">
+      </div>
+    </div>
+    <div class="sidebar-content" id="sidebar-links">
+      <!-- Generated dynamically -->
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="main-container">
+    <div class="main-header">
+      <div class="active-doc-title" id="header-doc-title">Welcome</div>
+      <div class="header-actions">
+        <span class="theme-badge">Multi-Society SaaS v2.0</span>
+      </div>
+    </div>
+    <div class="content-area">
+      <div class="content-wrapper">
+        <div class="markdown-body" id="content">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PrismJS Syntax Highlighter -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+  <script>
+    // Embedded Markdown Files Data
+    const docs = {"01-project-overview.md":"# Project Overview\n\nAT-BMS (HousingOS) is a state-of-the-art, multi-tenant portal designed to streamline operations, finance, and security workflows within gated communities, housing societies, and commercial complexes.\n\n## Business Goals\n1. **Financial Transparency**: Provide real-time ledger access to residents to reduce disputes.\n2. **Tenant Isolation**: Maintain absolute data privacy between different housing societies using the same platform instance.\n3. **Operational Efficiency**: Provide tools to log complaints, handle parking allocations, and track maintenance bills.\n4. **Security Hardening**: Secure entry/exit tracking and prevent unauthorized users from viewing adjacent society records.\n\n## Core Concepts Explained\n\n### 1. Society / Tenant\n* **Technical definition**: The top-level administrative unit (represented in the `tenants` database table).\n* **Roman Urdu**: *Ye poori housing society ya building cooperative hai (jaise Green Pines Society). Har society ka data doosri society se bilkul alag rehta hai.*\n\n### 2. Block\n* **Technical definition**: A spatial cluster within a tenant (e.g., Block A, Phase II).\n* **Roman Urdu**: *Society ke andar ka area ya sector (jaise Block A). Ye building ya units ko grouping dene ke liye use hota hai.*\n\n### 3. Building\n* **Technical definition**: A physical structure inside a Block containing vertical levels.\n* **Roman Urdu**: *Block ke andar majood physical building ya tower (jaise Tower 1). Blocks ke baghair buildings directly society level par bhi ho sakti hain.*\n\n### 4. Floor\n* **Technical definition**: A vertical index mapping inside a building.\n* **Roman Urdu**: *Building ki floors (jaise Ground Floor, First Floor). Units ko height ke mutabiq classify karne ke liye.*\n\n### 5. Unit\n* **Technical definition**: A specific apartment, flat, penthouse, shop, or villa (represented in the `units` table).\n* **Roman Urdu**: *Woh flat ya ghar jisme rehne wala shakhs rehta hai. Ye billing aur ownership ki aakhri limit hai.*\n\n### 6. Resident\n* **Technical definition**: An occupant of a unit, classified as Owner or Tenant.\n* **Roman Urdu**: *Woh shakhs jo unit me reh raha hai. Iska data profiles table me save hota.*\n\n### 7. Society Admin\n* **Technical definition**: An administrator scoped to one or more tenants via `society_admin_tenants`.\n* **Roman Urdu**: *Society ka manager jo sirf apni society ke members, billing, aur complaints ko manage kar sakta hai.*\n\n### 8. Super Admin\n* **Technical definition**: A global platform admin with global bypass.\n* **Roman Urdu**: *Platform owner jo poore system ko monitor karta hai, nai societies banata hai, aur unhe system modules assign karta hai.*\n","02-system-architecture.md":"# System Architecture\n\nThe AT-BMS application utilizes a modern, unified tech stack that combines the best of single-page apps (SPA) and server-side rendering (SSR).\n\n## Frontend-Backend Integration via TanStack Start\n- **Core Engine**: Vinxi runs the bundler, bundling both frontend assets and backend server functions.\n- **Routing**: TanStack Router handles declarative, type-safe frontend routing. The file structure under `src/routes/` dynamically generates the client-side pages and paths.\n- **Server Functions**: Instead of standard REST or GraphQL endpoints, we use TanStack Start server functions (`createServerFn`). These functions allow direct server-side calls (like database queries) to be imported and executed as simple async function calls in React.\n- **Data Querying & Cache**: React Query (`@tanstack/react-query`) caches server responses, handles states (loading, error, success), and triggers mutations to keep the interface synchronized.\n\n## Data Layer Architecture\n- **Database Engine**: MySQL 8.x is the primary database, utilizing standard relationships and constraints.\n- **Connection Pooling**: `mysql2/promise` maintains a connection pool, avoiding overhead on concurrent database operations.\n- **Multi-Tenancy**: Scoped tables include a `tenant_id` field to enforce logical data segregation.\n","03-user-roles-and-permissions.md":"# User Roles and Permissions Matrix\n\nThe platform implements a Role-Based Access Control (RBAC) system split into two levels: Platform Level and Tenant/Society Level.\n\n| Role | Scope | Key Permissions |\n|---|---|---|\n| `super_admin` | Global | Full system access, society onboarding, global settings, log analysis. |\n| `society_admin` | Tenant | Full control over the specific society (units, bills, resident user roles). |\n| `resident` | Tenant (Unit) | View invoices, pay online, raise complaints, participate in polls and forum. |\n| `tenant` | Tenant (Unit) | View bills, submit complaints, view forum (restricted compared to owner). |\n| `guard` | Tenant (Gate) | Pre-registered visitor entry, exit log registration, blacklist alerts. |\n| `technician` | Tenant (Maintenance) | Update assigned work orders, update inventory usage, resolve issues. |\n| `finance_head` | Tenant (Finance) | View general ledger, trigger monthly maintenance charge heads, record payments. |\n\n## Dynamic Roles\nCustom roles can be created under the \"Role Permissions\" settings tab. These roles map to entries in the `custom_roles` and `role_permissions` tables, allowing fine-grained toggling of permissions (`can_view`, `can_create`, `can_edit`, `can_delete`) per module.\n","04-multi-society-architecture.md":"# Multi-Society Architecture\n\nAT-BMS is designed as a SaaS platform where multiple independent societies coexist on the same software instance and database.\n\n## Society Scoping & Isolation\n- **Cookie Resolution**: When a user logs in, their session cookie containing their credentials and active `tenant_id` is validated.\n- **Multi-Society Admin**: If a user is a `society_admin` for multiple societies, they are presented with a society switcher. The switching action updates their active `tenant_id` cookie context.\n- **Isolation Checks**: Every backend server function reads the caller's active `tenant_id` from the session and appends it as a condition (e.g. `WHERE tenant_id = ?`) on all database operations. This prevents IDOR (Insecure Direct Object Reference) vulnerabilities.\n","05-society-lifecycle.md":"# Society Lifecycle\n\nA society (Tenant) progresses through several phases on the platform:\n\n```mermaid\ngraph TD\n    A[Onboarding / Registration] --> B[Active Phase]\n    B --> C[Suspended / Inactive]\n    C --> B\n    B --> D[Deactivated / Offboarded]\n```\n\n## 1. Onboarding / Registration\n- Super Admin inputs basic details (Society Name, Slug, Plan Type: Basic, Standard, Enterprise).\n- Active module keys are provisioned into the `tenant_modules` registry table.\n- A default `society_admin` profile is provisioned.\n\n## 2. Active Phase\n- Society Admin builds the property tree (Blocks, Buildings, Units).\n- Residents are onboarded, billing cycles are run, security terminals activate.\n\n## 3. Suspended / Inactive\n- Occurs due to payment defaults or administrative locks.\n- Logins are disabled, page routes display an \"Account Inactive\" barrier.\n\n## 4. Deactivated / Offboarded\n- Society metadata remains for audit history, but active states are set to `FALSE`.\n","06-property-hierarchy.md":"# Property Hierarchy Validation\n\nThe platform models physical infrastructure using a structured parent-child hierarchy to ensure data integrity:\n\n```\nSociety (Tenant)\n  └── Block (Phase 1, Block A)\n        └── Building (Tower A, Building C)\n              └── Floor (Ground Floor, 1st Floor)\n                    └── Unit (Apt 101, Villa 5)\n```\n\n## Validation Rules\n- **Parent Isolation**: A Block must belong to the active `society_id` and `tenant_id`.\n- **No Orphan Units**: A Unit cannot exist without being mapped to a Floor, Building, and Block.\n- **Duplicate Prevention**: Unit numbers must be unique within their respective building context.\n- **Cascading Constraints**: Deleting a block will trigger database checks to ensure all child buildings, floors, and units are either safe-removed or reassigned, preventing dangling pointers.\n","07-module-catalog.md":"# Module Catalog\n\nThe application features a modular system structure where modules can be toggled on/off for each tenant.\n\n| Module Key | Friendly Name | Primary Table | UI Route | Backend API |\n|---|---|---|---|---|\n| `platform` | Super Admin Panel | `tenants` | `/platform` | `platform.ts` |\n| `property` | Property Management | `units`, `blocks` | `/property` | `property.ts` |\n| `residents` | Resident Profiles | `residents` | `/residents` | `residents.ts` |\n| `ledger` | Ledger & Bills | `ledger_entries` | `/ledger` | `ledger.ts` |\n| `payments` | Payment Registry | `payments` | `/payments` | `payments.ts` |\n| `complaints` | Complaint Tracker | `complaints` | `/complaints` | `complaints.ts` |\n| `visitor` | Gate Security | `visitor_passes` | `/visitor` | `visitor.ts` |\n| `parking` | Parking Spaces | `parking_slots` | `/parking` | `parking.ts` |\n| `utility_meters` | Sub-meter Readings | `meter_readings` | `/utility-meters` | `utility-meters.ts` |\n| `notice_board` | Announcements | `notices` | `/notices` | `notices.ts` |\n| `community_forum`| Forum board | `forum_threads` | `/forum` | `community.ts` |\n| `polls` | Surveys / Voting | `polls` | `/polls` | `community.ts` |\n| `events` | Events Manager | `events` | `/events` | `community.ts` |\n| `amenities` | Resource Bookings | `amenity_bookings` | `/amenities` | `community.ts` |\n| `documents` | Legal Documents | `documents` | `/documents` | `documents.ts` |\n| `vendors` | Vendors Directory | `vendors` | `/vendors` | `vendors.ts` |\n| `inventory` | Inventory Stock | `inventory_items` | `/inventory` | `inventory.ts` |\n| `projects` | Capital Projects | `projects` | `/projects` | `projects.ts` |\n","08-user-management.md":"# User Management\n\nUser management controls who can access the portal and what data they can interact with.\n\n## User Creation Flow\n1. **Request**: Admin submits details via the User Form.\n2. **Server Function**: Calls `createTenantUserFn`.\n3. **Database Checks**:\n   - Verifies if the email already exists in the global `users` table.\n   - If yes, assigns the existing user profile a role inside the current `tenant_id` (allowing cross-society accounts).\n   - If no, hashes a default password and inserts a new row in `users`.\n4. **Profile Linking**: Adds a record in `profiles` linked to the active `tenant_id`.\n5. **Roles Allocation**: Maps the user to their designated roles in `user_roles`.\n\n## Account Deactivation\nDeactivating a user marks their role assignments as inactive but retains their profile data to preserve audit trail integrity on old financial ledger transactions.\n","09-resident-management.md":"# Resident Management\n\nResident Management handles the occupants living inside the society units.\n\n## Onboarding Residents\n- Residents are linked to specific unit records in the `residents` table.\n- They are classified as either:\n  - **Owner**: Holds legal ownership of the property unit.\n  - **Tenant**: Rents the property unit from the owner.\n- An occupant's vehicle plates are mapped in the `resident_vehicles` table to allow automated matching in the gate security logs.\n\n## Move-Out Workflow\n1. User requests a move-out check.\n2. System checks the ledger to verify that the unit's balance is zero.\n3. Once approved, the `is_current` flag on the `residents` link is set to `FALSE`.\n4. The unit status in `units` is set back to `vacant`.\n","10-billing-and-ledger.md":"# Billing and Ledger Management\n\nThis module acts as the financial core of the society, handling invoices, charges, and resident statements.\n\n## Core Financial Entities\n- **Charge Heads (`charge_heads`)**: Defined monthly or periodic fees (e.g. \"Maintenance Fee\", \"Security Charges\").\n- **Ledger Entries (`ledger_entries`)**: Double-entry ledger logs. A `type = 'charge'` increases the outstanding balance of a unit, while a `type = 'payment'` decreases it.\n- **Resident Wallet (`wallets`)**: A virtual account for each unit storing overpayments and advance balances.\n\n## Recurring Billing Process\n1. Finance Head triggers the monthly billing process.\n2. The server iterates over all occupied units.\n3. For each active charge head, a transaction is written to the ledger, and the unit's current outstanding balance is updated.\n4. Notifications are sent automatically to residents.\n","11-payments.md":"# Payment Gateway and Records\n\nHandles payment collection from residents and record management.\n\n## Supported Channels\n1. **Manual Payments**: Cash, Cheques, or direct Bank Transfers recorded by the Finance Head.\n2. **Stripe Integration (Planned)**: Secure card checkouts (currently stubbed via mock components in frontend).\n\n## Payment Reconciliation Flow\n- When a payment is recorded:\n  - An entry is inserted into `payments`.\n  - A corresponding credit (`type = 'payment'`) is recorded in the ledger.\n  - If the payment amount exceeds the outstanding balance, the surplus is automatically added to the unit's wallet balance.\n  - Receipts are generated with a unique transaction reference identifier.\n","12-complaints.md":"# Complaints Management\n\nAllows residents to log complaints, and managers to coordinate resolution workflows.\n\n## Complaint Lifecycle\n```\n[Open] ──> [Assigned] ──> [In Progress] ──> [Resolved] ──> [Closed]\n```\n\n## Key Workflows\n- **Raise Complaint**: Residents fill out a form specifying category (lift, plumbing, electrical, security), priority (low, medium, high, critical), description, and attachment.\n- **Assign Technician**: Admin updates status to `assigned` and selects a technician profile.\n- **Comments Thread**: Both residents and admins can post comments to update progress.\n- **Resolution Verification**: The resident has the authority to verify the work and mark the ticket as officially `closed`.\n","13-maintenance.md":"# Maintenance and Work Orders\n\nManages preventative maintenance and reactive infrastructure repairs.\n\n## Preventative Maintenance Schedules\n- Admins configure routine check-ups on critical machines (e.g., generator oil change every 3 months).\n- The system automatically generates work orders when a scheduled date arrives.\n\n## Work Order Fields\n- **Technician**: User profile mapped to the work order.\n- **Linked Asset**: The machine or facility being repaired.\n- **Priority**: Urgency scale matching SLA requirements.\n- **Cost**: Tracked parts and labor expenses.\n","14-assets.md":"# Asset Registry\n\nMaintains a record of all physical infrastructure assets owned by the society.\n\n## Asset Schema\n- **Name**: e.g., Generator DG-1, Lift B2.\n- **Location**: Specific block/building location mapping.\n- **Serial Number**: For warranty verification.\n- **Warranty Expiry**: Date parameter trigger.\n- **Status**: `operational`, `under_maintenance`, `decommissioned`.\n\n## Maintenance Linking\nAssets are directly linked to work orders, building a complete service history for each physical item.\n","15-visitors-and-gate-security.md":"# Visitors and Gate Security\n\nSecures society boundary entries and logs non-resident vehicles/visitors.\n\n## Pass Types\n1. **Pre-Registered Passes**: Residents create a visitor profile, generate a unique pass code, and share it.\n2. **Ad-hoc Gate Entry**: Guard manually registers name, CNIC, phone number, vehicle plate, and destination unit.\n\n## Security Controls\n- **Blacklist Matches**: Any entry attempt matching a blacklisted vehicle plate or visitor name triggers a visual guard alert dashboard warning.\n- **Automatic Status Updates**: Passes are validated at entry terminals, updating status to `checked_in` and then `checked_out` when leaving.\n","16-parking.md":"# Parking Management\n\nTracks parking allocations to residents and prevents unauthorized vehicle usage.\n\n## Slot Management\n- Slots are configured by Type (Car, Bike, Guest) and Location.\n- Mapped to units via `parking_allocations`.\n\n## Privacy Guidelines\n- To maintain security, vehicle license plate numbers and owner mapping are masked on public tenant dashboards, only fully visible to Gated Security Guards and Admins.\n","17-utility-meters.md":"# Utility Meters\n\nHandles sub-meter management for gas, water, and electricity consumption.\n\n## Configuration\n- **Meter Rates**: Set per unit type (domestic/commercial) and utility type.\n- **Readings Log**: Records monthly values: `previous_reading`, `current_reading`, and calculates consumed units.\n\n## Billing Generation\nOnce a monthly reading is saved, the system computes the amount using the active rate table and pushes a debit item directly to the unit's ledger statement.\n","18-vendors.md":"# Vendor Management\n\nTracks third-party contractors, suppliers, and procurement histories.\n\n## Procurement Flow\n1. **Request for Quotation (RFQ)**: Admin outlines requirements and distributes to registered vendors.\n2. **Quotations Submission**: Vendor bids are uploaded and compared side-by-side.\n3. **Purchase Order (PO)**: Approved quotation triggers a PO creation.\n4. **Invoices**: Vendors submit invoices upon completion, matching ledger expense approvals.\n","19-inventory.md":"# Inventory Stock Management\n\nTracks tools, spare parts, and office materials needed for society operations.\n\n## Stock Movements\n- Items are cataloged with fields: `sku`, `name`, `category`, `stock_level`.\n- Any material usage on a work order registers a `stock_out` type movement.\n- Deliveries from vendors register a `stock_in` type movement.\n- Automatic alerts trigger when stock levels fall below specified minimum thresholds.\n","20-project-management.md":"# Project Management\n\nManages long-term capital improvement projects (e.g., building repaint, solar panel installations).\n\n## Structure\n- **Project Milestones**: Breakdown of targets, dates, and completion status.\n- **Expense Logging**: Linked directly to ledger payouts, ensuring all project payments are tracked.\n- **Contractor Mapping**: Assigned vendor profile mappings.\n","21-community-forum.md":"# Community Forum\n\nA private discussion board where verified residents can discuss society matters.\n\n## Controls\n- **Access Limits**: Only accounts with active resident profiles within the tenant can view and write to threads.\n- **Moderation**: Society Admins have authority to pin threads, lock comments, and delete inappropriate content.\n","22-polls-and-voting.md":"# Polls and Voting\n\nConducts society-wide surveys and binding voting resolutions.\n\n## Structure\n- **Question Details**: Question text, options list (JSON representation).\n- **Time Limits**: Set active start and end dates.\n- **Validation**: System enforces single-vote constraints by checking the unique user identifier against the `poll_votes` table.\n- **Anonymous Option**: Voting can be configured as anonymous to protect privacy.\n","23-events.md":"# Events Calendar\n\nManages community festivals, administrative meetings, and holiday celebrations.\n\n## Core Features\n- **Schedules**: Location details, starts_at, ends_at.\n- **RSVP Tracking**: Residents confirm attendance and note guest counts, allowing administrators to plan refreshments and security logistics.\n","24-amenities-booking.md":"# Amenities Booking\n\nManages reservations for shared society assets (e.g., Gated Park, Community Hall, Swimming Pool).\n\n## Collision Prevention Logic\n- When a resident requests a booking, the system checks for existing overlapping timeslots in `amenity_bookings`.\n- Bookings are held in a `pending` state until deposit/payments are cleared, then updated to `approved`.\n","25-notice-board.md":"# Notice Board\n\nOfficial bulletin board for management announcements.\n\n## Notice Features\n- **Target Audience**: Notices can be general or targeted (e.g., only for Block A).\n- **Pining**: High priority notices stay pinned to the top of dashboards.\n- **Read Receipts**: Tracks notice views in `notice_reads` to verify distribution metrics.\n","26-documents.md":"# Document Repository\n\nA secure file repository for society blueprints, NOCs, and meeting minutes.\n\n## Security Policies\n- **Extension Blockade**: The server strictly rejects executable file uploads (e.g. `.exe`, `.bat`, `.js`) by inspecting both file names and mime-types.\n- **Size Caps**: File uploads are limited to 10MB per file.\n- **Role Isolation**: Sensitive files (like financial audits) are restricted to admin roles.\n","27-security-architecture.md":"# Security Architecture\n\nAT-BMS maintains a defense-in-depth approach to protect multi-tenant integrity.\n\n## Protection Pillars\n1. **Authentication Gateways**: All routes inspect active HttpOnly sessions.\n2. **Server Function Validation**: Server functions enforce permission levels using custom check wrappers (`requirePermission`).\n3. **IDOR Mitigation**: Queries consistently match keys against the user's validated `tenant_id` context instead of relying on client-supplied parameters.\n","28-tenant-isolation.md":"# Tenant Data Isolation\n\nData isolation is enforced strictly at the database query level.\n\n## Logical Isolation Patterns\n- Standard tables include a `tenant_id` column.\n- Backend server query examples:\n  ```sql\n  SELECT * FROM complaints WHERE id = ? AND tenant_id = ?;\n  ```\n- This ensures that even if a resident attempts to access another society's complaint ID, the database query returns empty results, preventing unauthorized cross-society access.\n","29-database-architecture.md":"# Database Architecture\n\nMySQL is the underlying storage database engine.\n\n## Database Configurations\n- **Storage Engine**: InnoDB for transactional integrity, foreign key support, and row-level locking.\n- **Foreign Key Constraints**: Standard cascading rules are used (`ON DELETE RESTRICT` on core tables like users and tenants to prevent accidental data loss).\n- **Indexing Strategy**: Indexes are created on frequent search keys (e.g., `tenant_id`, `email`, `unit_id`) to maintain fast query times.\n","30-database-table-catalog.md":"# Database Table Catalog\n\nThis document lists all 57 database tables in the AT-BMS (HousingOS) system, grouped by architectural domains.\n\n## 1. Security & Authentication\n- `users`: Core login credentials.\n  - `id` (VARCHAR(36), PK): UUID.\n  - `email` (VARCHAR(255), UNIQUE): User's primary email.\n  - `password_hash` (VARCHAR(255)): Scrypt-hashed password.\n- `profiles`: Personal profiles linked with tenants.\n  - `id` (VARCHAR(36), PK, FK -> users.id): UUID.\n  - `full_name` (VARCHAR(255)): Full name.\n  - `society_name` (VARCHAR(255)): Active society context.\n  - `phone` (VARCHAR(50)): Contact number.\n  - `tenant_id` (VARCHAR(36), FK -> tenants.id): Scoping identifier.\n- `user_roles`: User assigned roles mapping.\n  - `id` (VARCHAR(36), PK): UUID.\n  - `user_id` (VARCHAR(36), FK -> users.id)\n  - `role` (ENUM('super_admin', 'society_admin', 'resident', 'tenant', 'guard', 'technician', 'finance_head'))\n- `custom_roles`: Tenant custom roles.\n  - `id` (VARCHAR(36), PK)\n  - `tenant_id` (VARCHAR(36))\n  - `name` (VARCHAR(100))\n- `role_permissions`: Overrides for custom role permissions.\n  - `id` (VARCHAR(36), PK)\n  - `role_id` (VARCHAR(36), FK)\n  - `module_key` (VARCHAR(50))\n  - `can_view` (BOOLEAN)\n  - `can_create` (BOOLEAN)\n  - `can_edit` (BOOLEAN)\n  - `can_delete` (BOOLEAN)\n- `sessions`: Auth sessions.\n  - `id` (VARCHAR(36), PK)\n  - `user_id` (VARCHAR(36), FK)\n  - `expires_at` (DATETIME)\n\n## 2. Properties & Tenant Isolation\n- `tenants`: HousingOS SaaS customer instances.\n  - `id` (VARCHAR(36), PK)\n  - `name` (VARCHAR(255))\n  - `slug` (VARCHAR(255), UNIQUE)\n  - `plan` (ENUM('basic', 'standard', 'enterprise'))\n- `tenant_modules`: Registered modules per society.\n  - `id` (VARCHAR(36), PK)\n  - `tenant_id` (VARCHAR(36))\n  - `module_key` (VARCHAR(50))\n  - `is_active` (BOOLEAN)\n- `societies`: Society groupings under a tenant.\n  - `id` (VARCHAR(36), PK)\n  - `tenant_id` (VARCHAR(36))\n  - `name` (VARCHAR(255))\n- `blocks`: Structural sections within a society.\n  - `id` (VARCHAR(36), PK)\n  - `society_id` (VARCHAR(36), FK)\n  - `tenant_id` (VARCHAR(36))\n  - `name` (VARCHAR(255))\n- `buildings`: Structures in blocks.\n  - `id` (VARCHAR(36), PK)\n  - `block_id` (VARCHAR(36), FK)\n  - `tenant_id` (VARCHAR(36))\n  - `name` (VARCHAR(255))\n- `floors`: Verticals in buildings.\n  - `id` (VARCHAR(36), PK)\n  - `building_id` (VARCHAR(36), FK)\n  - `tenant_id` (VARCHAR(36))\n  - `name` (VARCHAR(255))\n- `units`: Physical property flats/villas.\n  - `id` (VARCHAR(36), PK)\n  - `floor_id` (VARCHAR(36), FK)\n  - `building_id` (VARCHAR(36), FK)\n  - `block_id` (VARCHAR(36), FK)\n  - `society_id` (VARCHAR(36), FK)\n  - `tenant_id` (VARCHAR(36))\n  - `unit_number` (VARCHAR(50))\n  - `unit_type` (ENUM('flat', 'penthouse', 'villa', 'shop'))\n  - `status` (ENUM('occupied', 'vacant', 'renovation', 'locked'))\n\n## 3. Residents & Vehicles\n- `persons`: Core identity directory.\n  - `id` (VARCHAR(36), PK)\n  - `tenant_id` (VARCHAR(36))\n  - `user_id` (VARCHAR(36), FK)\n  - `full_name` (VARCHAR(255))\n  - `phone` (VARCHAR(50))\n  - `email` (VARCHAR(255))\n- `residents`: Residents profile links.\n  - `id` (VARCHAR(36), PK)\n  - `tenant_id` (VARCHAR(36))\n  - `unit_id` (VARCHAR(36), FK)\n  - `person_id` (VARCHAR(36), FK)\n  - `type` (ENUM('owner', 'tenant'))\n  - `is_current` (BOOLEAN)\n- `resident_vehicles`: Parking/Gate whitelist vehicle plates.\n  - `id` (VARCHAR(36), PK)\n  - `tenant_id` (VARCHAR(36))\n  - `unit_id` (VARCHAR(36), FK)\n  - `plate_number` (VARCHAR(50))\n  - `vehicle_type` (VARCHAR(50))\n\n## 4. Financial Ledger & Payments\n- `charge_heads`: Billing definitions.\n  - `id`, `tenant_id`, `name`, `description`, `default_amount`\n- `ledger_entries`: Billing ledger transactions list.\n  - `id`, `tenant_id`, `unit_id`, `type`, `charge_head_id`, `amount`, `balance_after`\n- `payments`: Resident payment recordings.\n  - `id`, `tenant_id`, `unit_id`, `amount`, `payment_method`, `reference`, `notes`\n- `wallets`: Pre-paid wallets per unit.\n  - `id`, `tenant_id`, `unit_id`, `balance`\n\n## 5. Complaints & Work Orders\n- `complaints`: Resident tickets directory.\n  - `id`, `tenant_id`, `title`, `description`, `category`, `priority`, `status`, `submitted_by`\n- `complaint_comments`: Conversation threads on complaints.\n  - `id`, `complaint_id`, `author_id`, `body`\n- `complaint_history`: Audit trail for tickets status changes.\n  - `id`, `complaint_id`, `status`, `changed_by`\n- `work_orders`: Physical repair actions list.\n  - `id`, `tenant_id`, `technician_id`, `asset_id`, `status`, `cost`\n- `maintenance_schedules`: Recurrence checks patterns.\n  - `id`, `tenant_id`, `asset_id`, `interval_days`, `last_run`\n\n## 6. Gate Security & Visitors\n- `visitor_passes`: Pre-authorized guest passes.\n  - `id`, `tenant_id`, `visitor_name`, `pass_code`, `expires_at`\n- `entry_exit_log`: Physical gate scanning histories.\n  - `id`, `tenant_id`, `visitor_pass_id`, `scan_time`, `action_type`\n- `gate_terminals`: Registered terminal tablets.\n  - `id`, `tenant_id`, `name`, `status`\n- `guard_patrols`: Checkpoints tour records.\n  - `id`, `tenant_id`, `guard_name`, `checkpoint_name`\n- `blacklist`: Blocked vehicle plate registrations.\n  - `id`, `tenant_id`, `type`, `value`, `reason`\n\n## 7. Community & Governance\n- `forum_threads`: Discussions.\n  - `id`, `tenant_id`, `author_id`, `category`, `title`, `body`\n- `forum_replies`: Discussion posts.\n  - `id`, `thread_id`, `author_id`, `body`\n- `polls`: Votes metadata.\n  - `id`, `tenant_id`, `question`, `options`, `closes_at`\n- `poll_votes`: Individual votes registrations.\n  - `id`, `poll_id`, `user_id`, `choice`\n- `events`: Community calendars.\n  - `id`, `tenant_id`, `title`, `starts_at`, `ends_at`\n- `event_rsvps`: Attendance confirmations.\n  - `id`, `event_id`, `user_id`, `status`\n- `amenities`: Bookable properties items.\n  - `id`, `tenant_id`, `name`, `capacity`, `charge_per_slot`\n- `amenity_bookings`: Bookings schedule entries.\n  - `id`, `tenant_id`, `amenity_id`, `user_id`, `booking_date`, `status`\n- `governance_meetings`: Committee meetings records.\n  - `id`, `tenant_id`, `title`, `scheduled_at`, `status`\n- `governance_resolutions`: Passed/proposed policies items.\n  - `id`, `tenant_id`, `meeting_id`, `title`, `status`\n\n## 8. General Logs & Files\n- `documents`: Upload metadata index.\n  - `id`, `tenant_id`, `name`, `category`, `file_url`, `expiry_date`\n- `notifications`: Alerts registry logs.\n  - `id`, `user_id`, `title`, `body`, `is_read`\n- `audit_logs`: Operations tracking logs.\n  - `id`, `tenant_id`, `user_id`, `module_key`, `action`, `ip_address`\n","31-api-catalog.md":"# API Server Functions Catalog\n\nThis document indexes the primary server functions defined in the `src/lib/api/` codebase.\n\n## 1. Authentication & Security\n- `loginFn` (POST): Validates credentials, creates session record, and writes HttpOnly session cookie.\n- `logoutFn` (POST): Destroys session row and clears client session cookie.\n- `getScopingSessionFn` (GET): Resolves authenticated user profile, active roles, and scoped `tenant_id`.\n- `getMyPermissionsFn` (GET): Reads user roles, custom role overrides, and merges permissions schema.\n- `createTenantUserFn` (POST): Super admin/society admin creates user profiles and assigns role mappings.\n\n## 2. Property Tree & Societies\n- `listAllSocietiesFn` (POST): Lists registered societies for Switcher panels.\n- `createSocietyWithAdminFn` (POST): Provisions new society records along with the initial admin credentials.\n- `toggleSocietyStatusFn` (POST): Enforces administrative deactivation/lockouts.\n- `updateSocietyFn` (POST): Modifies name and addresses metadata.\n- `updateUnitStatusFn` (POST): Switches status state parameter of a unit (vacant/occupied/renovation/locked).\n\n## 3. Financial Statements\n- `getLedgerEntriesFn` (GET): Queries transactions logs for statement panels.\n- `recordPaymentFn` (POST): Saves payment records and resolves ledger credits.\n- `runMonthlyChargesFn` (POST): Executes batch routine billing.\n- `createChargeHeadFn` (POST): Registers new billing fee definitions.\n\n## 4. Gated Security\n- `getVisitorPassesFn` (GET): Lists active passes.\n- `createVisitorPassFn` (POST): Allows residents to register guest entries.\n- `recordGatePassVerificationFn` (POST): Guards verify pass codes and log scans.\n- `addBlacklistFn` (POST): Registers blocked plates in blacklist.\n- `checkBlacklistFn` (POST): Matches scanner inputs against blocked lists.\n\n## 5. Operations & Work Orders\n- `getComplaintsFn` (GET): Queries tickets catalog.\n- `createComplaintFn` (POST): Saves new complaint tickets.\n- `updateComplaintStatusFn` (POST): Updates status states of complaints.\n- `createWorkOrderFn` (POST): Assigns maintenance technician orders.\n- `createAmenityBookingFn` (POST): Checks timeslot availability and books amenities.\n- `voteInPollFn` (POST): Records resident choices in survey polls.\n","32-authentication-and-sessions.md":"# Authentication and Sessions\n\nAuthentication uses HttpOnly cookies to protect session tokens against cross-site scripting (XSS) attacks.\n\n## Session Lifecycle\n1. **Login**: User enters credentials, checked against hashed values via `scrypt`.\n2. **Session Generation**: A unique token is written to the `sessions` database table.\n3. **Cookie Set**: The token is written to a cookie set with properties: `Secure`, `HttpOnly`, `SameSite=Lax`.\n4. **Validation**: Every page load validates the session status against the database.\n5. **Logout**: Deletes the database row and clears the cookie.\n","33-rbac-permissions.md":"# Dynamic RBAC Merging\n\nPermissions are dynamically computed by checking custom overrides.\n\n## The Merging Algorithm\n- A user can have multiple role assignments.\n- During access checks, the system:\n  1. Fetches static system defaults for assigned roles.\n  2. Queries the `role_permissions` overrides table.\n  3. Merges settings using an OR logic (if any single role allows access, the user is granted access).\n- In-page checks use the custom react hook `usePermissions()` and the wrapper component `PermissionGate` for conditional rendering.\n","34-module-activation.md":"# Module Activation Gates\n\nModules are enabled or disabled per tenant to support tiered SaaS subscriptions.\n\n## Activation Gates\n- Database state is maintained in `tenant_modules`.\n- The frontend wraps active pages inside a `ModuleGate` component.\n- The gate queries the active modules list, redirecting users to an \"Access Denied\" page if a module is disabled for their society.\n- Backend server functions verify module states before completing database executions.\n","35-audit-logging.md":"# Audit Logging\n\nThe platform keeps track of administrative actions for security audits.\n\n## Logged Parameters\n- **Timestamp**: Exact UTC time parameter.\n- **User**: The ID of the admin who triggered the action.\n- **Module**: The associated feature module key.\n- **Action**: Description of the changes made (e.g. \"Changed monthly maintenance fee amount\").\n- **IP Address**: Client request IP context.\n","36-frontend-navigation.md":"# Frontend Navigation Filtering\n\nThe sidebar and main dashboard navigation items dynamically filter out based on permissions.\n\n## Sidebar Filter Logic\n- Navigation arrays map to feature module keys.\n- On render, the sidebar matches entries against the user's permissions:\n  - If a user has no view permission for a module, the sidebar hides the link.\n  - If the module is deactivated in the society settings, the route is completely omitted from the navigation menu.\n","37-forms-catalog.md":"# Dynamic Forms Catalog\n\nAT-BMS uses a dynamic JSON metadata structure to render administrative forms.\n\n## Form Renderer Configurations\n- Form schemas define:\n  - Fields (input, select, textarea, date).\n  - Validation rules (required, min/max limits, regex parameters).\n- This structure allows admins to add custom fields to forms (such as visitor check-in fields) without modifying backend database schemas.\n","38-testing-and-qa.md":"# Testing and QA Strategy\n\nOur Quality Assurance strategy focuses on validating data boundaries and RBAC rules.\n\n## Core Testing Scenarios\n1. **Multi-Tenancy Segregation**: Verify that Society A users cannot access Society B database objects.\n2. **Access Control Overrides**: Verify that updating a role's permissions immediately hides/reveals action buttons in the UI.\n3. **Billing Edge Cases**: Verify correct wallet deductions and invoice adjustments for overpayments.\n","39-browser-testing-checklist.md":"# Browser Testing Checklist\n\nA manual checklist for validating portal components:\n\n- [ ] **Auth Check**: Login, session persistency, and logout flows.\n- [ ] **Society Switcher**: Verify that updating active society correctly updates routes and displays matching data.\n- [ ] **RBAC Restrictions**: Log in as a Gated Guard and verify that financial routes show access denied screens.\n- [ ] **Complaints Flow**: Raise a ticket, verify technician assignment, add comment threads, and close the ticket.\n- [ ] **Billing Audit**: Run monthly charges, record a payment transaction, verify ledger balance updates.\n","40-known-issues-and-gaps.md":"# Known Issues and Gaps\n\nThe following features are partially implemented or planned for future releases:\n\n1. **Stripe Payment Gateway**: Stubs exist in the UI routes, but the backend API integration is mock-only.\n2. **AI Maintenance Predictions**: The module exists but uses placeholder analysis results. Full integration with ML predictions is planned.\n3. **SMS Notification Gateways**: SMS alert configurations are defined, but the driver integrations are mock-only.\n","41-implementation-history.md":"# Implementation History\n\nSummary of development phases:\n\n- **Phase 1**: Database setup, property tree modeling, and auth credentials.\n- **Phase 2**: Billing statements, ledger tables, and payments logging.\n- **Phase 3**: Complaints module and preventative maintenance work orders.\n- **Phase 4**: Gate terminal scanning, pre-registered passes, and blacklist alert modules.\n- **Phase 5**: Dynamic RBAC permissions integration, sidebar navigation filters, and document upload security constraints.\n","42-deployment-and-environment.md":"# Deployment and Environment\n\nDeployment directives for production and staging setups.\n\n## Environment Variables\n- `DATABASE_URL`: Primary MySQL connection URL parameters.\n- `SESSION_SECRET`: Session signing token.\n- `PORT`: Application listener port (default 3000).\n\n## Docker Setup\n- `docker-compose.yml` is included to run both MySQL and Vinxi web processes in isolated network containers.\n","43-developer-setup.md":"# Developer Setup Guide\n\nStep-by-step instructions to get the development environment running locally:\n\n1. **Clone & Install**:\n   ```bash\n   bun install\n   ```\n2. **Configure Database**:\n   Set up your `.env` credentials matching your local MySQL server.\n3. **Seed Database**:\n   ```bash\n   bun run db:seed\n   ```\n4. **Start Dev Server**:\n   ```bash\n   bun run dev\n   ```\n","44-troubleshooting.md":"# Troubleshooting Common Errors\n\nSolutions to common local environment issues:\n\n### 1. Database Connection Refused\n- **Fix**: Check if your MySQL server is running on port 3306. Check your `.env` parameters.\n\n### 2. Permissions Cache Stale\n- **Fix**: The client permissions hook caches database settings for 5 minutes. Trigger a browser hard refresh (`Ctrl + Shift + R`) to clear the active cache state.\n\n### 3. Upload File Rejected\n- **Fix**: Verify file format extensions. The system automatically blocks executable scripts (`.exe`, `.bat`).\n","45-final-project-status.md":"# Final Project Status Scorecard\n\nCurrent status of system features:\n\n| Feature Area | Status | Verification Check |\n|---|---|---|\n| Tenant Isolation | ✅ 100% | Enforced on all DB server queries |\n| Dynamic Permissions | ✅ 100% | Verified via PermissionGate checks |\n| Billing & Ledger | ✅ 100% | Statements calculate balance updates |\n| Gate Security | ✅ 100% | Passes match blacklist entries |\n| Stripe Checkout | ⚠️ Mock Only | Pending API keys integrations |\n| AI Predictions | ⚠️ Mock Only | Pending ML service connection |\n"};
+    const groups = [{"name":"Overview & Lifecycle","items":[{"key":"01-project-overview.md","title":"Project Overview"},{"key":"02-system-architecture.md","title":"System Architecture"},{"key":"03-user-roles-and-permissions.md","title":"User Roles & Permissions"},{"key":"04-multi-society-architecture.md","title":"Multi-Society Architecture"},{"key":"05-society-lifecycle.md","title":"Society Lifecycle"},{"key":"06-property-hierarchy.md","title":"Property Hierarchy"}]},{"name":"Feature & Module Documentation","items":[{"key":"07-module-catalog.md","title":"Module Catalog"},{"key":"08-user-management.md","title":"User Management"},{"key":"09-resident-management.md","title":"Resident Management"},{"key":"10-billing-and-ledger.md","title":"Billing & Ledger"},{"key":"11-payments.md","title":"Payments Gateway"},{"key":"12-complaints.md","title":"Complaints Tracker"},{"key":"13-maintenance.md","title":"Maintenance Orders"},{"key":"14-assets.md","title":"Asset Registry"},{"key":"15-visitors-and-gate-security.md","title":"Gate & Visitor Security"},{"key":"16-parking.md","title":"Parking Slots"},{"key":"17-utility-meters.md","title":"Utility Sub-meters"},{"key":"18-vendors.md","title":"Vendors Procurement"},{"key":"19-inventory.md","title":"Inventory Stock"},{"key":"20-project-management.md","title":"Capital Projects"},{"key":"21-community-forum.md","title":"Resident Forum"},{"key":"22-polls-and-voting.md","title":"Polls & Voting"},{"key":"23-events.md","title":"Events Calendar"},{"key":"24-amenities-booking.md","title":"Amenities Booking"},{"key":"25-notice-board.md","title":"Notice Board"},{"key":"26-documents.md","title":"Document Repository"}]},{"name":"Architecture & Security Details","items":[{"key":"27-security-architecture.md","title":"Security Architecture"},{"key":"28-tenant-isolation.md","title":"Tenant Data Isolation"},{"key":"29-database-architecture.md","title":"Database Architecture"},{"key":"30-database-table-catalog.md","title":"Database Table Catalog"},{"key":"31-api-catalog.md","title":"API Server Functions"},{"key":"32-authentication-and-sessions.md","title":"Auth & Sessions"},{"key":"33-rbac-permissions.md","title":"Dynamic RBAC Merging"},{"key":"34-module-activation.md","title":"Module Activation Gates"},{"key":"35-audit-logging.md","title":"Audit Logs"},{"key":"36-frontend-navigation.md","title":"Sidebar Filters"},{"key":"37-forms-catalog.md","title":"Dynamic Forms JSON"}]},{"name":"Operations & Maintenance","items":[{"key":"38-testing-and-qa.md","title":"Testing Strategy"},{"key":"39-browser-testing-checklist.md","title":"QA Browser Checklist"},{"key":"40-known-issues-and-gaps.md","title":"Known Gaps & Todos"},{"key":"41-implementation-history.md","title":"Implementation History"},{"key":"42-deployment-and-environment.md","title":"Deployment & Env"},{"key":"43-developer-setup.md","title":"Developer Setup"},{"key":"44-troubleshooting.md","title":"Troubleshooting"},{"key":"45-final-project-status.md","title":"Final Status Scorecard"}]}];
+
+    let activeDocKey = '01-project-overview.md';
+
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Render the Sidebar Index
+    function renderSidebar(filterText = '') {
+      const container = document.getElementById('sidebar-links');
+      container.innerHTML = '';
+
+      const query = filterText.toLowerCase();
+
+      groups.forEach(group => {
+        // Filter items in the group
+        const matchedItems = group.items.filter(item => 
+          item.title.toLowerCase().includes(query) || 
+          item.key.toLowerCase().includes(query)
+        );
+
+        if (matchedItems.length === 0) return;
+
+        const groupEl = document.createElement('div');
+        groupEl.className = 'category-group';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'category-title';
+        titleEl.textContent = group.name;
+        groupEl.appendChild(titleEl);
+
+        matchedItems.forEach(item => {
+          const linkEl = document.createElement('a');
+          linkEl.className = 'doc-link';
+          if (item.key === activeDocKey) {
+            linkEl.classList.add('active');
+          }
+          linkEl.dataset.key = item.key;
+          linkEl.innerHTML = `<i data-lucide="file-text" style="width: 14px; height: 14px;"></i> ${item.title}`;
+          
+          linkEl.addEventListener('click', (e) => {
+            e.preventDefault();
+            selectDoc(item.key);
+          });
+
+          groupEl.appendChild(linkEl);
+        });
+
+        container.appendChild(groupEl);
+      });
+
+      lucide.createIcons();
+    }
+
+    // Select and load a document
+    function selectDoc(key) {
+      activeDocKey = key;
+      
+      // Update sidebar visual active states
+      document.querySelectorAll('.doc-link').forEach(link => {
+        if (link.dataset.key === key) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      });
+
+      // Find the document title
+      let title = 'Documentation';
+      for (const group of groups) {
+        const item = group.items.find(i => i.key === key);
+        if (item) {
+          title = item.title;
+          break;
+        }
+      }
+
+      document.getElementById('header-doc-title').textContent = title;
+
+      // Render Markdown Content
+      const mdContent = docs[key] || '# Document not found\nSorry, the requested document could not be loaded.';
+      
+      // Add custom rendering for Mermaid blocks if needed (simple block representation)
+      let parsedHtml = marked.parse(mdContent);
+      
+      // Look for pre tags containing mermaid text and style them nicely
+      parsedHtml = parsedHtml.replace(/<pre><code class="language-mermaid">([\s\S]*?)</code></pre>/g, (match, code) => {
+        return `<div class="mermaid-container">
+          <pre style="border: none; background: transparent !important;"><code class="language-text">${code.trim()}</code></pre>
+        </div>`;
+      });
+
+      const contentEl = document.getElementById('content');
+      contentEl.innerHTML = parsedHtml;
+
+      // Add Copy buttons to pre blocks
+      document.querySelectorAll('.markdown-body pre').forEach(pre => {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.addEventListener('click', () => {
+          const codeText = pre.querySelector('code').textContent;
+          navigator.clipboard.writeText(codeText).then(() => {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+          });
+        });
+        pre.appendChild(copyBtn);
+      });
+
+      // Run PrismJS highlighter
+      if (window.Prism) {
+        Prism.highlightAllUnder(contentEl);
+      }
+
+      // Scroll content area back to top
+      document.querySelector('.content-area').scrollTop = 0;
+    }
+
+    // Search input listener
+    document.getElementById('search').addEventListener('input', (e) => {
+      renderSidebar(e.target.value);
+    });
+
+    // Start portal on load
+    window.addEventListener('DOMContentLoaded', () => {
+      renderSidebar();
+      selectDoc(activeDocKey);
+    });
+  </script>
+</body>
+</html>
