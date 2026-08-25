@@ -430,7 +430,7 @@ export const listSocietyAdminsFn = createServerFn({ method: "GET" }).handler(asy
 });
 
 export const getAdminAssignmentsFn = createServerFn({ method: "GET" })
-  .validator(z.object({ adminUserId: z.string().uuid() }))
+  .validator(z.object({ adminUserId: z.string() }))
   .handler(async (ctx: any) => {
     const { data, request } = ctx;
     await requireSuperAdmin(request);
@@ -445,8 +445,8 @@ export const getAdminAssignmentsFn = createServerFn({ method: "GET" })
 export const saveAdminAssignmentsFn = createServerFn({ method: "POST" })
   .validator(
     z.object({
-      adminUserId: z.string().uuid(),
-      tenantIds: z.array(z.string().uuid()),
+      adminUserId: z.string(),
+      tenantIds: z.array(z.string()),
     })
   )
   .handler(async (ctx: any) => {

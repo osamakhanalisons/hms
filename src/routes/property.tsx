@@ -86,18 +86,22 @@ function PropertyPage() {
     const { societies, blocks, buildings, floors, units } = treeData;
 
     return societies.map((s: any): PropertyNode => {
-      // 1. Apartment Area children (blocks that have buildings containing flats)
-      const sBlocks = blocks.filter((b: any) => b.society_id === s.id);
-      
-      // 2. House/Villa Area units (units with building_id IS NULL)
-      const sHouseVillas = units.filter((u: any) => u.society_id === s.id && (u.unit_type === "house" || u.unit_type === "villa" || !u.building_id));
+      // 1. Apartment Area blocks (only blocks that contain buildings)
+      const sApartmentBlocks = blocks.filter((b: any) =>
+        b.society_id === s.id && buildings.some((bu: any) => bu.block_id === b.id)
+      );
+
+      // 2. House/Villa Area units (units with unit_type house/villa OR building_id IS NULL)
+      const sHouseVillas = units.filter((u: any) =>
+        u.society_id === s.id && (u.unit_type === "house" || u.unit_type === "villa" || !u.building_id)
+      );
 
       const apartmentAreaNode: PropertyNode = {
         id: `${s.id}-apartments`,
         name: "Apartment Area",
         type: "apartment_area" as any,
         societyId: s.id,
-        children: sBlocks.map((bl: any): PropertyNode => {
+        children: sApartmentBlocks.map((bl: any): PropertyNode => {
           const blBuildings = buildings.filter((bu: any) => bu.block_id === bl.id);
           return {
             id: bl.id,
@@ -109,34 +113,87 @@ function PropertyPage() {
                 id: bu.id,
                 name: bu.name,
                 type: "building",
-                children: buUnits.map((u: any): PropertyNode => ({
-                  id: u.id,
-                  name: `${u.unit_type === "penthouse" ? "Penthouse" : "Flat"} ${u.unit_number}`,
-                  type: "unit",
-                  unitNumber: u.unit_number,
-                  unitType: u.unit_type,
-                  status: u.status,
-                })),
+                children: buUnits.map((u: any): PropertyNode => {
+                  const numStr = String(u.unit_number || "");
+                  const label = numStr.toLowerCase().startsWith("flat") || numStr.toLowerCase().startsWith("penthouse") || numStr.toLowerCase().startsWith("shop")
+                    ? numStr
+                    : `${u.unit_type === "penthouse" ? "Penthouse" : u.unit_type === "shop" ? "Shop" : "Flat"} ${numStr}`;
+                  return {
+                    id: u.id,
+                    name: label,
+                    type: "unit",
+                    unitNumber: u.unit_number,
+                    unitType: u.unit_type,
+                    status: u.status,
+                  };
+                }),
               };
             }),
           };
         }),
       };
 
+      // Group sHouseVillas by block_id
+      const houseBlocksMap = new Map<string, any[]>();
+      const unblockedHouses: any[] = [];
+
+      for (const u of sHouseVillas) {
+        if (u.block_id) {
+          if (!houseBlocksMap.has(u.block_id)) {
+            houseBlocksMap.set(u.block_id, []);
+          }
+          houseBlocksMap.get(u.block_id)!.push(u);
+        } else {
+          unblockedHouses.push(u);
+        }
+      }
+
+      const houseBlockChildren: PropertyNode[] = [];
+      houseBlocksMap.forEach((hUnits, blockId) => {
+        const bl = blocks.find((b: any) => b.id === blockId);
+        houseBlockChildren.push({
+          id: `${blockId}-houseblock`,
+          name: bl?.name || "Officer Housing Sector",
+          type: "block",
+          children: hUnits.map((u: any): PropertyNode => {
+            const numStr = String(u.unit_number || "");
+            const label = numStr.toLowerCase().startsWith("house") || numStr.toLowerCase().startsWith("villa")
+              ? numStr
+              : `${u.unit_type === "villa" ? "Villa" : "House"} ${numStr}`;
+            return {
+              id: u.id,
+              name: label,
+              type: "unit",
+              unitNumber: u.unit_number,
+              unitType: u.unit_type,
+              status: u.status,
+              blockName: bl?.name,
+            };
+          }),
+        });
+      });
+
+      unblockedHouses.forEach((u: any) => {
+        const numStr = String(u.unit_number || "");
+        const label = numStr.toLowerCase().startsWith("house") || numStr.toLowerCase().startsWith("villa")
+          ? numStr
+          : `${u.unit_type === "villa" ? "Villa" : "House"} ${numStr}`;
+        houseBlockChildren.push({
+          id: u.id,
+          name: label,
+          type: "unit",
+          unitNumber: u.unit_number,
+          unitType: u.unit_type,
+          status: u.status,
+        });
+      });
+
       const houseVillaAreaNode: PropertyNode = {
         id: `${s.id}-housevillas`,
         name: "House / Villa Area",
         type: "house_villa_area" as any,
         societyId: s.id,
-        children: sHouseVillas.map((u: any): PropertyNode => ({
-          id: u.id,
-          name: `${u.unit_type === "villa" ? "Villa" : "House"} ${u.unit_number}`,
-          type: "unit",
-          unitNumber: u.unit_number,
-          unitType: u.unit_type,
-          status: u.status,
-          blockName: blocks.find((b: any) => b.id === u.block_id)?.name,
-        })),
+        children: houseBlockChildren,
       };
 
       return {

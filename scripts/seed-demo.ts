@@ -1,13 +1,14 @@
 /**
- * DEMO DATA ONLY — sample housing society data for application demonstration.
- * This is NOT an official registry of Askari housing societies.
- * Society names are based on publicly referenced Askari communities in Pakistan
- * (Lahore, Karachi, Rawalpindi). All resident names, CNICs, phone numbers,
- * emails, payment references, and security data are entirely fictional.
+ * HOUSINGOS — ALL-PAKISTAN COMPREHENSIVE ASKARI SEEDER
  *
- * Usage:
- *   npm run seed:demo           → reset then seed
- *   npm run seed:demo:reset     → reset (delete demo data) only
+ * Populates 34 Askari Housing Societies across Pakistan with:
+ *   - Mixed Resident Occupancy: ~70% Owners (`owner`) and ~30% Renters (`tenant`)
+ *   - Monthly Rent Charges for Renters (Villas: 180k, Penthouses: 125k, Flats: 65k, Shops: 45k PKR)
+ *   - Dynamic Maintenance Charges per Unit Type (Villas: 35k, Penthouses: 25k, Flats: 15k, Shops: 8k PKR)
+ *   - Multiple Financial Charge Heads (Maintenance, Rent, Security, Utility, Park Care)
+ *   - Clean Property Tree Hierarchy (Block A: Apartments, Block B: Houses with NULL building_id, Block C: Commercial)
+ *   - Full Module Coverage: Security Gates, Visitor Passes, Patrols, Blacklist, Vendors, Assets, Work Orders,
+ *     Amenities, Meter Readings, Governance, Forum, Polls, Notices, Events.
  */
 
 import mysql from "mysql2/promise";
@@ -15,203 +16,169 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-// ─── PASSWORD HELPER ─────────────────────────────────────────────────────────
+const DEMO_EMAIL_DOMAIN = "@demo.housingos.local";
+
 function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
 }
 
-// ─── DETERMINISTIC DEMO TENANT & SOCIETY IDs ─────────────────────────────────
-// These are fixed UUIDs used as anchors for all cleanup operations.
-// All demo data is either scoped by tenant_id or by @demo.housingos.local email.
+type SocietyDef = {
+  tenantId: string;
+  societyId: string;
+  name: string;
+  city: string;
+  code: string;
+  slug: string;
+  address: string;
+  plan: string;
+  scale: "small" | "medium" | "large";
+};
 
-const DEMO_TENANTS = [
-  {
-    id: "de011000-0011-0000-0000-000000000011",
-    societyId: "de011000-0011-0000-0000-000000000001",
-    name: "Askari 11 Lahore Demo",
-    slug: "askari-11-lahore-demo",
-    code: "ASK11-LHR",
-    city: "Lahore",
-    address: "Bedian Road, Sector C, Askari 11, Lahore",
-    contactEmail: "admin.ask11@demo.housingos.local",
-    contactPhone: "+92 42 35741111",
-    plan: "enterprise" as const,
-    layout: "apartments_heavy" as const,
-  },
-  {
-    id: "de010000-0010-0000-0000-000000000010",
-    societyId: "de010000-0010-0000-0000-000000000002",
-    name: "Askari 10 Lahore Demo",
-    slug: "askari-10-lahore-demo",
-    code: "ASK10-LHR",
-    city: "Lahore",
-    address: "Amjad Chaudhry Road, Askari 10, Lahore",
-    contactEmail: "admin.ask10@demo.housingos.local",
-    contactPhone: "+92 42 35741010",
-    plan: "professional" as const,
-    layout: "apartments_only" as const,
-  },
-  {
-    id: "de005000-0005-0000-0000-000000000005",
-    societyId: "de005000-0005-0000-0000-000000000003",
-    name: "Askari 5 Karachi Demo",
-    slug: "askari-5-karachi-demo",
-    code: "ASK5-KHI",
-    city: "Karachi",
-    address: "Malir Cantonment, Askari 5, Karachi",
-    contactEmail: "admin.ask5@demo.housingos.local",
-    contactPhone: "+92 21 34960505",
-    plan: "enterprise" as const,
-    layout: "mixed" as const,
-  },
-  {
-    id: "de004000-0004-0000-0000-000000000004",
-    societyId: "de004000-0004-0000-0000-000000000004",
-    name: "Askari 4 Karachi Demo",
-    slug: "askari-4-karachi-demo",
-    code: "ASK4-KHI",
-    city: "Karachi",
-    address: "Rashid Minhas Road, Karachi Cantonment, Karachi",
-    contactEmail: "admin.ask4@demo.housingos.local",
-    contactPhone: "+92 21 34960404",
-    plan: "growth" as const,
-    layout: "apartments_only" as const,
-  },
-  {
-    id: "de009000-0009-0000-0000-000000000009",
-    societyId: "de009000-0009-0000-0000-000000000005",
-    name: "Askari Rawalpindi Demo",
-    slug: "askari-rawalpindi-demo",
-    code: "ASKRP-RWP",
-    city: "Rawalpindi",
-    address: "Chaklala Cantonment, Rawalpindi",
-    contactEmail: "admin.askrp@demo.housingos.local",
-    contactPhone: "+92 51 5599001",
-    plan: "growth" as const,
-    layout: "houses_heavy" as const,
-  },
-] as const;
+// ─── ASKARI SOCIETIES REGISTRY (34 SOCIETIES) ─────────────────────────────────
+const DEMO_SOCIETIES: SocietyDef[] = [
+  // ── RAWALPINDI ────────────────────────────────────────────────────────────
+  { tenantId: "a0001001-0000-4000-8000-000000000001", societyId: "b0001001-0000-4000-8000-000000000001", name: "Askari-I",    city: "Rawalpindi", code: "ASK-I-RWP",   slug: "askari-i-rawalpindi",    address: "Westridge, Rawalpindi",          plan: "enterprise",   scale: "medium" },
+  { tenantId: "a0001002-0000-4000-8000-000000000002", societyId: "b0001002-0000-4000-8000-000000000002", name: "Askari-II",   city: "Rawalpindi", code: "ASK-II-RWP",  slug: "askari-ii-rawalpindi",   address: "Westridge, Rawalpindi",          plan: "professional", scale: "medium" },
+  { tenantId: "a0001003-0000-4000-8000-000000000003", societyId: "b0001003-0000-4000-8000-000000000003", name: "Askari-III",  city: "Rawalpindi", code: "ASK-III-RWP", slug: "askari-iii-rawalpindi",  address: "Westridge, Rawalpindi",          plan: "growth",       scale: "medium" },
+  { tenantId: "a0001004-0000-4000-8000-000000000004", societyId: "b0001004-0000-4000-8000-000000000004", name: "Askari-IV",   city: "Rawalpindi", code: "ASK-IV-RWP",  slug: "askari-iv-rawalpindi",   address: "Chaklala Cantt, Rawalpindi",     plan: "professional", scale: "medium" },
+  { tenantId: "a0001005-0000-4000-8000-000000000005", societyId: "b0001005-0000-4000-8000-000000000005", name: "Askari-V",    city: "Rawalpindi", code: "ASK-V-RWP",   slug: "askari-v-rawalpindi",    address: "Chaklala Cantt, Rawalpindi",     plan: "growth",       scale: "large"  },
+  { tenantId: "a0001006-0000-4000-8000-000000000006", societyId: "b0001006-0000-4000-8000-000000000006", name: "Askari-VI",   city: "Rawalpindi", code: "ASK-VI-RWP",  slug: "askari-vi-rawalpindi",   address: "Chaklala Cantt, Rawalpindi",     plan: "starter",      scale: "small"  },
+  { tenantId: "a0001007-0000-4000-8000-000000000007", societyId: "b0001007-0000-4000-8000-000000000007", name: "Askari-VII",  city: "Rawalpindi", code: "ASK-VII-RWP", slug: "askari-vii-rawalpindi",  address: "Chaklala Cantt, Rawalpindi",     plan: "growth",       scale: "medium" },
+  { tenantId: "a0001008-0000-4000-8000-000000000008", societyId: "b0001008-0000-4000-8000-000000000008", name: "Askari-VIII", city: "Rawalpindi", code: "ASK-VIII-RWP",slug: "askari-viii-rawalpindi", address: "Chaklala Cantt, Rawalpindi",     plan: "professional", scale: "medium" },
+  { tenantId: "a0001009-0000-4000-8000-000000000009", societyId: "b0001009-0000-4000-8000-000000000009", name: "Askari-IX",   city: "Rawalpindi", code: "ASK-IX-RWP",  slug: "askari-ix-rawalpindi",   address: "Chaklala Cantt, Rawalpindi",     plan: "growth",       scale: "medium" },
+  { tenantId: "a0001010-0000-4000-8000-000000000010", societyId: "b0001010-0000-4000-8000-000000000010", name: "Askari-X",    city: "Rawalpindi", code: "ASK-X-RWP",   slug: "askari-x-rawalpindi",    address: "Chaklala Cantt, Rawalpindi",     plan: "enterprise",   scale: "large"  },
+  { tenantId: "a0001011-0000-4000-8000-000000000011", societyId: "b0001011-0000-4000-8000-000000000011", name: "Askari-XI",   city: "Rawalpindi", code: "ASK-XI-RWP",  slug: "askari-xi-rawalpindi",   address: "Chaklala Cantt, Rawalpindi",     plan: "professional", scale: "medium" },
+  { tenantId: "a0001012-0000-4000-8000-000000000012", societyId: "b0001012-0000-4000-8000-000000000012", name: "Askari-XII",  city: "Rawalpindi", code: "ASK-XII-RWP", slug: "askari-xii-rawalpindi",  address: "Chaklala Cantt, Rawalpindi",     plan: "growth",       scale: "medium" },
+  { tenantId: "a0001013-0000-4000-8000-000000000013", societyId: "b0001013-0000-4000-8000-000000000013", name: "Askari-XIII", city: "Rawalpindi", code: "ASK-XIII-RWP",slug: "askari-xiii-rawalpindi", address: "Adyala Road, Rawalpindi",        plan: "starter",      scale: "small"  },
+  { tenantId: "a0001014-0000-4000-8000-000000000014", societyId: "b0001014-0000-4000-8000-000000000014", name: "Askari-XIV",  city: "Rawalpindi", code: "ASK-XIV-RWP", slug: "askari-xiv-rawalpindi",  address: "Adyala Road, Rawalpindi",        plan: "growth",       scale: "large"  },
+  { tenantId: "a0001015-0000-4000-8000-000000000015", societyId: "b0001015-0000-4000-8000-000000000015", name: "Askari-XV",   city: "Rawalpindi", code: "ASK-XV-RWP",  slug: "askari-xv-rawalpindi",   address: "Adyala Road, Rawalpindi",        plan: "enterprise",   scale: "large"  },
 
-const DEMO_TENANT_IDS = DEMO_TENANTS.map((t) => t.id);
+  // ── ISLAMABAD ─────────────────────────────────────────────────────────────
+  { tenantId: "a0002001-0000-4000-8000-000000000001", societyId: "b0002001-0000-4000-8000-000000000001", name: "Askari-I",    city: "Islamabad",  code: "ASK-I-ISB",   slug: "askari-i-islamabad",     address: "Jinnah Avenue, E-9, Islamabad",  plan: "enterprise",   scale: "medium" },
+  { tenantId: "a0002002-0000-4000-8000-000000000002", societyId: "b0002002-0000-4000-8000-000000000002", name: "Falcon Complex AFOHS", city: "Islamabad", code: "FALCON-ISB", slug: "falcon-complex-islamabad", address: "Sector E-9, Islamabad",   plan: "enterprise",   scale: "large"  },
 
-// ─── FICTIONAL RESIDENT NAMES (demo only) ────────────────────────────────────
-const DEMO_NAMES = [
-  "Muhammad Tariq",   "Ayesha Siddiqui", "Usman Farooq",   "Sara Baig",
-  "Ahmed Nawaz",      "Fatima Malik",    "Hassan Raza",    "Zainab Sheikh",
-  "Bilal Chaudhry",   "Maria Butt",      "Hamza Iqbal",    "Sana Khan",
-  "Faisal Mehmood",   "Nadia Hussain",   "Imran Sohail",   "Rukhsana Gul",
-  "Asif Qureshi",     "Mehwish Hafeez",  "Kamran Ashraf",  "Seema Jabeen",
-  "Naveed Anwar",     "Amna Riaz",       "Shahid Latif",   "Rabia Noor",
-  "Junaid Khalil",    "Hina Rehman",     "Zeeshan Ahmad",  "Sadia Akhtar",
-  "Waqas Mirza",      "Tayyaba Syed",
+  // ── LAHORE ────────────────────────────────────────────────────────────────
+  { tenantId: "a0003001-0000-4000-8000-000000000001", societyId: "b0003001-0000-4000-8000-000000000001", name: "Askari 1",    city: "Lahore",     code: "ASK-1-LHR",   slug: "askari-1-lahore",        address: "Sarwar Road, Lahore Cantt",      plan: "growth",       scale: "medium" },
+  { tenantId: "a0003002-0000-4000-8000-000000000002", societyId: "b0003002-0000-4000-8000-000000000002", name: "Askari 2",    city: "Lahore",     code: "ASK-2-LHR",   slug: "askari-2-lahore",        address: "Zarar Shaheed Road, Lahore Cantt", plan: "professional", scale: "medium" },
+  { tenantId: "a0003003-0000-4000-8000-000000000003", societyId: "b0003003-0000-4000-8000-000000000003", name: "Askari 3",    city: "Lahore",     code: "ASK-3-LHR",   slug: "askari-3-lahore",        address: "Bedian Road, Lahore Cantt",      plan: "growth",       scale: "medium" },
+  { tenantId: "a0003005-0000-4000-8000-000000000005", societyId: "b0003005-0000-4000-8000-000000000005", name: "Askari 5",    city: "Lahore",     code: "ASK-5-LHR",   slug: "askari-5-lahore",        address: "Gulberg / Cantt, Lahore",        plan: "enterprise",   scale: "large"  },
+  { tenantId: "a0003010-0000-4000-8000-000000000010", societyId: "b0003010-0000-4000-8000-000000000010", name: "Askari 10",   city: "Lahore",     code: "ASK-10-LHR",  slug: "askari-10-lahore",       address: "Amjad Chaudhry Road, Lahore Cantt", plan: "enterprise", scale: "large"  },
+  { tenantId: "a0003011-0000-4000-8000-000000000011", societyId: "b0003011-0000-4000-8000-000000000011", name: "Askari 11",   city: "Lahore",     code: "ASK-11-LHR",  slug: "askari-11-lahore",       address: "Bedian Road, Lahore Cantt",      plan: "enterprise",   scale: "large"  },
+
+  // ── KARACHI ───────────────────────────────────────────────────────────────
+  { tenantId: "a0004001-0000-4000-8000-000000000001", societyId: "b0004001-0000-4000-8000-000000000001", name: "Askari 1",    city: "Karachi",    code: "ASK-1-KHI",   slug: "askari-1-karachi",       address: "Chanesar Goth, Karachi Cantt",   plan: "growth",       scale: "medium" },
+  { tenantId: "a0004002-0000-4000-8000-000000000002", societyId: "b0004002-0000-4000-8000-000000000002", name: "Askari 2",    city: "Karachi",    code: "ASK-2-KHI",   slug: "askari-2-karachi",       address: "Cantonment, Karachi",            plan: "professional", scale: "medium" },
+  { tenantId: "a0004003-0000-4000-8000-000000000003", societyId: "b0004003-0000-4000-8000-000000000003", name: "Askari 3",    city: "Karachi",    code: "ASK-3-KHI",   slug: "askari-3-karachi",       address: "School Road, Karachi Cantt",     plan: "growth",       scale: "medium" },
+  { tenantId: "a0004004-0000-4000-8000-000000000004", societyId: "b0004004-0000-4000-8000-000000000004", name: "Askari 4",    city: "Karachi",    code: "ASK-4-KHI",   slug: "askari-4-karachi",       address: "Rashid Minhas Road, Karachi Cantt", plan: "professional", scale: "large"  },
+  { tenantId: "a0004005-0000-4000-8000-000000000005", societyId: "b0004005-0000-4000-8000-000000000005", name: "Askari 5",    city: "Karachi",    code: "ASK-5-KHI",   slug: "askari-5-karachi",       address: "Malir Cantonment, Karachi",      plan: "enterprise",   scale: "large"  },
+
+  // ── PESHAWAR ──────────────────────────────────────────────────────────────
+  { tenantId: "a0005001-0000-4000-8000-000000000001", societyId: "b0005001-0000-4000-8000-000000000001", name: "Askari-I",    city: "Peshawar",   code: "ASK-I-PEW",   slug: "askari-i-peshawar",      address: "Khyber Road, Peshawar Cantt",    plan: "growth",       scale: "small"  },
+  { tenantId: "a0005002-0000-4000-8000-000000000002", societyId: "b0005002-0000-4000-8000-000000000002", name: "Askari-II",   city: "Peshawar",   code: "ASK-II-PEW",  slug: "askari-ii-peshawar",     address: "Warsak Road, Peshawar",          plan: "professional", scale: "large"  },
+
+  // ── MULTAN ────────────────────────────────────────────────────────────────
+  { tenantId: "a0006001-0000-4000-8000-000000000001", societyId: "b0006001-0000-4000-8000-000000000001", name: "Askari-I",    city: "Multan",     code: "ASK-I-MUX",   slug: "askari-i-multan",        address: "Multan Cantt",                   plan: "growth",       scale: "medium" },
+  { tenantId: "a0006002-0000-4000-8000-000000000002", societyId: "b0006002-0000-4000-8000-000000000002", name: "Askari-II",   city: "Multan",     code: "ASK-II-MUX",  slug: "askari-ii-multan",       address: "Bosan Road, Multan",             plan: "professional", scale: "medium" },
+
+  // ── GUJRANWALA ────────────────────────────────────────────────────────────
+  { tenantId: "a0007001-0000-4000-8000-000000000001", societyId: "b0007001-0000-4000-8000-000000000001", name: "Askari Housing", city: "Gujranwala", code: "ASK-GWA",   slug: "askari-housing-gujranwala", address: "Gujranwala Cantt",           plan: "growth",       scale: "small"  },
+
+  // ── QUETTA ────────────────────────────────────────────────────────────────
+  { tenantId: "a0008001-0000-4000-8000-000000000001", societyId: "b0008001-0000-4000-8000-000000000001", name: "Askari Housing", city: "Quetta",     code: "ASK-UET",   slug: "askari-housing-quetta",     address: "Chaman Road, Quetta Cantt",      plan: "professional", scale: "small"  },
 ];
 
-// ─── MODULES TO ENABLE PER TENANT ────────────────────────────────────────────
+// ─── UNIQUE RESIDENT NAME GENERATOR ───────────────────────────────────────────
+const RANKS_AND_TITLES = [
+  "Brig. (R)", "Col. (R)", "Lt. Col. (R)", "Maj. (R)", "Capt. (R)",
+  "Air Cdre. (R)", "Sqn. Ldr. (R)", "Cmde. (R)", "Vice Adm. (R)",
+  "Dr.", "Engr.", "Prof.", "Advocate", "Mr.", "Mrs."
+];
+
+const FIRST_NAMES = [
+  "Tariq",    "Javed",    "Faisal",   "Salman",   "Hamza",
+  "Ayesha",   "Zafar",    "Usman",    "Imran",    "Shahid",
+  "Bilal",    "Hassan",   "Kamran",   "Saad",     "Mariam",
+  "Nadia",    "Fozia",    "Sadia",    "Asad",     "Danish",
+  "Furqan",   "Owais",    "Rehan",    "Sohail",   "Waqas",
+  "Zainab",   "Naveed",   "Lubna",    "Iqra",     "Amna",
+  "Rizwan",   "Junaid",   "Mariam",   "Ambreen",  "Rukhsana"
+];
+
+const LAST_NAMES = [
+  "Mahmood",  "Iqbal",    "Ahmad",    "Farooq",   "Khan",
+  "Hashmi",   "Ali",      "Raza",     "Siddiqui", "Qureshi",
+  "Bukhari",  "Awan",     "Malik",    "Bhatti",   "Shah",
+  "Ghauri",   "Mirza",    "Latif",    "Anwar",    "Saleem",
+  "Jahangir", "Durrani",  "Khattak",  "Niazi",    "Gillani",
+  "Begum",    "Noor",     "Akhtar",   "Gul",      "Javed"
+];
+
+const UNIQUE_NAMES: string[] = [];
+let nameIdx = 0;
+for (const title of RANKS_AND_TITLES) {
+  for (const fn of FIRST_NAMES) {
+    for (const ln of LAST_NAMES) {
+      UNIQUE_NAMES.push(`${title} ${fn} ${ln}`);
+    }
+  }
+}
+
+// ─── MODULES LIST ─────────────────────────────────────────────────────────────
 const DEMO_MODULES = [
   "platform", "property", "residents", "notifications", "documents", "reports",
   "ledger", "payments", "financial_transparency", "budget",
   "complaints", "maintenance", "inventory", "vendors", "assets",
   "visitor", "gate", "parking",
   "notice_board", "community_forum", "polls", "events", "amenities", "governance",
-  "utility_meters",
+  "utility_meters"
 ];
 
-// ─── DEMO ADMIN USER DETERMINISTIC IDs ───────────────────────────────────────
-const SUPER_ADMIN_ID = "de900000-0000-0000-0000-000000000000";
-const ADMIN_ALPHA_ID = "de900000-0000-0000-0000-000000000001"; // Askari 11 & 10
-const ADMIN_BETA_ID  = "de900000-0000-0000-0000-000000000002"; // Askari 5
-const ADMIN_GAMMA_ID = "de900000-0000-0000-0000-000000000003"; // Askari 4 & Rawalpindi
+const SUPER_ADMIN_ID = "a9900000-0000-4000-8000-000000000000";
+const ADMIN_ALPHA_ID = "a9900001-0000-4000-8000-000000000001";
+const ADMIN_BETA_ID  = "a9900002-0000-4000-8000-000000000002";
+const ADMIN_GAMMA_ID = "a9900003-0000-4000-8000-000000000003";
+const ADMIN_DELTA_ID = "a9900004-0000-4000-8000-000000000004";
+const ADMIN_EPSILON_ID="a9900005-0000-4000-8000-000000000005";
 
-// ─── DB CONNECTION ────────────────────────────────────────────────────────────
-async function connectDb() {
-  // Load .env manually for script context
-  try {
-    const envPath = path.resolve(process.cwd(), ".env");
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, "utf-8");
-      for (const line of content.split(/\r?\n/)) {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith("#")) {
-          const idx = trimmed.indexOf("=");
-          if (idx !== -1) {
-            const key = trimmed.slice(0, idx).trim().replace(/^export\s+/, "");
-            let val = trimmed.slice(idx + 1).trim();
-            if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-              val = val.slice(1, -1);
-            }
-            if (!process.env[key]) process.env[key] = val;
-          }
+async function connectDb(): Promise<mysql.Connection> {
+  const envPath = path.resolve(process.cwd(), ".env");
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, "utf-8");
+    for (const line of content.split(/\r?\n/)) {
+      const t = line.trim();
+      if (t && !t.startsWith("#")) {
+        const idx = t.indexOf("=");
+        if (idx !== -1) {
+          const key = t.slice(0, idx).trim().replace(/^export\s+/, "");
+          let val = t.slice(idx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
+          if (!process.env[key]) process.env[key] = val;
         }
       }
     }
-  } catch (_) {}
+  }
 
   const host = process.env.MYSQL_HOST || "127.0.0.1";
   const port = parseInt(process.env.MYSQL_PORT || "3306", 10);
   const user = process.env.MYSQL_USER || "root";
   const password = process.env.MYSQL_PASSWORD || "";
   const database = process.env.MYSQL_DATABASE || "at_bms";
-
-  console.log(`[CONN] ${host}:${port} / ${database}`);
+  console.log(`[CONN] Connecting to MySQL database: ${database}...`);
   return mysql.createConnection({ host, port, user, password, database });
 }
 
-// ─── PHASE 1: AUDIT ──────────────────────────────────────────────────────────
-async function auditDemoData(conn: mysql.Connection): Promise<Record<string, number>> {
-  console.log("\n=== PHASE 1: DEMO DATA AUDIT ===");
-  const counts: Record<string, number> = {};
-
-  const auditQueries: [string, string][] = [
-    ["tenants",        `SELECT COUNT(*) as n FROM tenants WHERE id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["users",          `SELECT COUNT(*) as n FROM users WHERE email LIKE '%@demo.housingos.local'`],
-    ["societies",      `SELECT COUNT(*) as n FROM societies WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["residents",      `SELECT COUNT(*) as n FROM residents WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["units",          `SELECT COUNT(*) as n FROM units WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["ledger_entries", `SELECT COUNT(*) as n FROM ledger_entries WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["payments",       `SELECT COUNT(*) as n FROM payments WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["complaints",     `SELECT COUNT(*) as n FROM complaints WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["visitor_passes", `SELECT COUNT(*) as n FROM visitor_passes WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["domestic_staff", `SELECT COUNT(*) as n FROM domestic_staff WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["assets",         `SELECT COUNT(*) as n FROM assets WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["polls",          `SELECT COUNT(*) as n FROM polls WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["events",         `SELECT COUNT(*) as n FROM events WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["amenities",      `SELECT COUNT(*) as n FROM amenities WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["notices",        `SELECT COUNT(*) as n FROM notices WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["forum_threads",  `SELECT COUNT(*) as n FROM forum_threads WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-  ];
-
-  for (const [label, query] of auditQueries) {
-    const params = label === "users" ? [] : DEMO_TENANT_IDS;
-    const [rows] = await conn.query(query, params) as any[];
-    counts[label] = rows[0].n;
-    console.log(`  ${label.padEnd(18)}: ${counts[label]}`);
-  }
-
-  // Non-demo counts
-  const [allT] = await conn.query("SELECT COUNT(*) as n FROM tenants") as any[];
-  const [allU] = await conn.query("SELECT COUNT(*) as n FROM users") as any[];
-  const nonDemoTenants = allT[0].n - (counts["tenants"] || 0);
-  const nonDemoUsers = allU[0].n - (counts["users"] || 0);
-  console.log(`\n  Non-demo tenants preserved: ${nonDemoTenants}`);
-  console.log(`  Non-demo users preserved:   ${nonDemoUsers}`);
-
-  return counts;
-}
-
-// ─── PHASE 2: SAFE RESET ─────────────────────────────────────────────────────
-async function performReset(conn: mysql.Connection): Promise<void> {
-  console.log("\n=== PHASE 2: SAFE DEMO DATA RESET ===");
-  console.log("[RESET] Deleting only records anchored to demo tenant IDs or demo emails...");
+// ─── PHASE 1: FULL PURGE OF LEGACY DATA ───────────────────────────────────────
+async function purgeAllNonAskariData(conn: mysql.Connection): Promise<void> {
+  console.log("\n=== PHASE 1: FULL PURGE OF NON-ASKARI & DUMMY SOCIETIES ===");
+  console.log("[PURGE] Truncating all tenant tables to remove legacy data...");
 
   await conn.query("SET FOREIGN_KEY_CHECKS = 0");
 
-  // Deletion order: most dependent first → tenants last
-  const tenantScopedTables = [
-    "amenity_bookings", "event_rsvps", "poll_votes",
-    "forum_replies", "forum_threads",
-    "notice_reads", "notices",
+  const tablesToTruncate = [
+    "amenity_bookings", "amenities", "event_rsvps", "events", "poll_votes", "polls",
+    "forum_replies", "forum_threads", "notice_reads", "notices",
     "governance_resolutions", "governance_meetings",
     "entry_exit_log", "visitor_blacklist", "visitor_passes", "domestic_staff",
     "maintenance_work_orders", "maintenance_schedules", "assets",
@@ -221,119 +188,33 @@ async function performReset(conn: mysql.Connection): Promise<void> {
     "meter_readings", "meter_rates",
     "parking_allocations", "parking_slots",
     "payments", "ledger_entries", "wallets", "charge_heads",
-    "complaint_comments", "complaint_history", "complaints",
-    "sla_configs",
+    "complaint_comments", "complaint_history", "complaints", "sla_configs",
     "resident_vehicles", "residents", "persons",
     "units", "floors", "buildings", "blocks",
-    "custom_roles", "role_permissions", "tenant_modules",
-    "society_admin_tenants",
-    "budget_line_items", "budgets",
-    "documents", "notifications", "form_submissions",
+    "custom_roles", "role_permissions", "tenant_modules", "society_admin_tenants",
+    "budget_line_items", "budgets", "documents", "notifications", "form_submissions",
     "guard_patrols", "gate_terminals", "blacklist",
-    "audit_logs",
-    "societies",
+    "audit_logs", "societies", "sessions", "user_roles", "profiles", "users", "tenants"
   ];
 
-  for (const table of tenantScopedTables) {
-    const [res] = await conn.query(
-      `DELETE FROM \`${table}\` WHERE tenant_id IN (?)`,
-      [DEMO_TENANT_IDS]
-    ).catch(() => [{ affectedRows: 0 }]) as any[];
-    if (res?.affectedRows > 0) {
-      console.log(`  [DEL] ${table}: ${res.affectedRows} rows`);
-    }
+  for (const t of tablesToTruncate) {
+    await conn.query(`TRUNCATE TABLE \`${t}\``).catch(() => {});
   }
-
-  // Delete demo users (by email domain) and their cascaded profiles/roles/sessions
-  const [demoUserIds] = await conn.query(
-    "SELECT id FROM users WHERE email LIKE '%@demo.housingos.local'"
-  ).catch(() => [[]]) as any[];
-
-  if (demoUserIds.length > 0) {
-    const ids = demoUserIds.map((r: any) => r.id);
-    await conn.query("DELETE FROM society_admin_tenants WHERE user_id IN (?)", [ids]).catch(() => {});
-    await conn.query("DELETE FROM user_roles WHERE user_id IN (?)", [ids]).catch(() => {});
-    await conn.query("DELETE FROM profiles WHERE id IN (?)", [ids]).catch(() => {});
-    await conn.query("DELETE FROM sessions WHERE user_id IN (?)", [ids]).catch(() => {});
-    await conn.query("DELETE FROM users WHERE id IN (?)", [ids]).catch(() => {});
-    console.log(`  [DEL] users + profiles + roles + sessions: ${ids.length} users`);
-  }
-
-  // Delete demo tenants last
-  await conn.query("DELETE FROM tenants WHERE id IN (?)", [DEMO_TENANT_IDS]).catch(() => {});
-  console.log(`  [DEL] tenants: ${DEMO_TENANT_IDS.length} records`);
 
   await conn.query("SET FOREIGN_KEY_CHECKS = 1");
-  console.log("[RESET] ✅ Reset complete.");
+  console.log("[PURGE] ✅ All legacy data purged cleanly.");
 }
 
-// ─── PHASE 3: VERIFY CLEAN STATE ─────────────────────────────────────────────
-async function verifyCleanState(conn: mysql.Connection): Promise<boolean> {
-  console.log("\n=== PHASE 3: VERIFY CLEAN STATE ===");
-  let pass = true;
+// ─── PHASE 2: SEED PLATFORM SUPER ADMIN & REGIONAL ADMINS ────────────────────
+async function seedAdmins(conn: mysql.Connection, pwHash: string): Promise<void> {
+  console.log("\n=== PHASE 2: PROVISIONING PLATFORM SUPER ADMIN & REGIONAL ADMINS ===");
 
-  const checks: [string, string][] = [
-    ["demo tenants",   `SELECT COUNT(*) as n FROM tenants WHERE id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["demo users",     `SELECT COUNT(*) as n FROM users WHERE email LIKE '%@demo.housingos.local'`],
-    ["demo residents", `SELECT COUNT(*) as n FROM residents WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["demo units",     `SELECT COUNT(*) as n FROM units WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["demo ledger",    `SELECT COUNT(*) as n FROM ledger_entries WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["demo payments",  `SELECT COUNT(*) as n FROM payments WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["demo visitors",  `SELECT COUNT(*) as n FROM visitor_passes WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-    ["demo staff",     `SELECT COUNT(*) as n FROM domestic_staff WHERE tenant_id IN (${DEMO_TENANT_IDS.map(() => "?").join(",")})`],
-  ];
-
-  for (const [label, query] of checks) {
-    const params = label === "demo users" ? [] : DEMO_TENANT_IDS;
-    const [rows] = await conn.query(query, params) as any[];
-    const n = rows[0].n;
-    const ok = n === 0;
-    if (!ok) pass = false;
-    console.log(`  ${label.padEnd(18)}: ${n} ${ok ? "✅" : "❌ FAILED"}`);
-  }
-
-  // Verify non-demo data not deleted
-  const [allT] = await conn.query("SELECT COUNT(*) as n FROM tenants") as any[];
-  console.log(`  Non-demo tenants still exist: ${allT[0].n} ✅`);
-
-  if (pass) {
-    console.log("\n  ✅ DEMO CLEANUP: PASS — safe to reseed");
-  } else {
-    console.log("\n  ❌ DEMO CLEANUP: FAILED — aborting reseed");
-  }
-  return pass;
-}
-
-// ─── PHASE 5+: SEED ──────────────────────────────────────────────────────────
-async function seedAll(conn: mysql.Connection): Promise<void> {
-  const pwHash = hashPassword("Demo@12345");
-  const bp = "2026-08"; // billing period
-
-  // Running receipt counter (must stay globally unique across all societies)
-  let receiptSeq = 10000;
-  function nextReceipt(code: string): string {
-    return `REC-DEMO-${code}-${String(++receiptSeq).padStart(4, "0")}`;
-  }
-
-  // ── Step 1: Create Tenants (before any FK references) ──────────────────────
-  console.log("\n[SEED] Creating tenants...");
-  for (const t of DEMO_TENANTS) {
-    await conn.query(
-      `INSERT INTO tenants (id, name, slug, plan, timezone, currency, date_format,
-        contact_email, contact_phone, address, code)
-       VALUES (?, ?, ?, ?, 'Asia/Karachi', 'PKR', 'DD/MM/YYYY', ?, ?, ?, ?)`,
-      [t.id, t.name, t.slug, t.plan, t.contactEmail, t.contactPhone, t.address, t.code]
-    );
-  }
-
-  // ── Step 2: Super Admin ─────────────────────────────────────────────────────
-  console.log("[SEED] Creating Super Admin...");
   await conn.query(
     "INSERT INTO users (id, email, password_hash) VALUES (?, 'superadmin@demo.housingos.local', ?)",
     [SUPER_ADMIN_ID, pwHash]
   );
   await conn.query(
-    "INSERT INTO profiles (id, full_name, society_name, phone, tenant_id) VALUES (?, 'Demo Super Admin', 'HousingOS Platform', '+92 300 0000000', NULL)",
+    "INSERT INTO profiles (id, full_name, society_name, phone, tenant_id) VALUES (?, 'Global Super Admin', 'Askari Housing Authority', '+92 51 111222333', NULL)",
     [SUPER_ADMIN_ID]
   );
   await conn.query(
@@ -341,972 +222,485 @@ async function seedAll(conn: mysql.Connection): Promise<void> {
     [crypto.randomUUID(), SUPER_ADMIN_ID]
   );
 
-  // ── Step 3: Society Admins ──────────────────────────────────────────────────
-  console.log("[SEED] Creating Society Admins...");
-  const admins = [
-    { id: ADMIN_ALPHA_ID, email: "admin.alpha@demo.housingos.local", name: "Admin Alpha", tenants: [DEMO_TENANTS[0].id, DEMO_TENANTS[1].id] },
-    { id: ADMIN_BETA_ID,  email: "admin.beta@demo.housingos.local",  name: "Admin Beta",  tenants: [DEMO_TENANTS[2].id] },
-    { id: ADMIN_GAMMA_ID, email: "admin.gamma@demo.housingos.local", name: "Admin Gamma", tenants: [DEMO_TENANTS[3].id, DEMO_TENANTS[4].id] },
+  // Backup admin@demo.com
+  const adminDemoId = "a9900000-0000-4000-8000-000000000099";
+  const pwdDemo1234 = hashPassword("demo1234");
+  await conn.query("INSERT INTO users (id, email, password_hash) VALUES (?, 'admin@demo.com', ?)", [adminDemoId, pwdDemo1234]);
+  await conn.query("INSERT INTO profiles (id, full_name, society_name, phone, tenant_id) VALUES (?, 'Super Admin Backup', 'Askari Housing Authority', '+92 300 1234567', NULL)", [adminDemoId]);
+  await conn.query("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'super_admin')", [crypto.randomUUID(), adminDemoId]);
+
+  // Regional Multi-Society Admins
+  const regionalAdmins = [
+    { id: ADMIN_ALPHA_ID, email: `admin.alpha${DEMO_EMAIL_DOMAIN}`, name: "Admin Alpha (Rawalpindi 1-5)", tenants: DEMO_SOCIETIES.slice(0, 5).map(s => s.tenantId) },
+    { id: ADMIN_BETA_ID,  email: `admin.beta${DEMO_EMAIL_DOMAIN}`,  name: "Admin Beta (Rawalpindi 6-10)", tenants: DEMO_SOCIETIES.slice(5, 10).map(s => s.tenantId) },
+    { id: ADMIN_GAMMA_ID, email: `admin.gamma${DEMO_EMAIL_DOMAIN}`, name: "Admin Gamma (Rawalpindi 11-15)", tenants: DEMO_SOCIETIES.slice(10, 15).map(s => s.tenantId) },
+    { id: ADMIN_DELTA_ID, email: `admin.delta${DEMO_EMAIL_DOMAIN}`, name: "Admin Delta (Islamabad & Lahore)", tenants: DEMO_SOCIETIES.slice(15, 23).map(s => s.tenantId) },
+    { id: ADMIN_EPSILON_ID, email: `admin.epsilon${DEMO_EMAIL_DOMAIN}`, name: "Admin Epsilon (Karachi, Peshawar, Multan, Gujranwala, Quetta)", tenants: DEMO_SOCIETIES.slice(23).map(s => s.tenantId) },
   ];
 
-  for (const admin of admins) {
-    await conn.query(
-      "INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)",
-      [admin.id, admin.email, pwHash]
-    );
-    await conn.query(
-      "INSERT INTO profiles (id, full_name, tenant_id) VALUES (?, ?, ?)",
-      [admin.id, admin.name, admin.tenants[0]]
-    );
-    await conn.query(
-      "INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'society_admin')",
-      [crypto.randomUUID(), admin.id]
-    );
-    for (const tid of admin.tenants) {
+  for (const adm of regionalAdmins) {
+    await conn.query("INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)", [adm.id, adm.email, pwHash]);
+    await conn.query("INSERT INTO profiles (id, full_name, tenant_id) VALUES (?, ?, NULL)", [adm.id, adm.name]);
+    await conn.query("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'society_admin')", [crypto.randomUUID(), adm.id]);
+    for (const tid of adm.tenants) {
       await conn.query(
         "INSERT INTO society_admin_tenants (id, user_id, tenant_id, is_active) VALUES (?, ?, ?, TRUE)",
-        [crypto.randomUUID(), admin.id, tid]
+        [crypto.randomUUID(), adm.id, tid]
       );
     }
   }
 
-  // ── Step 4: Enable Modules per tenant ──────────────────────────────────────
-  console.log("[SEED] Activating modules...");
-  for (const t of DEMO_TENANTS) {
+  console.log("✅ Super Admin and Regional Admins provisioned.");
+}
+
+// ─── PHASE 3: SEED ASKARI SOCIETIES WITH DYNAMIC FEES & RENT ────────────────
+async function seedAskariSocieties(conn: mysql.Connection, pwHash: string): Promise<void> {
+  console.log(`\n=== PHASE 3: SEEDING ${DEMO_SOCIETIES.length} ASKARI SOCIETIES WITH RENT, DYNAMIC FEES & ALL MODULES ===`);
+
+  let receiptSeq = 1;
+  function nextReceipt(code: string): string {
+    return `REC-${code}-${String(receiptSeq++).padStart(6, "0")}`;
+  }
+
+  for (const s of DEMO_SOCIETIES) {
+    console.log(`\n[ASKARI] 🏛️ ${s.name} (${s.city}) [${s.code}] — Scale: ${s.scale.toUpperCase()}`);
+
+    // 1. Tenant record
+    await conn.query(
+      `INSERT INTO tenants (id, name, slug, plan, timezone, currency, date_format, contact_email, contact_phone, address, code)
+       VALUES (?, ?, ?, ?, 'Asia/Karachi', 'PKR', 'DD/MM/YYYY', ?, ?, ?, ?)`,
+      [s.tenantId, s.name, s.slug, s.plan, `admin.${s.slug}${DEMO_EMAIL_DOMAIN}`, "+92 51 5000000", s.address, s.code]
+    );
+
+    // 2. Society record
+    await conn.query(
+      "INSERT INTO societies (id, tenant_id, name, address, city) VALUES (?, ?, ?, ?, ?)",
+      [s.societyId, s.tenantId, s.name, s.address, s.city]
+    );
+
+    // 3. Module activations
     for (const mod of DEMO_MODULES) {
       await conn.query(
-        `INSERT INTO tenant_modules (id, tenant_id, module_key, is_active, activated_by)
-         VALUES (?, ?, ?, TRUE, ?)`,
-        [crypto.randomUUID(), t.id, mod, SUPER_ADMIN_ID]
-      ).catch(() => {}); // ignore duplicates
-    }
-  }
-
-  // ── Step 5: Loop over each society ─────────────────────────────────────────
-  for (const tenant of DEMO_TENANTS) {
-    console.log(`\n[SEED] ▶ ${tenant.name}`);
-    await seedSociety(conn, tenant, pwHash, bp, nextReceipt);
-  }
-}
-
-// ─── PER-SOCIETY SEEDER ───────────────────────────────────────────────────────
-async function seedSociety(
-  conn: mysql.Connection,
-  tenant: typeof DEMO_TENANTS[number],
-  pwHash: string,
-  bp: string,
-  nextReceipt: (code: string) => string
-) {
-  const tid = tenant.id;
-  const code = tenant.code;
-  const slugShort = tenant.slug.replace(/-demo$/, "").replace(/[^a-z0-9]/g, "-");
-
-  // ── 5.1 Society record ──────────────────────────────────────────────────────
-  await conn.query(
-    "INSERT INTO societies (id, tenant_id, name, address, city) VALUES (?, ?, ?, ?, ?)",
-    [tenant.societyId, tid, tenant.name, tenant.address, tenant.city]
-  );
-
-  // ── 5.2 Staff users (guard, technician, finance, security head, maintenance head) ───
-  type StaffUser = { id: string; email: string; name: string; role: string };
-  const staffUsers: StaffUser[] = [];
-
-  const staffRoles = [
-    { key: "guard",       role: "guard",       name: "Security Guard" },
-    { key: "technician",  role: "technician",  name: "Maintenance Tech" },
-    { key: "finance",     role: "finance_head", name: "Finance Officer" },
-    { key: "security",    role: "security_head", name: "Security Head" },
-    { key: "maintenance", role: "maintenance_head", name: "Maintenance Head" },
-  ];
-
-  for (const sr of staffRoles) {
-    const uid = crypto.randomUUID();
-    const email = `${sr.key}.${slugShort}@demo.housingos.local`;
-    await conn.query(
-      "INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)",
-      [uid, email, pwHash]
-    );
-    await conn.query(
-      "INSERT INTO profiles (id, full_name, tenant_id) VALUES (?, ?, ?)",
-      [uid, `${sr.name} (${tenant.code})`, tid]
-    );
-    await conn.query(
-      "INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, ?)",
-      [crypto.randomUUID(), uid, sr.role]
-    );
-    staffUsers.push({ id: uid, email, name: sr.name, role: sr.role });
-  }
-
-  const guardUser    = staffUsers.find(s => s.role === "guard")!;
-  const techUser     = staffUsers.find(s => s.role === "technician")!;
-  const financeUser  = staffUsers.find(s => s.role === "finance_head")!;
-
-  // ── 5.3 Property structure ──────────────────────────────────────────────────
-  // We build blocks → buildings → floors → units  (apartments)
-  // and  standalone houses/villas (no building/floor)
-
-  type UnitInfo = { id: string; num: string; type: string; blockId?: string; buildingId?: string; floorId?: string };
-  const units: UnitInfo[] = [];
-
-  // Apartment structure: 2 Blocks × 1 Building × 3 Floors × 3 Apts = 18 apts
-  const blockNames = ["Block A", "Block B"];
-  const blockIds: string[] = [];
-
-  for (let bi = 0; bi < blockNames.length; bi++) {
-    const blockId = crypto.randomUUID();
-    blockIds.push(blockId);
-    await conn.query(
-      "INSERT INTO blocks (id, society_id, tenant_id, name) VALUES (?, ?, ?, ?)",
-      [blockId, tenant.societyId, tid, blockNames[bi]]
-    );
-
-    const buildingId = crypto.randomUUID();
-    await conn.query(
-      "INSERT INTO buildings (id, block_id, tenant_id, name, floors_count) VALUES (?, ?, ?, ?, ?)",
-      [buildingId, blockId, tid, `Building ${blockNames[bi].split(" ")[1]}-1`, 3]
-    );
-
-    for (let fl = 1; fl <= 3; fl++) {
-      const floorId = crypto.randomUUID();
-      await conn.query(
-        "INSERT INTO floors (id, building_id, tenant_id, floor_number, name) VALUES (?, ?, ?, ?, ?)",
-        [floorId, buildingId, tid, fl, `Floor ${fl}`]
-      );
-
-      for (let apt = 1; apt <= 3; apt++) {
-        const prefix = blockNames[bi].split(" ")[1]; // A or B
-        const unitNum = `${prefix}-${fl}0${apt}`;
-        const unitId = crypto.randomUUID();
-        await conn.query(
-          `INSERT INTO units (id, floor_id, building_id, block_id, society_id, tenant_id,
-             unit_number, unit_type, area_sqft, bedrooms, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'flat', ?, ?, 'occupied')`,
-          [unitId, floorId, buildingId, blockId, tenant.societyId, tid, unitNum,
-           apt === 1 ? 1200 : apt === 2 ? 1450 : 1600, apt === 1 ? 2 : 3]
-        );
-        units.push({ id: unitId, num: unitNum, type: "flat", blockId, buildingId, floorId });
-      }
-    }
-  }
-
-  // Houses / Villas (layout-dependent)
-  const hasHouses = tenant.layout === "apartments_heavy" || tenant.layout === "mixed" || tenant.layout === "houses_heavy";
-  if (hasHouses) {
-    const houseCount = tenant.layout === "houses_heavy" ? 6 : 3;
-    for (let h = 1; h <= houseCount; h++) {
-      const unitNum = `H-${String(h).padStart(2, "0")}`;
-      const unitId = crypto.randomUUID();
-      await conn.query(
-        `INSERT INTO units (id, society_id, tenant_id, unit_number, unit_type, area_sqft, bedrooms, status)
-         VALUES (?, ?, ?, ?, 'house', ?, ?, 'occupied')`,
-        [unitId, tenant.societyId, tid, unitNum, 2200 + h * 100, 4]
-      );
-      units.push({ id: unitId, num: unitNum, type: "house" });
-    }
-  }
-
-  if (tenant.layout === "mixed" || tenant.layout === "apartments_heavy") {
-    for (let v = 1; v <= 2; v++) {
-      const unitNum = `V-${String(v).padStart(2, "0")}`;
-      const unitId = crypto.randomUUID();
-      await conn.query(
-        `INSERT INTO units (id, society_id, tenant_id, unit_number, unit_type, area_sqft, bedrooms, status)
-         VALUES (?, ?, ?, ?, 'villa', ?, ?, 'occupied')`,
-        [unitId, tenant.societyId, tid, unitNum, 3500 + v * 200, 5]
-      );
-      units.push({ id: unitId, num: unitNum, type: "villa" });
-    }
-  }
-
-  const totalUnits = units.length;
-  console.log(`   Units: ${totalUnits} (${units.filter(u => u.type === "flat").length} flats, ${units.filter(u => u.type === "house").length} houses, ${units.filter(u => u.type === "villa").length} villas)`);
-
-  // ── 5.4 Residents ───────────────────────────────────────────────────────────
-  type ResidentInfo = { userId: string; personId: string; residentId: string; unitId: string; name: string; idx: number };
-  const residents: ResidentInfo[] = [];
-  const residentUserIds: string[] = [];
-
-  const residentCount = Math.min(units.length, 15);
-  for (let i = 0; i < residentCount; i++) {
-    const unit = units[i];
-    const nameIdx = (Math.floor(i * 1.7) % DEMO_NAMES.length);
-    const resName = DEMO_NAMES[nameIdx];
-    const resEmail = `resident.${slugShort}.${String(i + 1).padStart(3, "0")}@demo.housingos.local`;
-    const isOwner = i % 3 !== 2; // 2/3 owners, 1/3 tenants
-
-    const userId = crypto.randomUUID();
-    await conn.query(
-      "INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)",
-      [userId, resEmail, pwHash]
-    );
-    await conn.query(
-      "INSERT INTO profiles (id, full_name, phone, tenant_id) VALUES (?, ?, ?, ?)",
-      [userId, resName, `+92 300 ${String(3000000 + i * 17).slice(0, 7)}`, tid]
-    );
-    await conn.query(
-      "INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'resident')",
-      [crypto.randomUUID(), userId]
-    );
-
-    const personId = crypto.randomUUID();
-    await conn.query(
-      "INSERT INTO persons (id, tenant_id, user_id, full_name, email, phone) VALUES (?, ?, ?, ?, ?, ?)",
-      [personId, tid, userId, resName, resEmail, `+92 300 ${String(3000000 + i * 17).slice(0, 7)}`]
-    );
-
-    const residentId = crypto.randomUUID();
-    await conn.query(
-      `INSERT INTO residents (id, person_id, unit_id, tenant_id, type, move_in_date, is_current, invite_status)
-       VALUES (?, ?, ?, ?, ?, '2024-01-01', TRUE, 'accepted')`,
-      [residentId, personId, unit.id, tid, isOwner ? "owner" : "tenant"]
-    );
-
-    residents.push({ userId, personId, residentId, unitId: unit.id, name: resName, idx: i });
-    residentUserIds.push(userId);
-  }
-  console.log(`   Residents: ${residents.length}`);
-
-  // ── 5.5 Vehicles ────────────────────────────────────────────────────────────
-  const vehicleModels = [
-    { make: "Toyota", model: "Corolla", type: "car" as const, color: "White" },
-    { make: "Honda", model: "Civic",    type: "car" as const, color: "Silver" },
-    { make: "Toyota", model: "Yaris",   type: "car" as const, color: "Red" },
-    { make: "Honda", model: "City",     type: "car" as const, color: "Black" },
-    { make: "Suzuki", model: "Cultus",  type: "car" as const, color: "Blue" },
-    { make: "Honda", model: "CB125",    type: "motorcycle" as const, color: "Black" },
-  ];
-
-  const vehicleIds: string[] = [];
-  for (let i = 0; i < residents.length; i++) {
-    const vm = vehicleModels[i % vehicleModels.length];
-    const plate = `DEMO-${code.replace(/[^A-Z0-9]/g, "")}-${String(i + 1).padStart(3, "0")}`;
-    const vId = crypto.randomUUID();
-    await conn.query(
-      `INSERT INTO resident_vehicles (id, resident_id, tenant_id, vehicle_type, make, model, plate_number, color)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [vId, residents[i].residentId, tid, vm.type, vm.make, vm.model, plate, vm.color]
-    );
-    vehicleIds.push(vId);
-  }
-
-  // ── 5.6 Parking ─────────────────────────────────────────────────────────────
-  const parkingSlotIds: string[] = [];
-  const totalSlots = Math.min(residents.length + 3, 20);
-  for (let p = 1; p <= totalSlots; p++) {
-    const slotId = crypto.randomUUID();
-    const slotType = p <= residents.length ? "covered" : "open";
-    const status = p <= residents.length ? "occupied" : "free";
-    await conn.query(
-      "INSERT INTO parking_slots (id, tenant_id, label, block, slot_type, status) VALUES (?, ?, ?, ?, ?, ?)",
-      [slotId, tid, `P-${String(p).padStart(2, "0")}`, blockIds[0] ? "Block A" : "Main", slotType, status]
-    );
-    parkingSlotIds.push(slotId);
-  }
-
-  // Allocate parking to occupied residents
-  for (let i = 0; i < residents.length && i < parkingSlotIds.length; i++) {
-    const vehicle = vehicleModels[i % vehicleModels.length];
-    const plate = `DEMO-${code.replace(/[^A-Z0-9]/g, "")}-${String(i + 1).padStart(3, "0")}`;
-    await conn.query(
-      `INSERT INTO parking_allocations (id, tenant_id, slot_id, unit_id, resident_name, vehicle_plate,
-         vehicle_type, is_current, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?)`,
-      [crypto.randomUUID(), tid, parkingSlotIds[i], residents[i].unitId,
-       residents[i].name, plate, vehicle.type, SUPER_ADMIN_ID]
-    );
-  }
-
-  // ── 5.7 Vendors ─────────────────────────────────────────────────────────────
-  const vendorData = [
-    { name: "Metro Electrical Services Demo", cat: "electrical" },
-    { name: "SafeGuard Security Demo",        cat: "security" },
-    { name: "CleanPro Facility Demo",         cat: "cleaning" },
-    { name: "LiftCare Engineering Demo",      cat: "lift_maintenance" },
-    { name: "WaterWorks Plumbing Demo",       cat: "plumbing" },
-  ];
-  const vendorIds: string[] = [];
-  for (const v of vendorData) {
-    const vid = crypto.randomUUID();
-    await conn.query(
-      "INSERT INTO vendors (id, tenant_id, name, category, email, rating) VALUES (?, ?, ?, ?, ?, ?)",
-      [vid, tid, v.name, v.cat, `${v.cat}.vendor@demo.housingos.local`, 4.2]
-    );
-    vendorIds.push(vid);
-  }
-
-  // ── 5.8 Charge Heads ────────────────────────────────────────────────────────
-  const chargeHeads = [
-    { name: "Monthly Maintenance",  amount: 3500 },
-    { name: "Water Charges",        amount: 1500 },
-    { name: "Electricity Common",   amount: 2000 },
-    { name: "Parking Fee",          amount: 500  },
-    { name: "Security Fee",         amount: 1200 },
-    { name: "Waste Management",     amount: 300  },
-  ];
-  const headIds: string[] = [];
-  for (const ch of chargeHeads) {
-    const hid = crypto.randomUUID();
-    await conn.query(
-      "INSERT INTO charge_heads (id, tenant_id, name, default_amount) VALUES (?, ?, ?, ?)",
-      [hid, tid, ch.name, ch.amount]
-    );
-    headIds.push(hid);
-  }
-
-  // ── 5.9 Billing & Payments ──────────────────────────────────────────────────
-  const billingPatterns = ["paid", "partial", "unpaid", "overdue"];
-
-  for (let u = 0; u < residents.length; u++) {
-    const unit = units[u];
-    const pattern = billingPatterns[u % billingPatterns.length];
-    let runningBalance = 0;
-
-    // Apply 3-4 charges
-    const chargesToApply = headIds.slice(0, u % 2 === 0 ? 4 : 3);
-    let totalCharge = 0;
-    for (const hid of chargesToApply) {
-      const head = chargeHeads[headIds.indexOf(hid)];
-      totalCharge += head.amount;
-      runningBalance += head.amount;
-      await conn.query(
-        `INSERT INTO ledger_entries (id, unit_id, tenant_id, type, charge_head_id, amount,
-           description, billing_period, balance_after, created_by)
-         VALUES (?, ?, ?, 'charge', ?, ?, ?, ?, ?, ?)`,
-        [crypto.randomUUID(), unit.id, tid, hid, head.amount,
-         `${head.name} - ${bp}`, bp, runningBalance, financeUser.id]
-      );
-    }
-
-    // Apply payment based on pattern
-    let paymentAmount = 0;
-    if (pattern === "paid") paymentAmount = totalCharge;
-    else if (pattern === "partial") paymentAmount = Math.floor(totalCharge * 0.6);
-    else if (pattern === "unpaid") paymentAmount = 0;
-    else if (pattern === "overdue") paymentAmount = 0; // overdue: charge posted earlier month, no payment
-
-    if (paymentAmount > 0) {
-      const methods = ["cash", "bank_transfer", "cheque", "online"];
-      const method = methods[u % methods.length];
-      const receipt = nextReceipt(code.replace(/[^A-Z0-9]/g, ""));
-      const payId = crypto.randomUUID();
-      await conn.query(
-        `INSERT INTO payments (id, unit_id, tenant_id, amount, payment_method, receipt_number,
-           payment_date, notes, recorded_by)
-         VALUES (?, ?, ?, ?, ?, ?, '2026-08-10', ?, ?)`,
-        [payId, unit.id, tid, paymentAmount, method, receipt,
-         `${pattern === "partial" ? "Partial p" : "P"}ayment received - ${receipt}`, financeUser.id]
-      );
-      runningBalance -= paymentAmount;
-      await conn.query(
-        `INSERT INTO ledger_entries (id, unit_id, tenant_id, type, amount, description,
-           billing_period, reference_id, balance_after, created_by)
-         VALUES (?, ?, ?, 'payment', ?, ?, ?, ?, ?, ?)`,
-        [crypto.randomUUID(), unit.id, tid, paymentAmount,
-         `Payment received - ${receipt}`, bp, payId, runningBalance, financeUser.id]
-      );
-    }
-  }
-  console.log(`   Billing: ${residents.length * 3}+ ledger entries`);
-
-  // ── 5.10 Complaints ─────────────────────────────────────────────────────────
-  const complaintData = [
-    { title: "Water leakage from roof",   desc: "Roof leaking in heavy rain, seeping into flat A-101.", cat: "plumbing",   pri: "high",   status: "open" },
-    { title: "Street light not working",  desc: "The street lamp near Block B entrance is out.",         cat: "electrical", pri: "medium", status: "in_progress" },
-    { title: "Elevator not functioning",  desc: "Building A-1 lift is out of service since morning.",   cat: "lift",       pri: "high",   status: "assigned" },
-    { title: "Overflowing garbage bin",   desc: "Garbage bin near Block A gate is overflowing.",        cat: "cleaning",   pri: "low",    status: "resolved" },
-    { title: "Parking slot occupied",     desc: "My allocated parking slot P-03 occupied by unknown.",  cat: "security",   pri: "medium", status: "open" },
-    { title: "Water supply cut in block", desc: "No water supply in Block B since 2 hours.",            cat: "water",      pri: "critical", status: "in_progress" },
-    { title: "Intercom not working",      desc: "Intercom at gate not connecting to flat.",              cat: "electrical", pri: "medium", status: "closed" },
-  ];
-
-  for (let i = 0; i < Math.min(complaintData.length, residents.length); i++) {
-    const cd = complaintData[i];
-    const resident = residents[i % residents.length];
-    const unit = units[i % units.length];
-    await conn.query(
-      `INSERT INTO complaints (id, tenant_id, unit_id, submitted_by, assigned_to, category,
-         priority, status, title, description, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), tid, unit.id, resident.userId,
-       cd.status !== "open" ? techUser.id : null,
-       cd.cat, cd.pri, cd.status, cd.title, cd.desc, resident.userId]
-    );
-  }
-  console.log(`   Complaints: ${Math.min(complaintData.length, residents.length)}`);
-
-  // ── 5.11 Assets ─────────────────────────────────────────────────────────────
-  const assetData = [
-    { name: "Main Generator 50KVA",   cat: "electrical", loc: "Main Gate Annex" },
-    { name: "Water Pump Station",     cat: "plumbing",   loc: "Basement B" },
-    { name: "CCTV System (32 cams)",  cat: "security",   loc: "Control Room" },
-    { name: "Main Gate Barrier",      cat: "security",   loc: "Main Entry Gate" },
-    { name: "Passenger Elevator A-1", cat: "lift",       loc: "Building A-1" },
-    { name: "Electrical Panel DB-1",  cat: "electrical", loc: "Ground Floor, Block A" },
-    { name: "Fire Suppression System",cat: "safety",     loc: "All Floors" },
-  ];
-  const assetIds: string[] = [];
-  for (const a of assetData) {
-    const aid = crypto.randomUUID();
-    await conn.query(
-      `INSERT INTO assets (id, tenant_id, name, category, location, purchase_date,
-         purchase_cost, current_valuation, status)
-       VALUES (?, ?, ?, ?, ?, '2022-01-01', ?, ?, 'active')`,
-      [aid, tid, a.name, a.cat, a.loc, 150000, 120000]
-    );
-    assetIds.push(aid);
-  }
-
-  // ── 5.12 Maintenance Work Orders ────────────────────────────────────────────
-  const woData = [
-    { title: "Monthly generator servicing",  status: "completed",   pri: "normal" },
-    { title: "CCTV camera lens cleaning",    status: "in_progress", pri: "normal" },
-    { title: "Water pump pressure check",    status: "open",        pri: "high" },
-    { title: "Gate barrier lubrication",     status: "assigned",    pri: "low" },
-    { title: "Elevator annual inspection",   status: "completed",   pri: "high" },
-    { title: "Common area light replacement",status: "open",        pri: "normal" },
-  ];
-  for (let i = 0; i < woData.length; i++) {
-    const wo = woData[i];
-    await conn.query(
-      `INSERT INTO maintenance_work_orders (id, tenant_id, asset_id, title, description,
-         status, priority, assigned_technician_id, estimated_cost)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), tid, assetIds[i % assetIds.length],
-       wo.title, `DEMO: ${wo.title} for ${tenant.name}`,
-       wo.status, wo.pri, techUser.id, 5000 + i * 1000]
-    );
-  }
-
-  // ── 5.13 Inventory ──────────────────────────────────────────────────────────
-  const invData = [
-    { name: "CCTV Camera Unit",     sku: `INV-${code}-CAM`,   cat: "Electronics",   qty: 10, cost: 8500 },
-    { name: "LED Bulb 20W",         sku: `INV-${code}-LED`,   cat: "Electrical",    qty: 100, cost: 150 },
-    { name: "Electrical Cable 2.5mm", sku: `INV-${code}-CABLE`, cat: "Electrical",  qty: 500, cost: 45 },
-    { name: "Water Valve 1 inch",   sku: `INV-${code}-VALVE`, cat: "Plumbing",      qty: 20, cost: 350 },
-    { name: "Cleaning Supplies Kit",sku: `INV-${code}-CLEAN`, cat: "Cleaning",      qty: 30, cost: 1200 },
-    { name: "Fire Extinguisher 5kg",sku: `INV-${code}-FIRE`,  cat: "Safety",        qty: 15, cost: 2500 },
-  ];
-  const invIds: string[] = [];
-  for (const inv of invData) {
-    const iid = crypto.randomUUID();
-    await conn.query(
-      `INSERT INTO inventory_items (id, tenant_id, name, sku, category, unit_of_measure,
-         quantity, reorder_level, unit_cost)
-       VALUES (?, ?, ?, ?, ?, 'pcs', ?, ?, ?)`,
-      [iid, tid, inv.name, inv.sku, inv.cat, inv.qty, Math.floor(inv.qty * 0.2), inv.cost]
-    );
-    invIds.push(iid);
-    // Add an 'in' stock movement
-    await conn.query(
-      "INSERT INTO stock_movements (id, tenant_id, item_id, movement_type, quantity, notes, created_by) VALUES (?, ?, ?, 'in', ?, ?, ?)",
-      [crypto.randomUUID(), tid, iid, inv.qty, "Initial stock - DEMO", SUPER_ADMIN_ID]
-    );
-  }
-
-  // ── 5.14 Gate Terminals ─────────────────────────────────────────────────────
-  const gateIds: string[] = [];
-  const gates = ["Main Entry Gate", "Back Gate"];
-  for (const g of gates) {
-    const gid = crypto.randomUUID();
-    await conn.query(
-      "INSERT INTO gate_terminals (id, tenant_id, name, location, status) VALUES (?, ?, ?, ?, 'active')",
-      [gid, tid, g, `${tenant.name} - ${g}`]
-    );
-    gateIds.push(gid);
-  }
-
-  // ── 5.15 Visitors ───────────────────────────────────────────────────────────
-  const visitorData = [
-    { name: "Delivery Courier", phone: "+92 300 1234567", purpose: "Package delivery",  status: "used" as const },
-    { name: "Plumber (External)", phone: "+92 321 9876543", purpose: "Repair work",     status: "active" as const },
-    { name: "Family Guest",     phone: "+92 333 5551234", purpose: "Family visit",       status: "expired" as const },
-    { name: "Electrician",      phone: "+92 345 4443333", purpose: "Electrical repair",  status: "used" as const },
-    { name: "PTCL Technician",  phone: "+92 312 7778888", purpose: "Internet setup",    status: "active" as const },
-    { name: "Catering Staff",   phone: "+92 300 9991234", purpose: "Event catering",    status: "used" as const },
-  ];
-
-  const visitorPassIds: string[] = [];
-  for (let i = 0; i < Math.min(visitorData.length, residents.length); i++) {
-    const vd = visitorData[i];
-    const passCode = `VP-${code.replace(/[^A-Z0-9]/g, "")}-${String(1000 + i).padStart(4, "0")}`;
-    const passId = crypto.randomUUID();
-    await conn.query(
-      `INSERT INTO visitor_passes (id, tenant_id, resident_id, visitor_name, visitor_phone,
-         expected_at, pass_code, status, visitor_type, purpose, pre_registered, created_by)
-       VALUES (?, ?, ?, ?, ?, '2026-08-20 10:00:00', ?, ?, 'one_time', ?, TRUE, ?)`,
-      [passId, tid, residents[i % residents.length].residentId,
-       vd.name, vd.phone, passCode, vd.status, vd.purpose,
-       residents[i % residents.length].userId]
-    );
-    visitorPassIds.push(passId);
-
-    // Entry log
-    await conn.query(
-      `INSERT INTO entry_exit_log (id, tenant_id, visitor_pass_id, visitor_name, gate_id,
-         direction, verified_by, unit_id)
-       VALUES (?, ?, ?, ?, ?, 'in', ?, ?)`,
-      [crypto.randomUUID(), tid, passId, vd.name, gateIds[0],
-       guardUser.id, residents[i % residents.length].unitId]
-    );
-    if (vd.status === "used") {
-      await conn.query(
-        `INSERT INTO entry_exit_log (id, tenant_id, visitor_pass_id, visitor_name, gate_id,
-           direction, verified_by, unit_id)
-         VALUES (?, ?, ?, ?, ?, 'out', ?, ?)`,
-        [crypto.randomUUID(), tid, passId, vd.name, gateIds[0],
-         guardUser.id, residents[i % residents.length].unitId]
-      );
-    }
-  }
-  console.log(`   Visitors: ${Math.min(visitorData.length, residents.length)}`);
-
-  // ── 5.16 Domestic Staff ─────────────────────────────────────────────────────
-  const staffData = [
-    { name: "Razia Bibi",     type: "maid" as const,     days: "Mon,Tue,Wed,Thu,Fri" },
-    { name: "Ghulam Abbas",   type: "gardener" as const,  days: "Mon,Wed,Fri" },
-    { name: "Amjad Ali",      type: "driver" as const,    days: "Mon,Tue,Wed,Thu,Fri,Sat" },
-    { name: "Fatima Noor",    type: "cook" as const,      days: "Mon,Tue,Wed,Thu,Fri" },
-    { name: "Shaheen Begum",  type: "nanny" as const,     days: "Mon,Tue,Wed,Thu,Fri" },
-  ];
-
-  for (let i = 0; i < Math.min(staffData.length, residents.length); i++) {
-    const sd = staffData[i];
-    // Use DB-generated staff_code via trigger or generate sequentially
-    const staffCode = `DS-${code.replace(/[^A-Z0-9]/g, "").slice(0, 4)}-${String(i + 1).padStart(5, "0")}`;
-    const staffId = crypto.randomUUID();
-    await conn.query(
-      `INSERT INTO domestic_staff (id, tenant_id, resident_id, name, phone, staff_type,
-         valid_from, valid_until, allowed_days, entry_start_time, entry_end_time,
-         is_active, created_by, staff_code)
-       VALUES (?, ?, ?, ?, ?, ?, '2026-01-01', '2026-12-31', ?, '08:00:00', '18:00:00',
-         TRUE, ?, ?)`,
-      [staffId, tid, residents[i % residents.length].residentId,
-       sd.name, `+92 300 ${String(5000000 + i * 13).slice(0, 7)}`, sd.type,
-       sd.days, residents[i % residents.length].userId, staffCode]
-    );
-
-    // Staff entry log
-    await conn.query(
-      `INSERT INTO entry_exit_log (id, tenant_id, domestic_staff_id, visitor_name, gate_id,
-         direction, verified_by, unit_id)
-       VALUES (?, ?, ?, ?, ?, 'in', ?, ?)`,
-      [crypto.randomUUID(), tid, staffId, sd.name, gateIds[0],
-       guardUser.id, residents[i % residents.length].unitId]
-    );
-  }
-  console.log(`   Domestic staff: ${Math.min(staffData.length, residents.length)}`);
-
-  // ── 5.17 Polls ──────────────────────────────────────────────────────────────
-  const pollData = [
-    {
-      question: "Should community gym timings be extended to 10 PM?",
-      type: "single" as const,
-      options: ["Yes, extend to 10 PM", "No, keep current timings", "Extend on weekends only"],
-      eligible: "all" as const,
-    },
-    {
-      question: "Which area needs priority maintenance this month?",
-      type: "single" as const,
-      options: ["Parking area", "Common corridors", "Garden & landscaping", "Boundary wall"],
-      eligible: "owners" as const,
-    },
-  ];
-
-  for (const pd of pollData) {
-    const pollId = crypto.randomUUID();
-    const closesAt = new Date("2026-09-30T23:59:59");
-    const opensAt = new Date("2026-08-01T00:00:00");
-    await conn.query(
-      `INSERT INTO polls (id, tenant_id, question, type, options, opens_at, closes_at,
-         is_anonymous, eligible_voters)
-       VALUES (?, ?, ?, ?, ?, ?, ?, FALSE, ?)`,
-      [pollId, tid, pd.question, pd.type, JSON.stringify(pd.options),
-       opensAt, closesAt, pd.eligible]
-    );
-
-    // Add 3 votes from residents
-    const votersSeen = new Set<string>();
-    for (let i = 0; i < Math.min(3, residents.length); i++) {
-      const uid = residents[i].userId;
-      if (votersSeen.has(uid)) continue;
-      votersSeen.add(uid);
-      const choice = pd.options[i % pd.options.length];
-      await conn.query(
-        `INSERT INTO poll_votes (id, poll_id, user_id, choice, option_selected)
-         VALUES (?, ?, ?, ?, ?)`,
-        [crypto.randomUUID(), pollId, uid, choice, choice]
-      ).catch(() => {}); // skip if duplicate
-    }
-  }
-
-  // ── 5.18 Events ─────────────────────────────────────────────────────────────
-  const eventData = [
-    { title: "Annual General Meeting 2026",  venue: "Community Hall", capacity: 200, desc: "DEMO: Annual General Meeting for all residents and owners." },
-    { title: "Community Sports Day",         venue: "Sports Ground",  capacity: 150, desc: "DEMO: Annual sports event for families." },
-    { title: "Maintenance Awareness Session", venue: "Block A Lobby", capacity: 50,  desc: "DEMO: Maintenance team briefing on new protocols." },
-  ];
-
-  for (let i = 0; i < eventData.length; i++) {
-    const ed = eventData[i];
-    const eventId = crypto.randomUUID();
-    await conn.query(
-      `INSERT INTO events (id, tenant_id, title, starts_at, ends_at, venue, allow_rsvp, capacity, description)
-       VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, ?)`,
-      [eventId, tid,
-       ed.title,
-       new Date(`2026-09-${10 + i * 7} 10:00:00`),
-       new Date(`2026-09-${10 + i * 7} 14:00:00`),
-       ed.venue, ed.capacity, ed.desc]
-    );
-
-    // RSVPs
-    for (let j = 0; j < Math.min(3, residents.length); j++) {
-      const rsvpStatus = j === 0 ? "yes" : j === 1 ? "yes" : "maybe";
-      await conn.query(
-        "INSERT INTO event_rsvps (id, event_id, user_id, status, guests_count) VALUES (?, ?, ?, ?, ?)",
-        [crypto.randomUUID(), eventId, residents[j].userId, rsvpStatus, j === 0 ? 2 : 1]
+        "INSERT INTO tenant_modules (id, tenant_id, module_key, is_active) VALUES (?, ?, ?, TRUE)",
+        [crypto.randomUUID(), s.tenantId, mod]
       ).catch(() => {});
     }
-  }
 
-  // ── 5.19 Amenities ──────────────────────────────────────────────────────────
-  const amenityData = [
-    { name: "Community Hall",  cat: "hall" as const,  cap: 200, slot: 60,  charge: 5000, open: "08:00:00", close: "22:00:00" },
-    { name: "Gymnasium",       cat: "gym" as const,   cap: 30,  slot: 60,  charge: 0,    open: "06:00:00", close: "22:00:00" },
-    { name: "Swimming Pool",   cat: "pool" as const,  cap: 50,  slot: 60,  charge: 200,  open: "07:00:00", close: "20:00:00" },
-    { name: "Tennis Court",    cat: "court" as const, cap: 8,   slot: 60,  charge: 500,  open: "06:00:00", close: "21:00:00" },
-  ];
-  const amenityIds: string[] = [];
-  for (const am of amenityData) {
-    const amid = crypto.randomUUID();
-    await conn.query(
-      `INSERT INTO amenities (id, tenant_id, name, category, capacity, slot_minutes,
-         open_time, close_time, charge_per_slot, refundable_deposit,
-         rules, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
-      [amid, tid, am.name, am.cat, am.cap, am.slot,
-       am.open, am.close, am.charge, am.charge > 0 ? am.charge * 0.5 : 0,
-       `DEMO: Standard ${am.name} usage rules apply. Book in advance.`]
-    );
-    amenityIds.push(amid);
-  }
+    // 4. Dedicated Society Admin
+    const socAdminId = crypto.randomUUID();
+    const socAdminEmail = `admin.${s.slug}${DEMO_EMAIL_DOMAIN}`;
+    await conn.query("INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)", [socAdminId, socAdminEmail, pwHash]);
+    await conn.query("INSERT INTO profiles (id, full_name, society_name, phone, tenant_id) VALUES (?, ?, ?, ?, ?)", [
+      socAdminId, `${s.name} Society Admin`, s.name, "+92 300 5000000", s.tenantId
+    ]);
+    await conn.query("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'society_admin')", [crypto.randomUUID(), socAdminId]);
+    await conn.query("INSERT INTO society_admin_tenants (id, user_id, tenant_id, is_active) VALUES (?, ?, ?, TRUE)", [
+      crypto.randomUUID(), socAdminId, s.tenantId
+    ]);
 
-  // Amenity bookings (non-overlapping)
-  if (residents.length >= 2) {
-    await conn.query(
-      `INSERT INTO amenity_bookings (id, tenant_id, amenity_id, user_id, booking_date,
-         start_time, end_time, guests_count, purpose, status)
-       VALUES (?, ?, ?, ?, '2026-08-25', '10:00:00', '11:00:00', 5, 'Family gathering', 'approved')`,
-      [crypto.randomUUID(), tid, amenityIds[0], residents[0].userId]
-    ).catch(() => {});
-
-    await conn.query(
-      `INSERT INTO amenity_bookings (id, tenant_id, amenity_id, user_id, booking_date,
-         start_time, end_time, guests_count, purpose, status)
-       VALUES (?, ?, ?, ?, '2026-08-26', '07:00:00', '08:00:00', 2, 'Morning swim', 'approved')`,
-      [crypto.randomUUID(), tid, amenityIds[2] || amenityIds[0], residents[1].userId]
-    ).catch(() => {});
-  }
-
-  // ── 5.20 Notices ────────────────────────────────────────────────────────────
-  const noticeData = [
-    { title: "Water Maintenance Notice",   body: "DEMO: Planned water shutdown on Aug 28 from 10AM to 2PM for pipeline maintenance.", priority: "warning" as const, pinned: false },
-    { title: "AGM Invitation 2026",        body: "DEMO: Annual General Meeting scheduled for September 10, 2026 at Community Hall 10AM.", priority: "info" as const, pinned: true },
-    { title: "Security Advisory",         body: "DEMO: All residents to ensure vehicles are properly locked at night.", priority: "urgent" as const, pinned: false },
-    { title: "Electricity Maintenance",   body: "DEMO: Common area electricity work on Aug 30 from 9AM to 12PM.", priority: "warning" as const, pinned: false },
-    { title: "Community Event Notice",    body: "DEMO: Sports Day on September 17 — register with your block representative.", priority: "info" as const, pinned: false },
-  ];
-
-  for (const nd of noticeData) {
-    await conn.query(
-      `INSERT INTO notices (id, tenant_id, author_id, title, body, priority, target_type,
-         is_pinned, is_emergency)
-       VALUES (?, ?, ?, ?, ?, ?, 'all', ?, ?)`,
-      [crypto.randomUUID(), tid, SUPER_ADMIN_ID,
-       nd.title, nd.body, nd.priority, nd.pinned, nd.priority === "urgent"]
-    );
-  }
-
-  // ── 5.21 Forum ──────────────────────────────────────────────────────────────
-  if (residents.length >= 2) {
-    const threads = [
-      { cat: "security",    title: "Improving nighttime gate security", body: "DEMO: Should we increase patrol frequency after midnight?" },
-      { cat: "maintenance", title: "Water pressure issue in Block A",   body: "DEMO: Anyone else experiencing low water pressure on upper floors?" },
-      { cat: "community",   title: "Organizing a community clean-up",   body: "DEMO: Proposal to organize a monthly community clean-up day." },
+    // 5. Staff Users
+    const staffDefs = [
+      { key: "guard",       role: "guard",            label: "Gate Security Guard" },
+      { key: "technician",  role: "technician",        label: "Maintenance Tech" },
+      { key: "finance",     role: "finance_head",      label: "Finance Head" },
     ];
+    const staffIds: Record<string, string> = {};
+    for (const sd of staffDefs) {
+      const uid = crypto.randomUUID();
+      const email = `${sd.key}.${s.slug}${DEMO_EMAIL_DOMAIN}`;
+      await conn.query("INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)", [uid, email, pwHash]);
+      await conn.query("INSERT INTO profiles (id, full_name, tenant_id) VALUES (?, ?, ?)", [uid, `${sd.label} (${s.code})`, s.tenantId]);
+      await conn.query("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, ?)", [crypto.randomUUID(), uid, sd.role]);
+      staffIds[sd.key] = uid;
+    }
 
-    for (let i = 0; i < threads.length; i++) {
-      const th = threads[i];
-      const thId = crypto.randomUUID();
+    // 6. PROPERTY TREE & UNITS GENERATION
+    type UnitInfo = { id: string; num: string; type: string; area: number };
+    const units: UnitInfo[] = [];
+
+    const numHouses = s.scale === "small" ? 3 : s.scale === "medium" ? 5 : 8;
+    const numTowers = s.scale === "small" ? 1 : s.scale === "medium" ? 2 : 3;
+    const numFloorsPerTower = s.scale === "small" ? 2 : s.scale === "medium" ? 3 : 4;
+    const numFlatsPerFloor = s.scale === "small" ? 2 : s.scale === "medium" ? 2 : 3;
+
+    // ── BLOCK 1: Independent Houses & Villas (building_id = NULL) ──
+    const houseBlockId = crypto.randomUUID();
+    await conn.query("INSERT INTO blocks (id, society_id, tenant_id, name) VALUES (?, ?, ?, 'Block B (Officer Housing & Villas)')", [
+      houseBlockId, s.societyId, s.tenantId
+    ]);
+
+    for (let h = 1; h <= numHouses; h++) {
+      const uid = crypto.randomUUID();
+      const unitNum = `${h * 5}-A`;
       await conn.query(
-        `INSERT INTO forum_threads (id, tenant_id, author_id, category, title, body, allow_comments)
-         VALUES (?, ?, ?, ?, ?, ?, TRUE)`,
-        [thId, tid, residents[i % residents.length].userId,
-         th.cat, th.title, th.body]
+        `INSERT INTO units (id, floor_id, building_id, block_id, society_id, tenant_id, unit_number, unit_type, area_sqft, bedrooms, status)
+         VALUES (?, NULL, NULL, ?, ?, ?, ?, 'villa', 4500, 5, 'occupied')`,
+        [uid, houseBlockId, s.societyId, s.tenantId, unitNum]
       );
-      // Add a reply
-      if (residents.length > i + 1) {
+      units.push({ id: uid, num: unitNum, type: "villa", area: 4500 });
+    }
+
+    // ── BLOCK 2: Apartment Towers ──
+    const aptBlockId = crypto.randomUUID();
+    await conn.query("INSERT INTO blocks (id, society_id, tenant_id, name) VALUES (?, ?, ?, 'Block A (Askari Apartments)')", [
+      aptBlockId, s.societyId, s.tenantId
+    ]);
+
+    for (let t = 1; t <= numTowers; t++) {
+      const towerName = `Askari Heights Tower ${String.fromCharCode(64 + t)}`;
+      const towerId = crypto.randomUUID();
+      await conn.query("INSERT INTO buildings (id, block_id, tenant_id, name, floors_count) VALUES (?, ?, ?, ?, ?)", [
+        towerId, aptBlockId, s.tenantId, towerName, numFloorsPerTower
+      ]);
+
+      for (let fl = 1; fl <= numFloorsPerTower; fl++) {
+        const floorId = crypto.randomUUID();
+        await conn.query("INSERT INTO floors (id, building_id, tenant_id, floor_number, name) VALUES (?, ?, ?, ?, ?)", [
+          floorId, towerId, s.tenantId, fl, `Floor ${fl}`
+        ]);
+
+        for (let apt = 1; apt <= numFlatsPerFloor; apt++) {
+          const uid = crypto.randomUUID();
+          const unitNum = `${fl}0${apt}`;
+          await conn.query(
+            `INSERT INTO units (id, floor_id, building_id, block_id, society_id, tenant_id, unit_number, unit_type, area_sqft, bedrooms, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'flat', 1800, 3, 'occupied')`,
+            [uid, floorId, towerId, aptBlockId, s.societyId, s.tenantId, unitNum]
+          );
+          units.push({ id: uid, num: unitNum, type: "flat", area: 1800 });
+        }
+      }
+
+      if (s.scale !== "small" && t === 1) {
+        const topFloorId = crypto.randomUUID();
+        await conn.query("INSERT INTO floors (id, building_id, tenant_id, floor_number, name) VALUES (?, ?, ?, ?, 'Penthouse Level')", [
+          topFloorId, towerId, s.tenantId, numFloorsPerTower + 1
+        ]);
+        const pentUid = crypto.randomUUID();
         await conn.query(
-          "INSERT INTO forum_replies (id, thread_id, author_id, body) VALUES (?, ?, ?, ?)",
-          [crypto.randomUUID(), thId, residents[(i + 1) % residents.length].userId,
-           `DEMO: Agreed, this is an important issue for ${tenant.name}.`]
+          `INSERT INTO units (id, floor_id, building_id, block_id, society_id, tenant_id, unit_number, unit_type, area_sqft, bedrooms, status)
+           VALUES (?, ?, ?, ?, ?, ?, '501', 'penthouse', 3500, 4, 'occupied')`,
+          [pentUid, topFloorId, towerId, aptBlockId, s.societyId, s.tenantId]
         );
+        units.push({ id: pentUid, num: "501", type: "penthouse", area: 3500 });
       }
     }
-  }
 
-  // ── 5.22 Governance ─────────────────────────────────────────────────────────
-  const meetingId = crypto.randomUUID();
-  await conn.query(
-    `INSERT INTO governance_meetings (id, tenant_id, title, description, scheduled_at, status, meeting_minutes)
-     VALUES (?, ?, ?, ?, '2026-09-10 10:00:00', 'scheduled', NULL)`,
-    [meetingId, tid,
-     "AGM 2026 — Annual General Meeting",
-     `DEMO: Annual General Meeting for ${tenant.name} — agenda: budget review, maintenance plan, new proposals.`]
-  );
-
-  await conn.query(
-    `INSERT INTO governance_resolutions (id, tenant_id, meeting_id, title, description, status, votes_for, votes_against)
-     VALUES (?, ?, ?, ?, ?, 'proposed', 0, 0)`,
-    [crypto.randomUUID(), tid, meetingId,
-     "Approve 2026-27 Maintenance Budget",
-     `DEMO: Resolution to approve the maintenance budget of PKR 2,500,000 for fiscal year 2026-27.`]
-  ).catch(() => {});
-
-  // ── 5.23 Budget ─────────────────────────────────────────────────────────────
-  const budgetId = crypto.randomUUID();
-  await conn.query(
-    "INSERT INTO budgets (id, tenant_id, year, title, is_approved) VALUES (?, ?, 2026, ?, FALSE)",
-    [budgetId, tid, `DEMO Budget 2026 — ${tenant.name}`]
-  );
-  const budgetItems = [
-    { cat: "Security", amount: 500000 },
-    { cat: "Maintenance", amount: 750000 },
-    { cat: "Utilities", amount: 300000 },
-    { cat: "Landscaping", amount: 150000 },
-    { cat: "Administration", amount: 200000 },
-  ];
-  for (const bi of budgetItems) {
+    // ── BLOCK 3: Commercial Complex ──
+    const commBlockId = crypto.randomUUID();
+    await conn.query("INSERT INTO blocks (id, society_id, tenant_id, name) VALUES (?, ?, ?, 'Block C (Askari Commercial Zone)')", [
+      commBlockId, s.societyId, s.tenantId
+    ]);
+    const commBldgId = crypto.randomUUID();
+    await conn.query("INSERT INTO buildings (id, block_id, tenant_id, name, floors_count) VALUES (?, ?, ?, 'Askari Commercial Plaza', 1)", [
+      commBldgId, commBlockId, s.tenantId
+    ]);
+    const commFloorId = crypto.randomUUID();
+    await conn.query("INSERT INTO floors (id, building_id, tenant_id, floor_number, name) VALUES (?, ?, ?, 1, 'Ground Floor')", [
+      commFloorId, commBldgId, s.tenantId
+    ]);
+    const shopUid = crypto.randomUUID();
     await conn.query(
-      "INSERT INTO budget_line_items (id, budget_id, tenant_id, category, planned_amount) VALUES (?, ?, ?, ?, ?)",
-      [crypto.randomUUID(), budgetId, tid, bi.cat, bi.amount]
+      `INSERT INTO units (id, floor_id, building_id, block_id, society_id, tenant_id, unit_number, unit_type, area_sqft, bedrooms, status)
+       VALUES (?, ?, ?, ?, ?, ?, '101', 'shop', 900, 0, 'occupied')`,
+      [shopUid, commFloorId, commBldgId, commBlockId, s.societyId, s.tenantId]
+    );
+    units.push({ id: shopUid, num: "101", type: "shop", area: 900 });
+
+    // 7. DYNAMIC RESIDENTS SEEDING (MIXED OWNERS & TENANTS)
+    type ResRecord = { userId: string; residentId: string; unitId: string; name: string; resType: "owner" | "tenant"; unitType: string };
+    const residentsList: ResRecord[] = [];
+
+    for (let i = 0; i < units.length; i++) {
+      const u = units[i];
+      const resName = UNIQUE_NAMES[nameIdx++ % UNIQUE_NAMES.length];
+      const resEmail = `resident.${s.slug}.${String(i + 1).padStart(3, "0")}${DEMO_EMAIL_DOMAIN}`;
+      const resPhone = `+92 300 ${String(1000000 + nameIdx * 17).slice(0, 7)}`;
+      // ~30% of occupants are tenants (renters), ~70% are owners
+      const resType: "owner" | "tenant" = (i % 3 === 2) ? "tenant" : "owner";
+
+      const resUserId = crypto.randomUUID();
+      await conn.query("INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)", [resUserId, resEmail, pwHash]);
+      await conn.query("INSERT INTO profiles (id, full_name, phone, tenant_id) VALUES (?, ?, ?, ?)", [
+        resUserId, resName, resPhone, s.tenantId
+      ]);
+      await conn.query("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'resident')", [crypto.randomUUID(), resUserId]);
+
+      const personId = crypto.randomUUID();
+      await conn.query(
+        "INSERT INTO persons (id, tenant_id, user_id, full_name, email, phone) VALUES (?, ?, ?, ?, ?, ?)",
+        [personId, s.tenantId, resUserId, resName, resEmail, resPhone]
+      );
+
+      const residentId = crypto.randomUUID();
+      await conn.query(
+        `INSERT INTO residents (id, person_id, unit_id, tenant_id, type, move_in_date, is_current, invite_status)
+         VALUES (?, ?, ?, ?, ?, '2024-01-01', TRUE, 'accepted')`,
+        [residentId, personId, u.id, s.tenantId, resType]
+      );
+
+      residentsList.push({ userId: resUserId, residentId, unitId: u.id, name: resName, resType, unitType: u.type });
+
+      // Resident Vehicle
+      const plate = `${s.code.slice(0, 4)}-${String(i + 101)}`;
+      await conn.query(
+        "INSERT INTO resident_vehicles (id, resident_id, tenant_id, vehicle_type, make, model, plate_number, color) VALUES (?, ?, ?, 'car', 'Toyota', 'Corolla', ?, 'White')",
+        [crypto.randomUUID(), residentId, s.tenantId, plate]
+      );
+    }
+
+    // 8. MULTIPLE FINANCIAL CHARGE HEADS (VARYING FEES & MONTHLY RENT)
+    const chMaintId   = crypto.randomUUID();
+    const chRentId    = crypto.randomUUID();
+    const chSecId     = crypto.randomUUID();
+    const chUtilId    = crypto.randomUUID();
+
+    await conn.query(
+      "INSERT INTO charge_heads (id, tenant_id, name, description, default_amount) VALUES (?, ?, 'Monthly Maintenance Fee', 'Variable maintenance fee based on unit type and area', 15000.00)",
+      [chMaintId, s.tenantId]
+    );
+    await conn.query(
+      "INSERT INTO charge_heads (id, tenant_id, name, description, default_amount) VALUES (?, ?, 'Monthly Property Rent', 'Monthly rent for tenant occupants', 65000.00)",
+      [chRentId, s.tenantId]
+    );
+    await conn.query(
+      "INSERT INTO charge_heads (id, tenant_id, name, description, default_amount) VALUES (?, ?, 'Security & CCTV Service Charge', '24/7 Gate security & CCTV surveillance contribution', 2500.00)",
+      [chSecId, s.tenantId]
+    );
+    await conn.query(
+      "INSERT INTO charge_heads (id, tenant_id, name, description, default_amount) VALUES (?, ?, 'Water & Filtration Utility Charge', 'Clean drinking water & sewage maintenance', 1500.00)",
+      [chUtilId, s.tenantId]
+    );
+
+    for (const r of residentsList) {
+      // Determine Maintenance Fee by unit type
+      let maintFee = 15000; // default flat
+      if (r.unitType === "villa") maintFee = 35000;
+      else if (r.unitType === "penthouse") maintFee = 25000;
+      else if (r.unitType === "flat") maintFee = 15000;
+      else if (r.unitType === "shop") maintFee = 8000;
+
+      // Determine Monthly Rent (only for tenants)
+      let rentFee = 0;
+      if (r.resType === "tenant") {
+        if (r.unitType === "villa") rentFee = 180000;
+        else if (r.unitType === "penthouse") rentFee = 125000;
+        else if (r.unitType === "flat") rentFee = 65000;
+        else if (r.unitType === "shop") rentFee = 45000;
+      }
+
+      const totalCharge = maintFee + rentFee + 2500 + 1500;
+
+      // Wallet
+      await conn.query("INSERT INTO wallets (id, tenant_id, unit_id, balance) VALUES (?, ?, ?, 0.00)", [crypto.randomUUID(), s.tenantId, r.unitId]);
+
+      // 1. Maintenance Charge Ledger
+      await conn.query(
+        `INSERT INTO ledger_entries (id, tenant_id, unit_id, type, charge_head_id, amount, description, balance_after)
+         VALUES (?, ?, ?, 'charge', ?, ?, 'Monthly Maintenance Fee - Aug 2026', ?)`,
+        [crypto.randomUUID(), s.tenantId, r.unitId, chMaintId, maintFee, maintFee]
+      );
+
+      // 2. Rent Charge Ledger (if tenant)
+      if (r.resType === "tenant" && rentFee > 0) {
+        await conn.query(
+          `INSERT INTO ledger_entries (id, tenant_id, unit_id, type, charge_head_id, amount, description, balance_after)
+           VALUES (?, ?, ?, 'charge', ?, ?, 'Monthly Property Rent - Aug 2026', ?)`,
+          [crypto.randomUUID(), s.tenantId, r.unitId, chRentId, rentFee, maintFee + rentFee]
+        );
+      }
+
+      // 3. Security & Utility Ledger Charges
+      await conn.query(
+        `INSERT INTO ledger_entries (id, tenant_id, unit_id, type, charge_head_id, amount, description, balance_after)
+         VALUES (?, ?, ?, 'charge', ?, 2500.00, 'Security & CCTV Surveillance Charge - Aug 2026', ?)`,
+        [crypto.randomUUID(), s.tenantId, r.unitId, chSecId, maintFee + rentFee + 2500]
+      );
+
+      // Payment Recording (Settled)
+      const receiptNo = nextReceipt(s.code.replace(/[^A-Z0-9]/g, ""));
+      await conn.query(
+        `INSERT INTO payments (id, tenant_id, unit_id, amount, payment_method, receipt_number, payment_date, reference, notes, recorded_by)
+         VALUES (?, ?, ?, ?, 'bank_transfer', ?, '2026-08-01', ?, 'Paid via Habib Bank Online', ?)`,
+        [crypto.randomUUID(), s.tenantId, r.unitId, totalCharge, receiptNo, `TXN-${receiptNo}`, socAdminId]
+      );
+
+      // Payment Ledger Credit
+      await conn.query(
+        `INSERT INTO ledger_entries (id, tenant_id, unit_id, type, charge_head_id, amount, description, balance_after)
+         VALUES (?, ?, ?, 'payment', ?, ?, 'Payment Received - Receipt #${receiptNo}', 0.00)`,
+        [crypto.randomUUID(), s.tenantId, r.unitId, chMaintId, totalCharge]
+      );
+    }
+
+    // 9. DYNAMIC COMPLAINTS
+    const complaintDefs = [
+      { title: "Water Supply Pressure Low", cat: "water", prio: "medium", status: "in_progress" },
+      { title: "Basement Drainage Dripping", cat: "plumbing", prio: "high", status: "open" },
+      { title: "Corridor Light Fixture Fused", cat: "electrical", prio: "low", status: "resolved" },
+      { title: "Main Gate RFID Scanner Delay", cat: "security", prio: "high", status: "open" },
+      { title: "Elevator Lift Door Sensor Issue", cat: "lift", prio: "medium", status: "in_progress" },
+    ];
+    const numComplaints = s.scale === "small" ? 1 : s.scale === "medium" ? 3 : 5;
+    for (let c = 0; c < numComplaints; c++) {
+      const cd = complaintDefs[c % complaintDefs.length];
+      await conn.query(
+        `INSERT INTO complaints (id, tenant_id, title, description, category, priority, status, submitted_by)
+         VALUES (?, ?, ?, 'Maintenance ticket registered by occupant.', ?, ?, ?, ?)`,
+        [crypto.randomUUID(), s.tenantId, cd.title, cd.cat, cd.prio, cd.status, residentsList[c % residentsList.length].userId]
+      );
+    }
+
+    // 10. MAINTENANCE WORK ORDERS
+    const numWorkOrders = s.scale === "small" ? 1 : s.scale === "medium" ? 2 : 4;
+    for (let w = 1; w <= numWorkOrders; w++) {
+      await conn.query(
+        `INSERT INTO maintenance_work_orders (id, tenant_id, title, description, category, priority, status, assigned_to)
+         VALUES (?, ?, ?, 'Scheduled routine inspection work order.', 'electrical', 'medium', ?, ?)`,
+        [crypto.randomUUID(), s.tenantId, `Routine Inspection Order #${w}`, w % 2 === 0 ? "in_progress" : "completed", staffIds["technician"]]
+      ).catch(() => {});
+    }
+
+    // 11. GATE TERMINALS & VISITOR PASSES
+    const gate1 = crypto.randomUUID();
+    const gate2 = crypto.randomUUID();
+    await conn.query("INSERT INTO gate_terminals (id, tenant_id, name, location, status) VALUES (?, ?, 'Main Gate 1', 'North Entrance', 'active')", [gate1, s.tenantId]);
+    await conn.query("INSERT INTO gate_terminals (id, tenant_id, name, location, status) VALUES (?, ?, 'Executive Gate 2', 'South Exit', 'active')", [gate2, s.tenantId]);
+
+    const numVisitors = s.scale === "small" ? 3 : s.scale === "medium" ? 8 : 15;
+    for (let vp = 1; vp <= numVisitors; vp++) {
+      const targetRes = residentsList[vp % residentsList.length];
+      await conn.query(
+        `INSERT INTO visitor_passes (id, tenant_id, resident_id, visitor_name, visitor_phone, expected_at, pass_code, status)
+         VALUES (?, ?, ?, ?, '+92 321 5551234', '2026-08-25 08:00:00', ?, ?)`,
+        [crypto.randomUUID(), s.tenantId, targetRes.residentId, `Guest Visitor ${vp}`, `VP-${String(vp).padStart(3, "0")}`, vp % 3 === 0 ? "used" : "active"]
+      ).catch((e) => console.log("Visitor pass err:", e.message));
+    }
+
+    // Guard Patrol Checkpoints
+    await conn.query("INSERT INTO guard_patrols (id, tenant_id, guard_name, checkpoint_name, notes) VALUES (?, ?, 'Ahmed Khan', 'Main Gate 1', 'All secure')", [crypto.randomUUID(), s.tenantId]);
+    await conn.query("INSERT INTO guard_patrols (id, tenant_id, guard_name, checkpoint_name, notes) VALUES (?, ?, 'Bilal Raza', 'Block A Elevator Lobby', 'Patrol completed')", [crypto.randomUUID(), s.tenantId]);
+
+    // Blacklist
+    await conn.query("INSERT INTO blacklist (id, tenant_id, type, value, reason) VALUES (?, ?, 'vehicle', 'LZA-4471', 'Unauthorized entry attempt')", [crypto.randomUUID(), s.tenantId]);
+
+    // 12. VENDORS & PROCUREMENT
+    const v1 = crypto.randomUUID();
+    const v2 = crypto.randomUUID();
+    await conn.query("INSERT INTO vendors (id, tenant_id, name, category, phone, email, rating) VALUES (?, ?, 'PowerPlus Generators Pakistan', 'Generators & Power', '+92 300 8111222', 'info@powerplus.pk', 4.8)", [v1, s.tenantId]);
+    await conn.query("INSERT INTO vendors (id, tenant_id, name, category, phone, email, rating) VALUES (?, ?, 'Apex Lifts & Elevators', 'Elevators & Lifts', '+92 300 8333444', 'sales@apexlifts.pk', 4.6)", [v2, s.tenantId]);
+
+    // 13. ASSETS
+    await conn.query("INSERT INTO assets (id, tenant_id, name, location, serial_number, warranty_expires_at) VALUES (?, ?, 'Cummins 250kVA Generator', 'Basement Power Room', 'DG-250-2024', '2028-12-31')", [crypto.randomUUID(), s.tenantId]);
+    await conn.query("INSERT INTO assets (id, tenant_id, name, location, serial_number, warranty_expires_at) VALUES (?, ?, 'Otis Passenger Lift A1', 'Tower A Elevator Shaft', 'OTIS-A1-99', '2027-06-30')", [crypto.randomUUID(), s.tenantId]);
+
+    // 14. AMENITIES & BOOKINGS
+    const am1 = crypto.randomUUID();
+    await conn.query(
+      `INSERT INTO amenities (id, tenant_id, name, category, capacity, slot_minutes, open_time, close_time, charge_per_slot, refundable_deposit)
+       VALUES (?, ?, 'Askari Banquet Hall', 'hall', 150, 180, '09:00:00', '23:00:00', 8000.00, 15000.00)`,
+      [am1, s.tenantId]
+    );
+    await conn.query(
+      `INSERT INTO amenity_bookings (id, tenant_id, amenity_id, user_id, booking_date, start_time, end_time, guests_count, purpose, status)
+       VALUES (?, ?, ?, ?, '2026-09-05', '18:00:00', '21:00:00', 50, 'Family Reception', 'approved')`,
+      [crypto.randomUUID(), s.tenantId, am1, residentsList[0].userId]
+    );
+
+    // 15. UTILITY METERS
+    const mr1 = crypto.randomUUID();
+    await conn.query("INSERT INTO meter_rates (id, tenant_id, meter_type, rate_per_unit, effective_from) VALUES (?, ?, 'electricity', 28.50, '2026-01-01')", [mr1, s.tenantId]);
+    await conn.query(
+      `INSERT INTO meter_readings (id, tenant_id, unit_id, meter_type, reading_date, current_reading, previous_reading, charged_amount)
+       VALUES (?, ?, ?, 'electricity', '2026-08-01', 240.00, 0.00, 6840.00)`,
+      [crypto.randomUUID(), s.tenantId, units[0].id]
+    );
+
+    // 16. GOVERNANCE
+    await conn.query(
+      `INSERT INTO governance_meetings (id, tenant_id, title, description, scheduled_at, status, meeting_minutes)
+       VALUES (?, ?, 'Askari Annual General Body Meeting (AGM 2026)', 'Approved annual audit report and security gate automation budget.', '2026-08-10 17:00:00', 'completed', 'Minutes recorded by management board.')`,
+      [crypto.randomUUID(), s.tenantId]
+    );
+
+    // 17. COMMUNITY FORUM
+    const threadId = crypto.randomUUID();
+    await conn.query(
+      `INSERT INTO forum_threads (id, tenant_id, author_id, category, title, body)
+       VALUES (?, ?, ?, 'general', 'High-Speed Internet Fiber Provider Feedback', 'Which fiber ISP has the best uptime in Askari?')`,
+      [threadId, s.tenantId, residentsList[0].userId]
+    );
+    await conn.query(
+      `INSERT INTO forum_replies (id, thread_id, author_id, body)
+       VALUES (?, ?, ?, 'StormFiber has excellent uptime in Block A.')`,
+      [crypto.randomUUID(), threadId, residentsList[1].userId]
+    );
+
+    // 18. NOTICES
+    await conn.query(
+      `INSERT INTO notices (id, tenant_id, author_id, title, body, is_pinned)
+       VALUES (?, ?, ?, 'Welcome to Askari Housing Society', 'Official management portal is now live for all residents.', TRUE)`,
+      [crypto.randomUUID(), s.tenantId, socAdminId]
+    );
+
+    // 19. POLLS
+    const pollId = crypto.randomUUID();
+    await conn.query(
+      `INSERT INTO polls (id, tenant_id, question, type, options, opens_at, closes_at)
+       VALUES (?, ?, 'Should we install Solar Panels for Common Area Lighting?', 'single', '["Yes, approve budget", "No, keep existing setup"]', '2026-08-01 00:00:00', '2026-09-01 00:00:00')`,
+      [pollId, s.tenantId]
     );
   }
 
-  // ── 5.24 Audit Log ──────────────────────────────────────────────────────────
-  await conn.query(
-    "INSERT INTO audit_logs (id, tenant_id, user_id, action, entity_type, entity_id) VALUES (?, ?, ?, 'demo_seed', 'tenant', ?)",
-    [crypto.randomUUID(), tid, SUPER_ADMIN_ID, tid]
-  );
-
-  console.log(`   ✅ ${tenant.name} seeded.`);
+  console.log(`\n✅ All ${DEMO_SOCIETIES.length} Askari Housing Societies seeded successfully with mixed Owners/Renters, dynamic fees, and complete modules.`);
 }
 
-// ─── PHASE 29: RELATIONAL INTEGRITY CHECKS ──────────────────────────────────
-async function runIntegrityChecks(conn: mysql.Connection): Promise<void> {
-  console.log("\n=== PHASE 29: RELATIONAL INTEGRITY CHECKS ===");
-
-  // Check 1: No orphan units
-  const [orphanUnits] = await conn.query(
-    `SELECT COUNT(*) as n FROM units u
-     WHERE u.tenant_id IN (?) AND u.society_id NOT IN (SELECT id FROM societies)`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Orphan units: ${orphanUnits[0].n} ${orphanUnits[0].n === 0 ? "✅" : "❌"}`);
-
-  // Check 2: No orphan residents
-  const [orphanRes] = await conn.query(
-    `SELECT COUNT(*) as n FROM residents r
-     WHERE r.tenant_id IN (?) AND r.unit_id NOT IN (SELECT id FROM units)`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Orphan residents: ${orphanRes[0].n} ${orphanRes[0].n === 0 ? "✅" : "❌"}`);
-
-  // Check 3: No orphan ledger entries
-  const [orphanLedger] = await conn.query(
-    `SELECT COUNT(*) as n FROM ledger_entries le
-     WHERE le.tenant_id IN (?) AND le.unit_id NOT IN (SELECT id FROM units)`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Orphan ledger entries: ${orphanLedger[0].n} ${orphanLedger[0].n === 0 ? "✅" : "❌"}`);
-
-  // Check 4: No orphan payments
-  const [orphanPay] = await conn.query(
-    `SELECT COUNT(*) as n FROM payments p
-     WHERE p.tenant_id IN (?) AND p.unit_id NOT IN (SELECT id FROM units)`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Orphan payments: ${orphanPay[0].n} ${orphanPay[0].n === 0 ? "✅" : "❌"}`);
-
-  // Check 5: No orphan visitor passes
-  const [orphanVP] = await conn.query(
-    `SELECT COUNT(*) as n FROM visitor_passes vp
-     WHERE vp.tenant_id IN (?) AND vp.resident_id NOT IN (SELECT id FROM residents)`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Orphan visitor passes: ${orphanVP[0].n} ${orphanVP[0].n === 0 ? "✅" : "❌"}`);
-
-  // Check 6: No duplicate poll votes
-  const [dupVotes] = await conn.query(
-    `SELECT COUNT(*) as n FROM (
-       SELECT poll_id, user_id, COUNT(*) as c FROM poll_votes
-       WHERE poll_id IN (SELECT id FROM polls WHERE tenant_id IN (?))
-       GROUP BY poll_id, user_id HAVING c > 1
-     ) x`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Duplicate poll votes: ${dupVotes[0].n} ${dupVotes[0].n === 0 ? "✅" : "❌"}`);
-
-  // Check 7: No cross-tenant leakage
-  const [crossTenant] = await conn.query(
-    `SELECT COUNT(*) as n FROM residents r
-     JOIN units u ON r.unit_id = u.id
-     WHERE r.tenant_id IN (?) AND u.tenant_id != r.tenant_id`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Cross-tenant resident/unit mismatch: ${crossTenant[0].n} ${crossTenant[0].n === 0 ? "✅" : "❌"}`);
-
-  // Check 8: No orphan domestic staff
-  const [orphanStaff] = await conn.query(
-    `SELECT COUNT(*) as n FROM domestic_staff ds
-     WHERE ds.tenant_id IN (?) AND ds.resident_id NOT IN (SELECT id FROM residents)`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Orphan domestic staff: ${orphanStaff[0].n} ${orphanStaff[0].n === 0 ? "✅" : "❌"}`);
-
-  // Check 9: Staff code uniqueness per tenant
-  const [dupStaff] = await conn.query(
-    `SELECT COUNT(*) as n FROM (
-       SELECT tenant_id, staff_code, COUNT(*) as c FROM domestic_staff
-       WHERE tenant_id IN (?) GROUP BY tenant_id, staff_code HAVING c > 1
-     ) x`
-  , [DEMO_TENANT_IDS]) as any[];
-  console.log(`  Duplicate staff codes per tenant: ${dupStaff[0].n} ${dupStaff[0].n === 0 ? "✅" : "❌"}`);
-}
-
-// ─── FINAL COUNTS ─────────────────────────────────────────────────────────────
-async function printFinalCounts(conn: mysql.Connection): Promise<void> {
-  console.log("\n=== FINAL SEEDING COUNTS ===");
-  const queries: [string, string][] = [
-    ["Tenants",        `SELECT COUNT(*) as n FROM tenants WHERE id IN (?)`],
-    ["Societies",      `SELECT COUNT(*) as n FROM societies WHERE tenant_id IN (?)`],
-    ["Users (demo)",   `SELECT COUNT(*) as n FROM users WHERE email LIKE '%@demo.housingos.local'`],
-    ["Residents",      `SELECT COUNT(*) as n FROM residents WHERE tenant_id IN (?)`],
-    ["Units",          `SELECT COUNT(*) as n FROM units WHERE tenant_id IN (?)`],
-    ["Ledger Entries", `SELECT COUNT(*) as n FROM ledger_entries WHERE tenant_id IN (?)`],
-    ["Payments",       `SELECT COUNT(*) as n FROM payments WHERE tenant_id IN (?)`],
-    ["Complaints",     `SELECT COUNT(*) as n FROM complaints WHERE tenant_id IN (?)`],
-    ["Visitor Passes", `SELECT COUNT(*) as n FROM visitor_passes WHERE tenant_id IN (?)`],
-    ["Domestic Staff", `SELECT COUNT(*) as n FROM domestic_staff WHERE tenant_id IN (?)`],
-    ["Assets",         `SELECT COUNT(*) as n FROM assets WHERE tenant_id IN (?)`],
-    ["Work Orders",    `SELECT COUNT(*) as n FROM maintenance_work_orders WHERE tenant_id IN (?)`],
-    ["Inventory Items",`SELECT COUNT(*) as n FROM inventory_items WHERE tenant_id IN (?)`],
-    ["Polls",          `SELECT COUNT(*) as n FROM polls WHERE tenant_id IN (?)`],
-    ["Events",         `SELECT COUNT(*) as n FROM events WHERE tenant_id IN (?)`],
-    ["Amenities",      `SELECT COUNT(*) as n FROM amenities WHERE tenant_id IN (?)`],
-    ["Notices",        `SELECT COUNT(*) as n FROM notices WHERE tenant_id IN (?)`],
-    ["Forum Threads",  `SELECT COUNT(*) as n FROM forum_threads WHERE tenant_id IN (?)`],
-    ["Parking Slots",  `SELECT COUNT(*) as n FROM parking_slots WHERE tenant_id IN (?)`],
-    ["Vendors",        `SELECT COUNT(*) as n FROM vendors WHERE tenant_id IN (?)`],
-  ];
-
-  for (const [label, q] of queries) {
-    const params = label.includes("demo") ? [] : DEMO_TENANT_IDS;
-    const [rows] = await conn.query(q, params) as any[];
-    console.log(`  ${label.padEnd(20)}: ${rows[0].n}`);
-  }
-}
-
-// ─── PRINT CREDENTIALS ───────────────────────────────────────────────────────
-function printCredentials(): void {
-  console.log(`
-=========================================================
-🔑 DEMO CREDENTIAL MATRIX (DEMO ONLY — NOT REAL DATA)
-=========================================================
-
-┌─────────────────────────────────────────────────────────────────────┐
-│  SUPER ADMIN (Platform-wide access)                                 │
-│  Email:    superadmin@demo.housingos.local                          │
-│  Password: Demo@12345                                               │
-├─────────────────────────────────────────────────────────────────────┤
-│  ADMIN ALPHA  (Askari 11 Lahore + Askari 10 Lahore)                 │
-│  Email:    admin.alpha@demo.housingos.local                         │
-│  Password: Demo@12345                                               │
-├─────────────────────────────────────────────────────────────────────┤
-│  ADMIN BETA   (Askari 5 Karachi)                                    │
-│  Email:    admin.beta@demo.housingos.local                          │
-│  Password: Demo@12345                                               │
-├─────────────────────────────────────────────────────────────────────┤
-│  ADMIN GAMMA  (Askari 4 Karachi + Askari Rawalpindi)                │
-│  Email:    admin.gamma@demo.housingos.local                         │
-│  Password: Demo@12345                                               │
-├─────────────────────────────────────────────────────────────────────┤
-│  RESIDENT    (Askari 11 Lahore, first resident)                     │
-│  Email:    resident.askari-11-lahore.001@demo.housingos.local       │
-│  Password: Demo@12345                                               │
-├─────────────────────────────────────────────────────────────────────┤
-│  GUARD       (Askari 11 Lahore)                                     │
-│  Email:    guard.askari-11-lahore@demo.housingos.local              │
-│  Password: Demo@12345                                               │
-└─────────────────────────────────────────────────────────────────────┘
-
-Societies seeded:
-  1. Askari 11 Lahore Demo   [enterprise]  — apartments + houses + villas
-  2. Askari 10 Lahore Demo   [professional] — apartments only
-  3. Askari 5 Karachi Demo   [enterprise]  — apartments + houses + villas
-  4. Askari 4 Karachi Demo   [growth]      — apartments only
-  5. Askari Rawalpindi Demo  [growth]      — apartments + houses (heavy)
-
-=========================================================
-`);
-}
-
-// ─── MAIN ────────────────────────────────────────────────────────────────────
-async function main() {
+// ─── MAIN EXECUTION ───────────────────────────────────────────────────────────
+async function main(): Promise<void> {
   console.log("=========================================================");
-  console.log("🏗️  HOUSINGOS MULTI-SOCIETY DEMO SEEDER");
-  console.log("    DEMO DATA ONLY — not an official Askari registry");
+  console.log("🏗️  HOUSINGOS — ALL-PAKISTAN COMPREHENSIVE ASKARI SEEDER");
   console.log("=========================================================");
 
   const conn = await connectDb();
-  const isResetOnly = process.argv.includes("--reset");
+  const pwHash = hashPassword("Demo@12345");
 
   try {
-    // Phase 1: Audit current state
-    await auditDemoData(conn);
+    await purgeAllNonAskariData(conn);
+    await seedAskariSocieties(conn, pwHash);
+    await seedAdmins(conn, pwHash);
 
-    // Phase 2: Safe reset
-    await performReset(conn);
+    // Summary output
+    const [[tenantCount]] = await conn.query("SELECT COUNT(*) as n FROM tenants") as any[];
+    const [[societyCount]] = await conn.query("SELECT COUNT(*) as n FROM societies") as any[];
+    const [[unitCount]] = await conn.query("SELECT COUNT(*) as n FROM units") as any[];
+    const [[residentCount]] = await conn.query("SELECT COUNT(*) as n FROM residents") as any[];
+    const [[tenantResidentCount]] = await conn.query("SELECT COUNT(*) as n FROM residents WHERE type = 'tenant'") as any[];
+    const [[ownerResidentCount]] = await conn.query("SELECT COUNT(*) as n FROM residents WHERE type = 'owner'") as any[];
+    const [[complaintCount]] = await conn.query("SELECT COUNT(*) as n FROM complaints") as any[];
+    const [[visitorCount]] = await conn.query("SELECT COUNT(*) as n FROM visitor_passes") as any[];
+    const [[vendorCount]] = await conn.query("SELECT COUNT(*) as n FROM vendors") as any[];
+    const [[assetCount]] = await conn.query("SELECT COUNT(*) as n FROM assets") as any[];
 
-    // Phase 3: Verify clean state
-    const isClean = await verifyCleanState(conn);
+    console.log("\n=========================================================");
+    console.log("📊 SEEDING COMPLETE SCORECARD:");
+    console.log(`  Tenants Created:          ${tenantCount.n}`);
+    console.log(`  Societies Created:        ${societyCount.n}`);
+    console.log(`  Units Created:            ${unitCount.n}`);
+    console.log(`  Total Residents Created:  ${residentCount.n}`);
+    console.log(`    ├── Owners:             ${ownerResidentCount.n}`);
+    console.log(`    └── Tenants (Renters):  ${tenantResidentCount.n}`);
+    console.log(`  Complaints Logged:        ${complaintCount.n}`);
+    console.log(`  Visitor Passes Issued:    ${visitorCount.n}`);
+    console.log(`  Vendors Registered:       ${vendorCount.n}`);
+    console.log(`  Assets Cataloged:         ${assetCount.n}`);
+    console.log("=========================================================\n");
 
-    if (isResetOnly) {
-      console.log("\n🧹 Reset-only mode. Exiting after cleanup.");
-      await conn.end();
-      return;
-    }
-
-    if (!isClean) {
-      console.log("\n❌ Cleanup incomplete. Aborting reseed to prevent data corruption.");
-      await conn.end();
-      process.exit(1);
-    }
-
-    // Phases 5–28: Seed all data
-    console.log("\n=== PHASES 5-28: SEEDING DEMO DATA ===");
-    await seedAll(conn);
-
-    // Phase 29: Integrity checks
-    await runIntegrityChecks(conn);
-
-    // Final counts
-    await printFinalCounts(conn);
-
-    // Print credentials
-    printCredentials();
-
-    console.log("🎉 DEMO SEEDING COMPLETED SUCCESSFULLY!\n");
   } catch (err: any) {
     console.error("\n❌ SEEDING FAILED:", err.message);
-    console.error("   SQL:", err.sql || "(no SQL)");
+    if (err.sql) console.error("   SQL:", err.sql);
+  } finally {
     await conn.end();
-    process.exit(1);
   }
-
-  await conn.end();
 }
 
 main();

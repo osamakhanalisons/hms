@@ -312,7 +312,7 @@ function ResidentsPage() {
                     <span>
                       {[
                         r.society_name,
-                        r.block_name && `Block ${r.block_name}`,
+                        r.block_name && (r.block_name.startsWith("Block") ? r.block_name : `Block ${r.block_name}`),
                         r.building_name,
                       ]
                         .filter(Boolean)

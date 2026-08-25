@@ -20,6 +20,8 @@ import {
   Wrench,
   Dumbbell,
   DoorOpen,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -37,6 +39,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -164,6 +176,7 @@ function SocietiesAdmin() {
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [selectedAdminId, setSelectedAdminId] = useState("");
   const [assignedTenantIds, setAssignedTenantIds] = useState<string[]>([]);
+  const [comboOpen, setComboOpen] = useState(false);
 
   // ── Queries ────────────────────────────────────────────────────────────
 
@@ -808,21 +821,59 @@ function SocietiesAdmin() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex flex-col">
               <Label htmlFor="admin-select">Select Society Admin</Label>
-              <select
-                id="admin-select"
-                value={selectedAdminId}
-                onChange={(e) => setSelectedAdminId(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="">-- Choose Admin --</option>
-                {adminsList.map((a: any) => (
-                  <option key={a.id} value={a.id}>
-                    {a.full_name || a.email} ({a.email})
-                  </option>
-                ))}
-              </select>
+              <Popover open={comboOpen} onOpenChange={setComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="admin-select"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={comboOpen}
+                    className="w-full h-10 justify-between font-normal text-left text-sm border border-input bg-background hover:bg-accent hover:text-accent-foreground px-3 py-2"
+                  >
+                    {selectedAdminId
+                      ? (() => {
+                          const admin = adminsList.find((a: any) => a.id === selectedAdminId);
+                          return admin
+                            ? `${admin.full_name || admin.email} (${admin.email})`
+                            : "-- Choose Admin --";
+                        })()
+                      : "-- Choose Admin --"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search admin..." />
+                    <CommandList>
+                      <CommandEmpty>No admin found.</CommandEmpty>
+                      <CommandGroup>
+                        {adminsList.map((a: any) => (
+                          <CommandItem
+                            key={a.id}
+                            value={`${a.full_name || ""} ${a.email}`}
+                            onSelect={() => {
+                              setSelectedAdminId(a.id);
+                              setComboOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 shrink-0",
+                                selectedAdminId === a.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span className="truncate">
+                              {a.full_name || a.email} <span className="text-muted-foreground text-xs">({a.email})</span>
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {selectedAdminId && (
