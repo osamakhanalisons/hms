@@ -33,11 +33,11 @@ export const markAsReadFn = createServerFn({ method: "POST" })
     const db = getDb();
     if (data.notificationId) {
       await db.query(
-        "UPDATE notifications SET read_status = 'read' WHERE id = ? AND tenant_id = ?",
+        "UPDATE notifications SET read_status = TRUE WHERE id = ? AND tenant_id = ?",
         [data.notificationId, tenantId],
       );
     } else {
-      await db.query("UPDATE notifications SET read_status = 'read' WHERE tenant_id = ?", [
+      await db.query("UPDATE notifications SET read_status = TRUE WHERE tenant_id = ?", [
         tenantId,
       ]);
     }

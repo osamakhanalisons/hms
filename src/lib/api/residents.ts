@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
+import { getSessionUser, getUserTenantId, resolveTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
 import { requirePermission } from "./permissions";
 
 // ─── Password helpers (same algo as signUpFn) ────────────────────────────────
@@ -265,10 +265,7 @@ export const addVehicleFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const db = getDb();
     
@@ -333,10 +330,7 @@ export const createResidentAccountFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const userRoles = await getUserRoles(userId);
     if (!isAdminRole(userRoles)) throw new Error("Forbidden");

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { formatDistanceToNow, parseISO, format } from "date-fns";
 import {
   TrendingUp,
@@ -116,9 +116,7 @@ function KpiCard({
             ) : (
               <>
                 <p className="mt-1 font-serif text-2xl font-bold tracking-tight">{value}</p>
-                {subtitle && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">{subtitle}</p>
-                )}
+                {subtitle && <p className="mt-1 text-[11px] text-muted-foreground">{subtitle}</p>}
               </>
             )}
           </div>
@@ -139,20 +137,28 @@ function FinancialTransparencyPage() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
 
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-    refetch,
-    isRefetching,
-  } = useQuery({
+  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ["financial-transparency", selectedYear],
     queryFn: () => getFinancialTransparencyFn({ data: { year: selectedYear } }),
     staleTime: 30_000,
   });
 
   const availableYears = data?.availableYears ?? [currentYear];
+
+  const [txPage, setTxPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setTxPage(1);
+  }, [selectedYear]);
+
+  const totalTxItems = data?.recentTransactions?.length ?? 0;
+  const totalTxPages = Math.ceil(totalTxItems / itemsPerPage) || 1;
+
+  const paginatedTransactions = useMemo(() => {
+    const start = (txPage - 1) * itemsPerPage;
+    return (data?.recentTransactions ?? []).slice(start, start + itemsPerPage);
+  }, [data?.recentTransactions, txPage]);
 
   return (
     <AppShell
@@ -184,7 +190,9 @@ function FinancialTransparencyPage() {
             onClick={() => refetch()}
             disabled={isRefetching}
           >
-            <RefreshCw className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`}
+            />
             Refresh
           </Button>
         </div>
@@ -285,7 +293,9 @@ function FinancialTransparencyPage() {
               ) : (
                 <div className="space-y-3">
                   {data.monthlyTrend.map((m) => {
-                    const maxVal = Math.max(...data.monthlyTrend.map((t) => Math.max(t.income, t.billed, 1)));
+                    const maxVal = Math.max(
+                      ...data.monthlyTrend.map((t) => Math.max(t.income, t.billed, 1)),
+                    );
                     const incomePct = Math.min(100, Math.round((m.income / maxVal) * 100));
                     const billedPct = Math.min(100, Math.round((m.billed / maxVal) * 100));
 
@@ -294,7 +304,8 @@ function FinancialTransparencyPage() {
                         <div className="flex justify-between text-xs font-medium">
                           <span>{m.label}</span>
                           <span className="text-muted-foreground">
-                            Collected: {formatCurrency(m.income)} / Billed: {formatCurrency(m.billed)}
+                            Collected: {formatCurrency(m.income)} / Billed:{" "}
+                            {formatCurrency(m.billed)}
                           </span>
                         </div>
                         <div className="h-2 w-full overflow-hidden rounded-full bg-muted flex">
@@ -347,7 +358,9 @@ function FinancialTransparencyPage() {
                             <span className="text-muted-foreground">
                               Planned: {formatCurrency(exp.planned)}
                             </span>
-                            <span className={`font-bold ${isOverBudget ? "text-rose-600" : "text-emerald-600"}`}>
+                            <span
+                              className={`font-bold ${isOverBudget ? "text-rose-600" : "text-emerald-600"}`}
+                            >
                               Actual: {formatCurrency(exp.actual)}
                             </span>
                           </div>
@@ -360,7 +373,9 @@ function FinancialTransparencyPage() {
                             style={{
                               width: `${Math.min(
                                 100,
-                                Math.round((exp.actual / Math.max(exp.planned, exp.actual, 1)) * 100)
+                                Math.round(
+                                  (exp.actual / Math.max(exp.planned, exp.actual, 1)) * 100,
+                                ),
                               )}%`,
                             }}
                           />
@@ -377,7 +392,9 @@ function FinancialTransparencyPage() {
         {/* Recent Financial Transactions Table */}
         <Card className="border-border/70 shadow-soft">
           <CardHeader className="pb-3">
-            <CardTitle className="font-serif text-base font-bold">Recent Financial Activity</CardTitle>
+            <CardTitle className="font-serif text-base font-bold">
+              Recent Financial Activity
+            </CardTitle>
             <CardDescription className="text-[11px]">
               Latest collection receipts and maintenance charges logged in the ledger
             </CardDescription>
@@ -398,54 +415,130 @@ function FinancialTransparencyPage() {
                 <p className="text-sm">No recent transactions recorded</p>
               </div>
             ) : (
-              <div className="divide-y divide-border/60 overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-muted/40 uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3">Type</th>
-                      <th className="px-4 py-3">Description</th>
-                      <th className="px-4 py-3">Unit</th>
-                      <th className="px-4 py-3">Date</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {data.recentTransactions.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3">
-                          {tx.type === "income" ? (
-                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-transparent">
-                              <ArrowUpRight className="mr-1 size-3" /> Income
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-transparent">
-                              <ArrowDownRight className="mr-1 size-3" /> Charge
-                            </Badge>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-medium">{tx.description}</td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {tx.unitNumber ? `Unit ${tx.unitNumber}` : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {(() => {
-                            try {
-                              return format(parseISO(tx.date), "dd MMM yyyy");
-                            } catch {
-                              return tx.date;
-                            }
-                          })()}
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold">
-                          <span className={tx.type === "income" ? "text-emerald-600" : "text-foreground"}>
-                            {tx.type === "income" ? "+" : ""}{formatCurrency(tx.amount)}
-                          </span>
-                        </td>
+              <>
+                <div className="divide-y divide-border/60 overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-muted/40 uppercase tracking-wider text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3">Type</th>
+                        <th className="px-4 py-3">Description</th>
+                        <th className="px-4 py-3">Unit</th>
+                        <th className="px-4 py-3">Date</th>
+                        <th className="px-4 py-3 text-right">Amount</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {paginatedTransactions.map((tx) => (
+                        <tr key={tx.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3">
+                            {tx.type === "income" ? (
+                              <Badge
+                                variant="outline"
+                                className="bg-emerald-500/10 text-emerald-600 border-transparent"
+                              >
+                                <ArrowUpRight className="mr-1 size-3" /> Income
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="bg-blue-500/10 text-blue-600 border-transparent"
+                              >
+                                <ArrowDownRight className="mr-1 size-3" /> Charge
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-medium">{tx.description}</td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {tx.unitNumber ? `Unit ${tx.unitNumber}` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {(() => {
+                              try {
+                                return format(parseISO(tx.date), "dd MMM yyyy");
+                              } catch {
+                                return tx.date;
+                              }
+                            })()}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold">
+                            <span
+                              className={
+                                tx.type === "income" ? "text-emerald-600" : "text-foreground"
+                              }
+                            >
+                              {tx.type === "income" ? "+" : ""}
+                              {formatCurrency(tx.amount)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Controls */}
+                {totalTxItems > itemsPerPage && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border/70 p-4 text-xs text-muted-foreground">
+                    <div>
+                      Showing{" "}
+                      <span className="font-semibold text-foreground">
+                        {(txPage - 1) * itemsPerPage + 1}
+                      </span>{" "}
+                      to{" "}
+                      <span className="font-semibold text-foreground">
+                        {Math.min(txPage * itemsPerPage, totalTxItems)}
+                      </span>{" "}
+                      of{" "}
+                      <span className="font-semibold text-foreground">
+                        {totalTxItems.toLocaleString()}
+                      </span>{" "}
+                      transactions
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={txPage === 1}
+                        onClick={() => setTxPage((p) => Math.max(p - 1, 1))}
+                        className="h-8 text-xs px-2.5 border-border/70 bg-background"
+                      >
+                        Previous
+                      </Button>
+
+                      {Array.from({ length: totalTxPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalTxPages || Math.abs(p - txPage) <= 2)
+                        .map((p, idx, arr) => {
+                          const prev = arr[idx - 1];
+                          return (
+                            <Fragment key={p}>
+                              {prev && p - prev > 1 && (
+                                <span className="text-xs text-muted-foreground px-1">...</span>
+                              )}
+                              <Button
+                                variant={p === txPage ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setTxPage(p)}
+                                className="h-8 w-8 text-xs p-0 font-medium border-border/70"
+                              >
+                                {p}
+                              </Button>
+                            </Fragment>
+                          );
+                        })}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={txPage === totalTxPages}
+                        onClick={() => setTxPage((p) => Math.min(p + 1, totalTxPages))}
+                        className="h-8 text-xs px-2.5 border-border/70 bg-background"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

@@ -150,6 +150,14 @@ function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Pagination state
+  const PROJ_PER_PAGE = 9;
+  const MILE_PER_PAGE = 10;
+  const EXP_PER_PAGE = 10;
+  const [projPage, setProjPage] = useState(1);
+  const [milePage, setMilePage] = useState(1);
+  const [expPage, setExpPage] = useState(1);
+
   // Create Project modal state
   const [addOpen, setAddOpen] = useState(false);
   const [name, setName] = useState("");
@@ -300,6 +308,28 @@ function ProjectsPage() {
   const vendors = data?.vendorsList ?? [];
   const users = data?.usersList ?? [];
 
+  // Paginated slices
+  const projTotalPages = Math.max(1, Math.ceil(projects.length / PROJ_PER_PAGE));
+  const mileTotalPages = Math.max(1, Math.ceil(milestones.length / MILE_PER_PAGE));
+  const expTotalPages = Math.max(1, Math.ceil(expenses.length / EXP_PER_PAGE));
+
+  const paginatedProjects = projects.slice((projPage - 1) * PROJ_PER_PAGE, projPage * PROJ_PER_PAGE);
+  const paginatedMilestones = milestones.slice((milePage - 1) * MILE_PER_PAGE, milePage * MILE_PER_PAGE);
+  const paginatedExpenses = expenses.slice((expPage - 1) * EXP_PER_PAGE, expPage * EXP_PER_PAGE);
+
+  // Helper: collapsed page numbers  [1 2 … 8 9 10 … 34]
+  function getPageNumbers(current: number, total: number): (number | "…")[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (current > 3) pages.push("…");
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push("…");
+    pages.push(total);
+    return pages;
+  }
+
   return (
     <AppShell
       title="Projects"
@@ -390,7 +420,9 @@ function ProjectsPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-serif text-lg font-bold">Society Projects</h2>
-            <span className="text-xs text-muted-foreground">{projects.length} projects listed</span>
+            <span className="text-xs text-muted-foreground">
+              {projects.length} projects &mdash; page {projPage} of {projTotalPages}
+            </span>
           </div>
 
           {isLoading ? (
@@ -407,7 +439,7 @@ function ProjectsPage() {
             </Card>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {projects.map((proj) => (
+              {paginatedProjects.map((proj) => (
                 <Card key={proj.id} className="border-border/70 shadow-soft flex flex-col justify-between hover:border-border transition-colors">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
@@ -517,6 +549,43 @@ function ProjectsPage() {
               ))}
             </div>
           )}
+
+          {/* Projects Pagination */}
+          {projTotalPages > 1 && (
+            <div className="flex items-center justify-center gap-1 pt-2">
+              <button
+                onClick={() => setProjPage((p) => Math.max(1, p - 1))}
+                disabled={projPage === 1}
+                className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+              >
+                ← Prev
+              </button>
+              {getPageNumbers(projPage, projTotalPages).map((pg, i) =>
+                pg === "…" ? (
+                  <span key={`ep-${i}`} className="px-1.5 text-muted-foreground text-[11px] select-none">…</span>
+                ) : (
+                  <button
+                    key={pg}
+                    onClick={() => setProjPage(pg)}
+                    className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                      projPage === pg
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border/70 hover:bg-muted"
+                    }`}
+                  >
+                    {pg}
+                  </button>
+                )
+              )}
+              <button
+                onClick={() => setProjPage((p) => Math.min(projTotalPages, p + 1))}
+                disabled={projPage === projTotalPages}
+                className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Recent Expenses & Milestones Section */}
@@ -541,7 +610,7 @@ function ProjectsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
-                      {milestones.slice(0, 10).map((m) => (
+                      {paginatedMilestones.map((m) => (
                         <tr key={m.id} className="hover:bg-muted/30 transition-colors">
                           <td className="px-4 py-2.5">
                             <div className="font-medium">{m.title}</div>
@@ -570,6 +639,18 @@ function ProjectsPage() {
                       ))}
                     </tbody>
                   </table>
+                  {/* Milestones Pagination */}
+                  {mileTotalPages > 1 && (
+                    <div className="flex items-center justify-center gap-1 px-4 py-3 border-t border-border/50">
+                      <button onClick={() => setMilePage((p) => Math.max(1, p - 1))} disabled={milePage === 1} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">← Prev</button>
+                      {getPageNumbers(milePage, mileTotalPages).map((pg, i) =>
+                        pg === "…" ? <span key={`em-${i}`} className="px-1 text-muted-foreground text-[10px] select-none">…</span> : (
+                          <button key={pg} onClick={() => setMilePage(pg)} className={`rounded border px-2.5 py-1 text-[10px] font-medium transition-colors ${milePage === pg ? "border-primary bg-primary text-primary-foreground" : "border-border/70 hover:bg-muted"}`}>{pg}</button>
+                        )
+                      )}
+                      <button onClick={() => setMilePage((p) => Math.min(mileTotalPages, p + 1))} disabled={milePage === mileTotalPages} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">Next →</button>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -596,7 +677,7 @@ function ProjectsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
-                      {expenses.slice(0, 10).map((exp) => (
+                      {paginatedExpenses.map((exp) => (
                         <tr key={exp.id} className="hover:bg-muted/30 transition-colors">
                           <td className="px-4 py-2.5">
                             <div className="font-medium">{exp.title}</div>
@@ -609,6 +690,18 @@ function ProjectsPage() {
                       ))}
                     </tbody>
                   </table>
+                  {/* Expenses Pagination */}
+                  {expTotalPages > 1 && (
+                    <div className="flex items-center justify-center gap-1 px-4 py-3 border-t border-border/50">
+                      <button onClick={() => setExpPage((p) => Math.max(1, p - 1))} disabled={expPage === 1} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">← Prev</button>
+                      {getPageNumbers(expPage, expTotalPages).map((pg, i) =>
+                        pg === "…" ? <span key={`ee-${i}`} className="px-1 text-muted-foreground text-[10px] select-none">…</span> : (
+                          <button key={pg} onClick={() => setExpPage(pg)} className={`rounded border px-2.5 py-1 text-[10px] font-medium transition-colors ${expPage === pg ? "border-primary bg-primary text-primary-foreground" : "border-border/70 hover:bg-muted"}`}>{pg}</button>
+                        )
+                      )}
+                      <button onClick={() => setExpPage((p) => Math.min(expTotalPages, p + 1))} disabled={expPage === expTotalPages} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">Next →</button>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

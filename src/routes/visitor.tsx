@@ -510,6 +510,52 @@ function VisitorPage() {
   const blacklist = data?.blacklist ?? [];
   const unitsList = data?.unitsList ?? [];
 
+  // ── Pagination ──────────────────────────────────────────────────
+  const PASS_PER_PAGE = 9;
+  const STAFF_PER_PAGE = 9;
+  const LOG_PER_PAGE = 15;
+  const BL_PER_PAGE = 15;
+  const [passPage, setPassPage] = useState(1);
+  const [staffPage, setStaffPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const [blPage, setBlPage] = useState(1);
+
+  const passTotalPages  = Math.max(1, Math.ceil(passes.length   / PASS_PER_PAGE));
+  const staffTotalPages = Math.max(1, Math.ceil(staffList.length / STAFF_PER_PAGE));
+  const logTotalPages   = Math.max(1, Math.ceil(logs.length     / LOG_PER_PAGE));
+  const blTotalPages    = Math.max(1, Math.ceil(blacklist.length / BL_PER_PAGE));
+
+  const paginatedPasses    = passes.slice   ((passPage  - 1) * PASS_PER_PAGE,  passPage  * PASS_PER_PAGE);
+  const paginatedStaff     = staffList.slice((staffPage - 1) * STAFF_PER_PAGE, staffPage * STAFF_PER_PAGE);
+  const paginatedLogs      = logs.slice     ((logPage   - 1) * LOG_PER_PAGE,   logPage   * LOG_PER_PAGE);
+  const paginatedBlacklist = blacklist.slice((blPage    - 1) * BL_PER_PAGE,    blPage    * BL_PER_PAGE);
+
+  function getPageNums(cur: number, tot: number): (number | "…")[] {
+    if (tot <= 7) return Array.from({ length: tot }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (cur > 3) pages.push("…");
+    const s = Math.max(2, cur - 1), e = Math.min(tot - 1, cur + 1);
+    for (let i = s; i <= e; i++) pages.push(i);
+    if (cur < tot - 2) pages.push("…");
+    pages.push(tot);
+    return pages;
+  }
+
+  function Paginator({ page, total, set }: { page: number; total: number; set: (p: number) => void }) {
+    if (total <= 1) return null;
+    return (
+      <div className="flex items-center justify-center gap-1 py-3 border-t border-border/50">
+        <button onClick={() => set(Math.max(1, page - 1))} disabled={page === 1} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">← Prev</button>
+        {getPageNums(page, total).map((pg, i) =>
+          pg === "…" ? <span key={`e${i}`} className="px-1 text-[10px] text-muted-foreground select-none">…</span> : (
+            <button key={pg} onClick={() => set(pg as number)} className={`rounded border px-2.5 py-1 text-[10px] font-medium transition-colors ${ page === pg ? "border-primary bg-primary text-primary-foreground" : "border-border/70 hover:bg-muted" }`}>{pg}</button>
+          )
+        )}
+        <button onClick={() => set(Math.min(total, page + 1))} disabled={page === total} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">Next →</button>
+      </div>
+    );
+  }
+
   return (
     <AppShell
       title="Visitor Management & Gate Passes"
@@ -638,6 +684,11 @@ function VisitorPage() {
             </Card>
 
             {/* Visitor Passes Grid */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">{passes.length} passes total</span>
+                <span className="text-xs text-muted-foreground">page {passPage} of {passTotalPages}</span>
+              </div>
             {isLoading ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -652,7 +703,7 @@ function VisitorPage() {
               </Card>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {passes.map((pass) => (
+                {paginatedPasses.map((pass) => (
                   <Card key={pass.id} className="border-border/70 shadow-soft hover:border-border transition-colors">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-2">
@@ -722,6 +773,8 @@ function VisitorPage() {
                 ))}
               </div>
             )}
+            <Paginator page={passPage} total={passTotalPages} set={setPassPage} />
+            </div>
           </TabsContent>
 
           {/* DOMESTIC STAFF TAB */}
@@ -757,7 +810,7 @@ function VisitorPage() {
               </Card>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {staffList.map((staff) => (
+                {paginatedStaff.map((staff) => (
                   <Card key={staff.id} className={`border-border/70 shadow-soft transition-colors ${!staff.isActive ? "opacity-60" : ""}`}>
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-2">
@@ -854,6 +907,7 @@ function VisitorPage() {
                 ))}
               </div>
             )}
+            <Paginator page={staffPage} total={staffTotalPages} set={setStaffPage} />
           </TabsContent>
 
           {/* GATE TERMINAL VERIFICATION TAB */}
@@ -1064,7 +1118,7 @@ function VisitorPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-border/60">
-                    {logs.map((log) => (
+                    {paginatedLogs.map((log) => (
                       <div key={log.id} className="p-4 flex flex-wrap items-center justify-between gap-3 hover:bg-muted/20 transition-colors text-xs">
                         <div className="flex items-center gap-3 min-w-0 max-w-lg">
                           <div className={`p-2 rounded-full ${log.direction === "in" ? "bg-emerald-500/10 text-emerald-600" : "bg-blue-500/10 text-blue-600"}`}>
@@ -1090,6 +1144,7 @@ function VisitorPage() {
                     ))}
                   </div>
                 )}
+                <Paginator page={logPage} total={logTotalPages} set={setLogPage} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -1118,7 +1173,7 @@ function VisitorPage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-border/60">
-                    {blacklist.map((b) => (
+                    {paginatedBlacklist.map((b) => (
                       <div key={b.id} className="p-4 flex flex-wrap items-center justify-between gap-3 hover:bg-muted/20 transition-colors text-xs">
                         <div className="space-y-1 min-w-0 max-w-lg">
                           <div className="flex items-center gap-2 font-bold text-foreground text-sm">
@@ -1148,6 +1203,7 @@ function VisitorPage() {
                     ))}
                   </div>
                 )}
+                <Paginator page={blPage} total={blTotalPages} set={setBlPage} />
               </CardContent>
             </Card>
           </TabsContent>

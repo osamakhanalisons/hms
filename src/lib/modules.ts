@@ -70,9 +70,9 @@ export const DEDICATED_ROUTES: Record<string, string> = {
   projects: "/projects",
   assets: "/assets",
   visitor: "/visitor",
-  gate: "/security",
-  guard_patrol: "/security",
-  blacklist: "/security",
+  gate: "/security?tab=gates",
+  guard_patrol: "/security?tab=patrols",
+  blacklist: "/security?tab=blacklist",
   parking: "/parking",
   utility_meters: "/utility-meters",
   notice_board: "/notices",
@@ -258,7 +258,7 @@ export const MODULES: ModuleDef[] = [
     icon: DoorOpen,
     description: "Entry/exit logs",
     plan: "Growth",
-    route: "/security",
+    route: "/security?tab=gates",
   },
   {
     key: "parking",
@@ -276,7 +276,7 @@ export const MODULES: ModuleDef[] = [
     icon: ShieldCheck,
     description: "Shifts, patrols, incidents",
     plan: "Professional",
-    route: "/security",
+    route: "/security?tab=patrols",
   },
   {
     key: "blacklist",
@@ -285,7 +285,7 @@ export const MODULES: ModuleDef[] = [
     icon: UserX,
     description: "Restricted visitors / vehicles",
     plan: "Growth",
-    route: "/security",
+    route: "/security?tab=blacklist",
   },
   // Community
   {

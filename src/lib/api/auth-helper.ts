@@ -31,12 +31,46 @@ export async function getUserTenantId(userId: string) {
 
 export async function getUserRoles(userId: string): Promise<string[]> {
   const db = getDb();
-  const [rows] = (await db.query("SELECT role FROM user_roles WHERE user_id = ?", [userId])) as any[];
+  const [rows] = (await db.query("SELECT role FROM user_roles WHERE user_id = ?", [
+    userId,
+  ])) as any[];
   return rows.map((r: any) => r.role as string);
 }
 
 export function isAdminRole(roles: string[]): boolean {
   return roles.includes("super_admin") || roles.includes("society_admin");
+}
+
+export async function resolveTenantId(
+  request?: Request,
+  clientTenantId?: string | null,
+): Promise<string> {
+  const userId = await getSessionUser(request);
+  if (!userId) throw new Error("Unauthorized");
+
+  const roles = await getUserRoles(userId);
+  const userTenantId = await getUserTenantId(userId);
+
+  if (roles.includes("super_admin") || roles.includes("society_admin")) {
+    const scoping = await getTenantScoping(request, clientTenantId);
+    if (scoping.tenantId && scoping.tenantId !== "all" && scoping.tenantId !== "") {
+      return scoping.tenantId;
+    }
+  }
+
+  if (userTenantId) return userTenantId;
+
+  if (roles.includes("super_admin") || roles.includes("society_admin")) {
+    const db = getDb();
+    const [tenants] = (await db.query(
+      "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1",
+    )) as any[];
+    if (tenants.length > 0) {
+      return tenants[0].id as string;
+    }
+  }
+
+  throw new Error("No tenant associated with user session.");
 }
 
 // Helper to require admin access
@@ -47,15 +81,13 @@ export async function requireAdmin(request: Request): Promise<{
 }> {
   const userId = await getSessionUser(request);
   if (!userId) throw new Error("Unauthorized");
-  
-  const tenantId = await getUserTenantId(userId);
-  if (!tenantId) throw new Error("No tenant");
-  
+
   const roles = await getUserRoles(userId);
   if (!isAdminRole(roles)) {
     throw new Error("Forbidden - Admin access required");
   }
-  
+
+  const tenantId = await resolveTenantId(request);
   return { userId, tenantId, roles };
 }
 
@@ -67,24 +99,22 @@ export async function requireAuth(request: Request): Promise<{
 }> {
   const userId = await getSessionUser(request);
   if (!userId) throw new Error("Unauthorized");
-  
-  const tenantId = await getUserTenantId(userId);
-  if (!tenantId) throw new Error("No tenant");
-  
+
   const roles = await getUserRoles(userId);
+  const tenantId = await resolveTenantId(request);
   return { userId, tenantId, roles };
 }
 
 // Helper to check if user has specific role(s)
 export function hasAnyRole(roles: string[], allowedRoles: string[]): boolean {
-  return roles.some(role => allowedRoles.includes(role));
+  return roles.some((role) => allowedRoles.includes(role));
 }
 
 // Scoping helper for role-aware multi-tenant querying
 export async function getTenantScoping(
   request: Request | undefined,
   clientTenantId?: string | null,
-  columnName = "tenant_id"
+  columnName = "tenant_id",
 ): Promise<{
   isSuperAdmin: boolean;
   tenantId: string;
@@ -119,7 +149,9 @@ export async function getTenantScoping(
   if (isSuperAdmin) {
     if (activeClientTenantId && activeClientTenantId !== "all" && activeClientTenantId !== "") {
       const db = getDb();
-      const [rows] = (await db.query("SELECT id FROM tenants WHERE id = ?", [activeClientTenantId])) as any[];
+      const [rows] = (await db.query("SELECT id FROM tenants WHERE id = ?", [
+        activeClientTenantId,
+      ])) as any[];
       if (rows.length > 0) {
         return {
           isSuperAdmin: true,
@@ -130,9 +162,14 @@ export async function getTenantScoping(
         };
       }
     }
+    const db = getDb();
+    const [tenants] = (await db.query(
+      "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1",
+    )) as any[];
+    const firstTenantId = tenants.length > 0 ? (tenants[0].id as string) : "";
     return {
       isSuperAdmin: true,
-      tenantId: "",
+      tenantId: firstTenantId,
       sqlFilter: "1=1",
       sqlParams: [],
       userTenantId,
@@ -175,4 +212,3 @@ export async function getTenantScoping(
     };
   }
 }
-

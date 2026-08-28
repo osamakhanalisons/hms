@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
 import { PermissionGate } from "@/components/permission-gate";
@@ -31,8 +31,35 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { FileSpreadsheet, PlusCircle, Search, Settings } from "lucide-react";
+import { FileSpreadsheet, PlusCircle, Search, Settings, Check, ChevronsUpDown } from "lucide-react";
+
+interface Unit {
+  id: string;
+  unit_number: string;
+  unit_type?: string;
+  status?: string;
+  building_name?: string;
+  block_name?: string;
+  full_path?: string;
+}
+
+interface ChargeHead {
+  id: string;
+  name: string;
+  description?: string;
+  default_amount?: number | string;
+}
 
 export const Route = createFileRoute("/ledger")({
   head: () => ({
@@ -61,6 +88,8 @@ function LedgerPage() {
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [headDialogOpen, setHeadDialogOpen] = useState(false);
+  const [unitComboOpen, setUnitComboOpen] = useState(false);
+  const [unitSearch, setUnitSearch] = useState("");
 
   // Forms
   const [chargeHeadId, setChargeHeadId] = useState("");
@@ -84,6 +113,22 @@ function LedgerPage() {
     }
   }, [units, selectedUnitId]);
 
+  const filteredUnits = useMemo(() => {
+    const query = unitSearch.trim().toLowerCase();
+    const allUnits = units as Unit[];
+    if (!query) {
+      return allUnits.slice(0, 50);
+    }
+    const filtered = allUnits.filter((u) => {
+      const label = (
+        u.full_path ||
+        `Unit ${u.unit_number} ${u.building_name ? `(${u.building_name})` : ""} ${u.block_name ? (u.block_name.startsWith("Block") ? u.block_name : `Block ${u.block_name}`) : ""}`
+      ).toLowerCase();
+      return label.includes(query);
+    });
+    return filtered.slice(0, 50);
+  }, [units, unitSearch]);
+
   const { data: chargeHeads = [] } = useQuery({
     queryKey: ["chargeHeads"],
     queryFn: async () => getChargeHeadsFn(),
@@ -97,7 +142,7 @@ function LedgerPage() {
 
   const generateBulk = useMutation({
     mutationFn: generateBulkChargesFn,
-    onSuccess: (res: any) => {
+    onSuccess: (res: { count: number }) => {
       queryClient.invalidateQueries({ queryKey: ["ledger"] });
       toast.success(`Generated charges for ${res.count} units`);
       setBulkDialogOpen(false);
@@ -174,18 +219,72 @@ function LedgerPage() {
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-10 space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
-              <SelectTrigger className="w-64 border-border/70">
-                <SelectValue placeholder="Select Unit Ledger..." />
-              </SelectTrigger>
-              <SelectContent>
-                {units.map((u: any) => (
-                  <SelectItem key={u.id} value={u.id}>
-                    {u.full_path || `Unit ${u.unit_number} ${u.building_name ? `(${u.building_name})` : ""} ${u.block_name ? (u.block_name.startsWith("Block") ? u.block_name : `Block ${u.block_name}`) : ""}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={unitComboOpen} onOpenChange={setUnitComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={unitComboOpen}
+                  className="w-72 justify-between border-border/70 text-left font-normal h-10 px-3 bg-background shadow-soft hover:bg-muted/50"
+                >
+                  <span className="truncate pr-2">
+                    {selectedUnitId
+                      ? (() => {
+                          const unit = (units as Unit[]).find((u) => u.id === selectedUnitId);
+                          return unit
+                            ? unit.full_path ||
+                                `Unit ${unit.unit_number} ${unit.building_name ? `(${unit.building_name})` : ""} ${unit.block_name ? (unit.block_name.startsWith("Block") ? unit.block_name : `Block ${unit.block_name}`) : ""}`
+                            : "Select Unit Ledger...";
+                        })()
+                      : "Select Unit Ledger..."}
+                  </span>
+                  <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[320px] sm:w-[400px] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Search unit by number, building, block..."
+                    value={unitSearch}
+                    onValueChange={setUnitSearch}
+                  />
+                  <CommandList className="max-h-[300px] overflow-y-auto">
+                    {filteredUnits.length === 0 && <CommandEmpty>No unit found.</CommandEmpty>}
+                    <CommandGroup>
+                      {filteredUnits.map((u: Unit) => {
+                        const label =
+                          u.full_path ||
+                          `Unit ${u.unit_number} ${u.building_name ? `(${u.building_name})` : ""} ${u.block_name ? (u.block_name.startsWith("Block") ? u.block_name : `Block ${u.block_name}`) : ""}`;
+                        return (
+                          <CommandItem
+                            key={u.id}
+                            value={u.id}
+                            onSelect={() => {
+                              setSelectedUnitId(u.id);
+                              setUnitComboOpen(false);
+                              setUnitSearch("");
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 shrink-0",
+                                selectedUnitId === u.id ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            <span className="truncate">{label}</span>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                    {units.length > 50 && !unitSearch && (
+                      <div className="p-2 text-center text-[10px] text-muted-foreground border-t border-border/50 bg-muted/5">
+                        Showing first 50 units. Type to search more.
+                      </div>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             {selectedUnitId && (
               <PermissionGate moduleKey="ledger" action="create" fallback={null}>
                 <Button
@@ -289,7 +388,7 @@ function LedgerPage() {
                     <SelectValue placeholder="Select Category..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {chargeHeads.map((ch: any) => (
+                    {(chargeHeads as ChargeHead[]).map((ch) => (
                       <SelectItem key={ch.id} value={ch.id}>
                         {ch.name}
                       </SelectItem>
@@ -347,7 +446,7 @@ function LedgerPage() {
                     <SelectValue placeholder="Select Category..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {chargeHeads.map((ch: any) => (
+                    {(chargeHeads as ChargeHead[]).map((ch) => (
                       <SelectItem key={ch.id} value={ch.id}>
                         {ch.name}
                       </SelectItem>

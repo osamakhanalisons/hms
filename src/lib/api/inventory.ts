@@ -2,7 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
+import {
+  getSessionUser,
+  getUserTenantId,
+  getUserRoles,
+  isAdminRole,
+  getTenantScoping,
+} from "./auth-helper";
 import { requirePermission } from "./permissions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -66,16 +72,34 @@ export const getInventoryOverviewFn = createServerFn({ method: "GET" })
     if (!userId) throw new Error("Unauthorized");
 
     const scoping = await getTenantScoping(request, data?.tenantId);
-    const tenantId = scoping.tenantId;
+    let tenantId = scoping.tenantId;
+    const db = getDb();
+
+    if (!tenantId) {
+      tenantId = scoping.userTenantId || "";
+    }
+    if (!tenantId) {
+      const [tenants] = (await db.query(
+        "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1",
+      )) as unknown as [{ id: string }[], unknown];
+      if (tenants.length > 0) {
+        tenantId = tenants[0].id;
+      }
+    }
+
     if (!tenantId) {
       return {
-        summary: { totalItems: 0, totalUnits: 0, lowStockCount: 0, outOfStockCount: 0, totalStockValue: 0 },
+        summary: {
+          totalItems: 0,
+          totalUnits: 0,
+          lowStockCount: 0,
+          outOfStockCount: 0,
+          totalStockValue: 0,
+        },
         items: [],
         recentMovements: [],
       } satisfies InventoryOverview;
     }
-
-    const db = getDb();
 
     // ── Summary KPIs (aggregate from inventory_items) ─────────────────────────
     const [[sumRow]] = (await db.query(
@@ -311,7 +335,16 @@ export const recordStockMovementFn = createServerFn({ method: "POST" })
       await connection.query(
         `INSERT INTO stock_movements (id, tenant_id, item_id, movement_type, quantity, reference, notes, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [movId, tenantId, data.itemId, data.movementType, data.quantity, data.reference || null, data.notes || null, userId],
+        [
+          movId,
+          tenantId,
+          data.itemId,
+          data.movementType,
+          data.quantity,
+          data.reference || null,
+          data.notes || null,
+          userId,
+        ],
       );
 
       // Update inventory_items.quantity (single source of truth)

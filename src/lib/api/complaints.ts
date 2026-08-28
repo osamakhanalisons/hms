@@ -2,9 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
+import {
+  getSessionUser,
+  getUserTenantId,
+  resolveTenantId,
+  getUserRoles,
+  isAdminRole,
+  getTenantScoping,
+} from "./auth-helper";
 import { requirePermission } from "./permissions";
-
 
 export const getComplaintsFn = createServerFn({ method: "GET" })
   .validator(
@@ -100,10 +106,10 @@ export const createComplaintFn = createServerFn({ method: "POST" })
         }
       } else {
         // Admin: must belong to their tenant
-        const [unitCheck] = (await db.query(
-          "SELECT id FROM units WHERE id = ? AND tenant_id = ?",
-          [data.unitId, tenantId],
-        )) as any[];
+        const [unitCheck] = (await db.query("SELECT id FROM units WHERE id = ? AND tenant_id = ?", [
+          data.unitId,
+          tenantId,
+        ])) as any[];
         if (unitCheck.length === 0) {
           throw new Error("Forbidden — Unit not found or unauthorized");
         }
@@ -150,8 +156,7 @@ export const assignComplaintFn = createServerFn({ method: "POST" })
   .handler(async ({ data, request }) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const userRoles = await getUserRoles(userId);
     if (!isAdminRole(userRoles)) {
@@ -179,8 +184,7 @@ export const updateComplaintStatusFn = createServerFn({ method: "POST" })
   .handler(async ({ data, request }) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const userRoles = await getUserRoles(userId);
     if (!isAdminRole(userRoles)) {
@@ -206,4 +210,3 @@ export const updateComplaintStatusFn = createServerFn({ method: "POST" })
     await db.query(query, params);
     return { success: true };
   });
-

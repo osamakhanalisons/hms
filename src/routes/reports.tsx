@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, Fragment } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -20,6 +21,13 @@ import {
 import { BarChart3, Users, Landmark, Wrench, Download, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+
+interface OccupancyReportItem {
+  block_name: string;
+  unit_number: string;
+  occupancy_status: string;
+  unit_type: string;
+}
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -44,10 +52,10 @@ function ReportsRoute() {
 
 function ReportsPage() {
   const { roles, loading } = useAuth();
-  
-  const canAccess = roles.some(r => 
-    ["super_admin", "society_admin", "finance_head"].includes(r)
-  );
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const canAccess = roles.some((r) => ["super_admin", "society_admin", "finance_head"].includes(r));
 
   const { data: finances, isLoading: loadingFinances } = useQuery({
     queryKey: ["reports", "finances"],
@@ -66,6 +74,14 @@ function ReportsPage() {
     queryFn: () => getComplaintResolutionReportFn(),
     enabled: canAccess,
   });
+
+  const totalItems = occupancy.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+
+  const paginatedOccupancy = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return occupancy.slice(start, start + itemsPerPage);
+  }, [occupancy, page]);
 
   if (!loading && !canAccess) {
     return (
@@ -86,8 +102,7 @@ function ReportsPage() {
     );
   }
 
-
-  const downloadCSV = (data: any[], filename: string) => {
+  const downloadCSV = (data: Record<string, unknown>[], filename: string) => {
     if (data.length === 0) {
       toast.error("No data available to download");
       return;
@@ -150,7 +165,9 @@ function ReportsPage() {
                   <div className="text-2xl font-bold">
                     {occupancy.length > 0
                       ? Math.round(
-                          (occupancy.filter((u: any) => u.occupancy_status === "occupied").length /
+                          (occupancy.filter(
+                            (u: OccupancyReportItem) => u.occupancy_status === "occupied",
+                          ).length /
                             occupancy.length) *
                             100,
                         )
@@ -158,7 +175,11 @@ function ReportsPage() {
                     %
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {occupancy.filter((u: any) => u.occupancy_status === "occupied").length}{" "}
+                    {
+                      occupancy.filter(
+                        (u: OccupancyReportItem) => u.occupancy_status === "occupied",
+                      ).length
+                    }{" "}
                     occupied units out of {occupancy.length}
                   </p>
                 </>
@@ -177,13 +198,14 @@ function ReportsPage() {
               ) : (
                 <>
                   <div className="text-2xl font-bold">
-                    {complaints?.total > 0
+                    {complaints && complaints.total > 0
                       ? Math.round((complaints.resolved / complaints.total) * 100)
                       : 0}
                     %
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {complaints?.resolved} resolved out of {complaints?.total} total complaints
+                    {complaints ? complaints.resolved : 0} resolved out of{" "}
+                    {complaints ? complaints.total : 0} total complaints
                   </p>
                 </>
               )}
@@ -214,36 +236,101 @@ function ReportsPage() {
                 Loading report data...
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Block</TableHead>
-                    <TableHead>Unit Number</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Type</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {occupancy.slice(0, 10).map((u: any, idx: number) => (
-                    <TableRow key={idx}>
-                      <TableCell className="font-medium">{u.block_name}</TableCell>
-                      <TableCell>{u.unit_number}</TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-xs ${
-                            u.occupancy_status === "occupied"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {u.occupancy_status}
-                        </span>
-                      </TableCell>
-                      <TableCell>{u.unit_type}</TableCell>
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Block</TableHead>
+                      <TableHead>Unit Number</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Type</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedOccupancy.map((u: OccupancyReportItem, idx: number) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{u.block_name}</TableCell>
+                        <TableCell>{u.unit_number}</TableCell>
+                        <TableCell>
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-full text-xs ${
+                              u.occupancy_status === "occupied"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
+                            {u.occupancy_status}
+                          </span>
+                        </TableCell>
+                        <TableCell>{u.unit_type}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {/* Pagination Controls */}
+                {totalItems > itemsPerPage && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border/70 pt-4 mt-4 text-xs text-muted-foreground">
+                    <div>
+                      Showing{" "}
+                      <span className="font-semibold text-foreground">
+                        {(page - 1) * itemsPerPage + 1}
+                      </span>{" "}
+                      to{" "}
+                      <span className="font-semibold text-foreground">
+                        {Math.min(page * itemsPerPage, totalItems)}
+                      </span>{" "}
+                      of{" "}
+                      <span className="font-semibold text-foreground">
+                        {totalItems.toLocaleString()}
+                      </span>{" "}
+                      units
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page === 1}
+                        onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                        className="h-8 text-xs px-2.5 border-border/70 bg-background"
+                      >
+                        Previous
+                      </Button>
+
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                        .map((p, idx, arr) => {
+                          const prev = arr[idx - 1];
+                          return (
+                            <Fragment key={p}>
+                              {prev && p - prev > 1 && (
+                                <span className="text-xs text-muted-foreground px-1">...</span>
+                              )}
+                              <Button
+                                variant={p === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setPage(p)}
+                                className="h-8 w-8 text-xs p-0 font-medium border-border/70"
+                              >
+                                {p}
+                              </Button>
+                            </Fragment>
+                          );
+                        })}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page === totalPages}
+                        onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                        className="h-8 text-xs px-2.5 border-border/70 bg-background"
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HousingOS — Master System Guide & Operating Manual</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              900: '#0c4a6e',
+            },
+            askari: {
+              gold: '#d97706',
+              green: '#15803d',
+              navy: '#1e293b'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            heading: ['Outfit', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    h1, h2, h3, h4 { font-family: 'Outfit', sans-serif; }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+    }
+    .dark .glass-card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(51, 65, 85, 0.9);
+    }
+    .ui-mockup-window {
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP HEADER NAVBAR -->
+  <header class="sticky top-0 z-50 bg-slate-900/95 text-white backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-brand-600 flex items-center justify-center font-bold text-white shadow-lg shadow-brand-500/30">
+          <i class="fa-solid fa-building-shield text-lg"></i>
+        </div>
+        <div>
+          <span class="font-heading text-xl font-bold tracking-tight">HousingOS</span>
+          <span class="ml-2 text-xs bg-amber-500/20 text-amber-300 font-semibold px-2 py-0.5 rounded border border-amber-500/30 uppercase tracking-wider">Master User Guide</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="http://localhost:5173" target="_blank" class="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-all shadow-md">
+          <i class="fa-solid fa-desktop"></i> Launch Live Application
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO SECTION -->
+  <section class="relative bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 text-white py-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px]"></div>
+    <div class="max-w-5xl mx-auto text-center relative z-10 space-y-6">
+      <span class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30">
+        <i class="fa-solid fa-circle-info"></i> End-to-End System Flow & Screenshot Manual
+      </span>
+      <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight font-heading leading-tight">
+        HousingOS Master Operating Manual
+      </h1>
+      <p class="text-lg text-slate-300 max-w-3xl mx-auto leading-relaxed">
+        Complete step-by-step user guide covering all <span class="text-white font-bold">25 Modules</span> across <span class="text-amber-400 font-bold">34 Askari Housing Societies in Pakistan</span> (Rawalpindi, Islamabad, Lahore, Karachi, Peshawar, Multan, Gujranwala, Quetta) with <span class="text-emerald-400 font-bold">20,150+ Residents</span>.
+      </p>
+
+      <!-- SEARCH INPUT FOR MODULES -->
+      <div class="max-w-xl mx-auto pt-4">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input 
+            type="text" 
+            id="guideSearch" 
+            placeholder="Search any module or feature (e.g. Ledger, Rent, Visitor Pass, Maintenance, Security)..."
+            class="w-full bg-slate-800/90 text-white placeholder-slate-400 text-xs font-medium pl-11 pr-4 py-3.5 rounded-xl border border-slate-700 focus:outline-none focus:border-brand-500 shadow-xl"
+            onkeyup="filterGuideSections()"
+          />
+        </div>
+      </div>
+
+      <!-- KEY METRICS BANNER -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 text-left">
+        <div class="bg-slate-800/90 border border-slate-700/80 rounded-xl p-4">
+          <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Active Askari Cantts</div>
+          <div class="text-2xl font-bold text-white mt-1">34 Societies</div>
+          <div class="text-[11px] text-emerald-400 mt-1"><i class="fa-solid fa-check"></i> Rawalpindi to Quetta</div>
+        </div>
+        <div class="bg-slate-800/90 border border-slate-700/80 rounded-xl p-4">
+          <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Population</div>
+          <div class="text-2xl font-bold text-white mt-1">20,150 Units</div>
+          <div class="text-[11px] text-brand-300 mt-1">13.4k Owners · 6.7k Renters</div>
+        </div>
+        <div class="bg-slate-800/90 border border-slate-700/80 rounded-xl p-4">
+          <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Financial Ledgers</div>
+          <div class="text-2xl font-bold text-amber-400 mt-1">20.1k Wallets</div>
+          <div class="text-[11px] text-slate-300 mt-1">Rent + Maint + Security</div>
+        </div>
+        <div class="bg-slate-800/90 border border-slate-700/80 rounded-xl p-4">
+          <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Security Control</div>
+          <div class="text-2xl font-bold text-emerald-400 mt-1">3.4k Passes</div>
+          <div class="text-[11px] text-emerald-300 mt-1">QR Code Gate Entry</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN BODY LAYOUT (STICKY NAV + CONTENT) -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      
+      <!-- STICKY SIDEBAR NAVIGATION -->
+      <aside class="lg:col-span-1">
+        <div class="sticky top-20 space-y-4">
+          <div class="glass-card rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+              <i class="fa-solid fa-compass"></i> Module Navigation
+            </h3>
+            <nav class="space-y-1 text-xs font-medium">
+              <a href="#mod-core" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-house-laptop text-brand-500 w-4"></i> 1. Dashboard & Core
+              </a>
+              <a href="#mod-societies" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-building-flag text-brand-500 w-4"></i> 2. Societies & Tenants
+              </a>
+              <a href="#mod-property" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-sitemap text-brand-500 w-4"></i> 3. Property Tree Hierarchy
+              </a>
+              <a href="#mod-residents" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-users text-brand-500 w-4"></i> 4. Residents & Renters
+              </a>
+              <a href="#mod-financials" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-file-invoice-dollar text-brand-500 w-4"></i> 5. Financials, Rent & Receipts
+              </a>
+              <a href="#mod-security" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-shield-halved text-brand-500 w-4"></i> 6. Security, Patrols & Blacklist
+              </a>
+              <a href="#mod-maintenance" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-screwdriver-wrench text-brand-500 w-4"></i> 7. Complaints & Maintenance
+              </a>
+              <a href="#mod-vendors" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-truck-ramp-box text-brand-500 w-4"></i> 8. Vendors & Assets
+              </a>
+              <a href="#mod-community" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-comments text-brand-500 w-4"></i> 9. Forum, Polls & Notices
+              </a>
+              <a href="#mod-governance" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-landmark text-brand-500 w-4"></i> 10. Governance & Utility Meters
+              </a>
+              <a href="#mod-credentials" class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-key text-amber-500 w-4"></i> 11. Demo Login Credentials
+              </a>
+            </nav>
+          </div>
+        </div>
+      </aside>
+
+      <!-- DOCUMENTATION CONTENT BODY -->
+      <main class="lg:col-span-3 space-y-12">
+
+        <!-- MODULE 1: DASHBOARD & WORKSPACE -->
+        <section id="mod-core" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-600 flex items-center justify-center text-sm"><i class="fa-solid fa-chart-line"></i></span>
+              1. Platform Dashboard & Workspace Overview
+            </h2>
+            <a href="http://localhost:5173" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Page</a>
+          </div>
+
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            The main dashboard provides real-time financial summaries, complaint metrics, occupancy statistics, and quick navigation cards tailored to the user's role.
+          </p>
+
+          <!-- UI SCREENSHOT MOCKUP 1 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window space-y-0">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-400 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-emerald-400 inline-block"></span>
+                <span class="ml-2 font-semibold text-white">SCREENSHOT 1: Executive Dashboard (Askari Housing Engine)</span>
+              </div>
+              <span class="text-slate-500">http://localhost:5173/</span>
+            </div>
+            <div class="p-6 space-y-4">
+              <!-- KPI GRID -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div class="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div class="text-slate-500 text-[11px]">Total Units</div>
+                  <div class="text-xl font-bold text-slate-900 dark:text-white">20,150</div>
+                  <div class="text-[10px] text-emerald-600 font-semibold mt-1">100% Occupied</div>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div class="text-slate-500 text-[11px]">Active Residents</div>
+                  <div class="text-xl font-bold text-slate-900 dark:text-white">20,150</div>
+                  <div class="text-[10px] text-brand-600 font-semibold mt-1">13.4k Owners · 6.7k Renters</div>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div class="text-slate-500 text-[11px]">Monthly Revenue</div>
+                  <div class="text-xl font-bold text-emerald-600 dark:text-emerald-400">PKR 845.2M</div>
+                  <div class="text-[10px] text-emerald-600 font-semibold mt-1">Rent + Maintenance Collected</div>
+                </div>
+                <div class="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div class="text-slate-500 text-[11px]">Open Complaints</div>
+                  <div class="text-xl font-bold text-amber-600 dark:text-amber-400">1,760</div>
+                  <div class="text-[10px] text-amber-600 font-semibold mt-1">In Progress across 34 Cantts</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 2: SOCIETIES & TENANTS -->
+        <section id="mod-societies" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center text-sm"><i class="fa-solid fa-building-flag"></i></span>
+              2. Societies Directory & Regional Admin Mapping
+            </h2>
+            <a href="http://localhost:5173/societies" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Page</a>
+          </div>
+
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Accessible by Super Admins and Regional Admins to provision new Askari Cantt housing societies, assign subscription tiers (<code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">growth</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">professional</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">enterprise</code>), and switch society context.
+          </p>
+
+          <!-- UI SCREENSHOT MOCKUP 2 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window space-y-0">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 2: Societies Registry (34 Askari Cantts)</span>
+              <span class="text-slate-500">http://localhost:5173/societies</span>
+            </div>
+            <div class="p-5 space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg flex items-center justify-between">
+                  <div>
+                    <h4 class="font-bold text-slate-900 dark:text-white">Askari-X (Rawalpindi)</h4>
+                    <p class="text-slate-500 font-mono text-[11px]">ASK-X-RWP · 900 Units</p>
+                  </div>
+                  <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">ENTERPRISE</span>
+                </div>
+                <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg flex items-center justify-between">
+                  <div>
+                    <h4 class="font-bold text-slate-900 dark:text-white">Falcon Complex AFOHS (Islamabad)</h4>
+                    <p class="text-slate-500 font-mono text-[11px]">FALCON-ISB · 900 Units</p>
+                  </div>
+                  <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">ENTERPRISE</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 3: PROPERTY HIERARCHY -->
+        <section id="mod-property" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-sm"><i class="fa-solid fa-sitemap"></i></span>
+              3. Property Tree & Location Breadcrumbs
+            </h2>
+            <a href="http://localhost:5173/property" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Page</a>
+          </div>
+
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            The property tree structures units into 3 strict zones: <span class="font-semibold text-amber-600">Apartment Area</span> (High-rise Towers with floors), <span class="font-semibold text-emerald-600">House / Villa Area</span> (Officer Independent Housing grouped by Block), and <span class="font-semibold text-sky-600">Commercial Zone</span> (Plaza shops).
+          </p>
+
+          <!-- UI SCREENSHOT MOCKUP 3 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 3: Interactive Property Explorer</span>
+              <span class="text-slate-500">http://localhost:5173/property</span>
+            </div>
+            <div class="p-5 font-mono text-xs space-y-2">
+              <div class="text-brand-600 font-bold"><i class="fa-solid fa-city mr-1.5"></i> Askari-X (Rawalpindi) [ASK-X-RWP]</div>
+              <div class="ml-4 space-y-1 border-l-2 border-slate-200 dark:border-slate-800 pl-3">
+                <div class="text-slate-800 dark:text-slate-200 font-semibold"><i class="fa-solid fa-building-user text-amber-500 mr-1"></i> Apartment Area</div>
+                <div class="ml-4 text-slate-600 dark:text-slate-400 font-bold">📁 Block A (Askari Apartments) › Tower A (Flats 101-1004)</div>
+                <div class="text-slate-800 dark:text-slate-200 font-semibold pt-1"><i class="fa-solid fa-house-chimney text-emerald-500 mr-1"></i> House / Villa Area</div>
+                <div class="ml-4 text-slate-600 dark:text-slate-400 font-bold">📁 Block B (Officer Housing & Villas) › Villa 2-A (4,500 sq ft)</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 4: RESIDENTS DIRECTORY -->
+        <section id="mod-residents" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center text-sm"><i class="fa-solid fa-users"></i></span>
+              4. Residents Directory & Pagination
+            </h2>
+            <a href="http://localhost:5173/residents" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Page</a>
+          </div>
+
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Displays occupants categorized by <span class="font-semibold text-blue-600">OWNER</span> and <span class="font-semibold text-indigo-600">TENANT</span> badges, contact info, linked login accounts, vehicle registrations, and instant page size controls (<code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">12</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">24</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">48</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">96</code> cards per page).
+          </p>
+
+          <!-- UI SCREENSHOT MOCKUP 4 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 4: Paginated Residents Cards</span>
+              <span class="text-slate-500">http://localhost:5173/residents</span>
+            </div>
+            <div class="p-5 space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg space-y-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-900 dark:text-white">Brig. (R) Tariq Mahmood</span>
+                    <span class="bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">OWNER</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 font-mono">Askari-X (Rawalpindi) › Block B › Villa 2-A</div>
+                </div>
+                <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg space-y-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-900 dark:text-white">Engr. Salman Farooq</span>
+                    <span class="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">TENANT</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 font-mono">Askari-X (Rawalpindi) › Block A › Flat 402</div>
+                </div>
+              </div>
+              <div class="flex items-center justify-between text-xs text-slate-500 font-mono border-t border-slate-100 dark:border-slate-800 pt-3">
+                <span>Showing 1 to 12 of 20,150 residents</span>
+                <span>Page 1 of 1680</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 5: FINANCIALS, RENT & RECEIPTS -->
+        <section id="mod-financials" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center text-sm"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+              5. Financial Management, Property Rent & Official Receipts
+            </h2>
+            <div class="flex gap-2">
+              <a href="http://localhost:5173/ledger" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ledger</a>
+              <a href="http://localhost:5173/payments" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Payments</a>
+            </div>
+          </div>
+
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Tracks unit charge heads (Maintenance Fee, Monthly Rent for Tenants, Security & Utilities) and payment receipts with unique receipt numbers (<code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">REC-ASKX-000104</code>).
+          </p>
+
+          <!-- UI SCREENSHOT MOCKUP 5 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 5: Official Ledger Statement & Payment Receipts</span>
+              <span class="text-slate-500">http://localhost:5173/ledger</span>
+            </div>
+            <div class="p-5 font-mono text-xs space-y-3">
+              <div class="flex justify-between items-center bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div>
+                  <div class="font-bold text-slate-900 dark:text-white">Unit 2-A (Villa) Ledger</div>
+                  <div class="text-[11px] text-slate-500">Occupant: Brig. (R) Tariq Mahmood (Owner)</div>
+                </div>
+                <span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[11px]">Paid · Bal 0.00 PKR</span>
+              </div>
+              <div class="space-y-1 text-[11px]">
+                <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span>Monthly Maintenance Fee (Villa 4,500 sq ft)</span>
+                  <span class="text-red-500 font-bold">+35,000.00 PKR</span>
+                </div>
+                <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span>Security & CCTV Service Charge</span>
+                  <span class="text-red-500 font-bold">+2,500.00 PKR</span>
+                </div>
+                <div class="flex justify-between py-1 font-bold text-emerald-600">
+                  <span>Payment Recv — Receipt #REC-ASKX-000101 (Habib Bank)</span>
+                  <span>-37,500.00 PKR</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 6: SECURITY & GATE CONTROL -->
+        <section id="mod-security" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-600 flex items-center justify-center text-sm"><i class="fa-solid fa-shield-halved"></i></span>
+              6. Security Control, Guard Patrols & Blacklist
+            </h2>
+            <a href="http://localhost:5173/security" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Page</a>
+          </div>
+
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Features URL tab routing (<code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">/security?tab=gates</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">/security?tab=patrols</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">/security?tab=blacklist</code>) ensuring exact active sidebar highlighting.
+          </p>
+
+          <!-- UI SCREENSHOT MOCKUP 6 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 6: Security Gate & Patrol Management</span>
+              <span class="text-slate-500">http://localhost:5173/security?tab=gates</span>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+              <div class="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+                <span class="bg-brand-600 text-white font-bold px-3 py-1 rounded">Gate Terminals (Active)</span>
+                <span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium px-3 py-1 rounded">Guard Patrols</span>
+                <span class="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium px-3 py-1 rounded">Blacklist Enforcement</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 pt-2">
+                <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg">
+                  <div class="font-bold text-slate-900 dark:text-white">Main Gate 1 (North Entrance)</div>
+                  <div class="text-[11px] text-emerald-600 font-semibold mt-1"><i class="fa-solid fa-circle-check"></i> Scanner Online · 120 scans today</div>
+                </div>
+                <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg">
+                  <div class="font-bold text-slate-900 dark:text-white">Executive Gate 2 (South Exit)</div>
+                  <div class="text-[11px] text-emerald-600 font-semibold mt-1"><i class="fa-solid fa-circle-check"></i> Scanner Online · 95 scans today</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 7: COMPLAINTS & MAINTENANCE -->
+        <section id="mod-maintenance" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-red-500/10 text-red-600 flex items-center justify-center text-sm"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+              7. Complaints Ticketing & Work Orders
+            </h2>
+            <div class="flex gap-2">
+              <a href="http://localhost:5173/complaints" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Complaints</a>
+              <a href="http://localhost:5173/maintenance" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Work Orders</a>
+            </div>
+          </div>
+
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Logs maintenance tickets under 8 strict categories (<code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">electrical</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">plumbing</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">security</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">cleaning</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">lift</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">water</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">civil</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">other</code>) with SLA tracking.
+          </p>
+
+          <!-- UI SCREENSHOT MOCKUP 7 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 7: Complaints Desk & Work Orders</span>
+              <span class="text-slate-500">http://localhost:5173/complaints</span>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+              <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg flex items-center justify-between">
+                <div>
+                  <div class="font-bold text-slate-900 dark:text-white">Basement Water Pipe Leakage</div>
+                  <div class="text-[11px] text-slate-500 font-mono">Category: Plumbing · Priority: High</div>
+                </div>
+                <span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">IN PROGRESS</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 8: VENDORS & ASSETS -->
+        <section id="mod-vendors" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-sm"><i class="fa-solid fa-truck-ramp-box"></i></span>
+              8. Vendors, Procurement & Assets Catalog
+            </h2>
+            <div class="flex gap-2">
+              <a href="http://localhost:5173/vendors" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Vendors</a>
+              <a href="http://localhost:5173/assets" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Assets</a>
+            </div>
+          </div>
+
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            Catalogs heavy society machinery (<code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">Cummins 250kVA Generators</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-brand-600 font-mono text-xs">Otis Lifts</code>) and registered contractors with ratings and purchase invoices.
+          </p>
+
+          <!-- UI SCREENSHOT MOCKUP 8 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 8: Vendors & Heavy Machinery Asset Register</span>
+              <span class="text-slate-500">http://localhost:5173/assets</span>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+              <div class="grid grid-cols-2 gap-3">
+                <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg space-y-1">
+                  <div class="font-bold text-slate-900 dark:text-white">Cummins 250kVA Generator</div>
+                  <div class="text-[11px] text-slate-500 font-mono">Location: Basement Power Room · S/N: DG-250-2024</div>
+                </div>
+                <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg space-y-1">
+                  <div class="font-bold text-slate-900 dark:text-white">Otis High-Speed Passenger Elevator</div>
+                  <div class="text-[11px] text-slate-500 font-mono">Location: Tower A Shaft 1 · S/N: OTIS-8841</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 9: COMMUNITY & FORUM -->
+        <section id="mod-community" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center text-sm"><i class="fa-solid fa-comments"></i></span>
+              9. Community Forum, Notices & Voting Polls
+            </h2>
+            <div class="flex gap-2">
+              <a href="http://localhost:5173/forum" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Forum</a>
+              <a href="http://localhost:5173/polls" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Polls</a>
+            </div>
+          </div>
+
+          <!-- UI SCREENSHOT MOCKUP 9 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 9: Community Discussions & Resident Polls</span>
+              <span class="text-slate-500">http://localhost:5173/forum</span>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+              <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg space-y-1">
+                <div class="font-bold text-slate-900 dark:text-white">Fiber Optic Internet Provider Recommendation</div>
+                <div class="text-[11px] text-slate-500 font-mono">Author: Brig. (R) Tariq Mahmood · 4 Replies</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 10: GOVERNANCE & UTILITIES -->
+        <section id="mod-governance" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+          <div class="border-b border-slate-200 dark:border-slate-800 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-slate-900 dark:text-white flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-600 flex items-center justify-center text-sm"><i class="fa-solid fa-landmark"></i></span>
+              10. Governance AGM Meetings & Utility Meters
+            </h2>
+            <div class="flex gap-2">
+              <a href="http://localhost:5173/governance" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Governance</a>
+              <a href="http://localhost:5173/utility-meters" target="_blank" class="text-xs font-semibold text-brand-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> Utility Meters</a>
+            </div>
+          </div>
+
+          <!-- UI SCREENSHOT MOCKUP 10 -->
+          <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden ui-mockup-window">
+            <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+              <span class="font-semibold text-white">SCREENSHOT 10: Annual Governance Meeting & Utility Rate Billing</span>
+              <span class="text-slate-500">http://localhost:5173/governance</span>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+              <div class="border border-slate-200 dark:border-slate-800 p-3 rounded-lg flex items-center justify-between">
+                <div>
+                  <div class="font-bold text-slate-900 dark:text-white">Askari Annual General Body Meeting (AGM 2026)</div>
+                  <div class="text-[11px] text-slate-500 font-mono">Approved annual audit report & security gate automation budget.</div>
+                </div>
+                <span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded">COMPLETED</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- MODULE 11: DEMO CREDENTIALS -->
+        <section id="mod-credentials" class="guide-section glass-card rounded-2xl p-6 sm:p-8 shadow-sm border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 space-y-6">
+          <div class="border-b border-amber-200 dark:border-amber-900/50 pb-4 flex items-center justify-between">
+            <h2 class="text-2xl font-bold font-heading text-amber-900 dark:text-amber-100 flex items-center gap-3">
+              <span class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-600 flex items-center justify-center text-sm"><i class="fa-solid fa-key"></i></span>
+              11. Pre-Configured Demo Accounts & Password
+            </h2>
+            <span class="text-xs font-mono font-bold px-2.5 py-1 rounded bg-amber-600 text-white">Password: Demo@12345</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-2">
+              <div class="text-amber-600 font-bold font-sans text-sm"><i class="fa-solid fa-crown mr-1"></i> Global Super Admin</div>
+              <div class="text-slate-700 dark:text-slate-300">Email: <span class="font-bold text-brand-600">superadmin@demo.housingos.local</span></div>
+              <div class="text-slate-700 dark:text-slate-300">Backup Email: <span class="font-bold text-brand-600">admin@demo.com</span> (Pass: demo1234)</div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-2">
+              <div class="text-brand-600 font-bold font-sans text-sm"><i class="fa-solid fa-building-flag mr-1"></i> Askari-I Rawalpindi Admin</div>
+              <div class="text-slate-700 dark:text-slate-300">Email: <span class="font-bold text-brand-600">admin.askari-i-rawalpindi@demo.housingos.local</span></div>
+              <div class="text-slate-700 dark:text-slate-300">Password: <span class="font-bold text-slate-900 dark:text-white">Demo@12345</span></div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- SEARCH FILTER SCRIPT -->
+  <script>
+    function filterGuideSections() {
+      const q = document.getElementById('guideSearch').value.toLowerCase().trim();
+      const sections = document.querySelectorAll('.guide-section');
+      sections.forEach(sec => {
+        const text = sec.innerText.toLowerCase();
+        if (!q || text.includes(q)) {
+          sec.style.display = 'block';
+        } else {
+          sec.style.display = 'none';
+        }
+      });
+    }
+  </script>
+
+  <!-- FOOTER -->
+  <footer class="bg-slate-900 text-slate-400 py-8 border-t border-slate-800 text-xs text-center">
+    <div class="max-w-7xl mx-auto px-4">
+      <p>© 2026 HousingOS Multi-Tenant Society Engine — Askari Housing Authority All-Pakistan Edition.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

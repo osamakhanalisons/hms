@@ -46,6 +46,9 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/security")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string) || "gates",
+  }),
   head: () => ({
     meta: [
       { title: "Security Control — HousingOS" },
@@ -426,6 +429,10 @@ function BlacklistTab() {
 // ─── Main Security Page ───────────────────────────────────────────────────────
 
 function SecurityPage() {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const currentTab = search.tab || "gates";
+
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-10 space-y-6">
@@ -443,7 +450,7 @@ function SecurityPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs defaultValue="gates">
+        <Tabs value={currentTab} onValueChange={(val) => navigate({ search: { tab: val } })}>
           <TabsList className="mb-4">
             <TabsTrigger value="gates" className="flex items-center gap-1.5">
               Gate Terminals

@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
+import { getSessionUser, getUserTenantId, resolveTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
 import { requirePermission } from "./permissions";
 
 // ── Get full property tree ─────────────────────────────────────────────────
@@ -110,8 +110,7 @@ export const createSocietyFn = createServerFn({ method: "POST" })
     if (!roles.includes("super_admin")) {
       throw new Error("Forbidden — Only Super Admin can create a society");
     }
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const db = getDb();
     const id = crypto.randomUUID();

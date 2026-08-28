@@ -19,15 +19,15 @@ export const getFinancialSummaryReportFn = createServerFn({ method: "GET" })
     const { sqlFilter: ledgerFilter, sqlParams: ledgerParams } = await getTenantScoping(request, data?.tenantId, "tenant_id");
     const { sqlFilter: paymentFilter, sqlParams: paymentParams } = await getTenantScoping(request, data?.tenantId, "tenant_id");
 
-    // Calculate total billed from ledgers
+    // Calculate total billed from ledger_entries
     const [billedRows] = (await db.query(
-      `SELECT SUM(amount) AS total FROM ledgers WHERE ${ledgerFilter} AND entry_type = 'debit'`,
+      `SELECT SUM(amount) AS total FROM ledger_entries WHERE ${ledgerFilter} AND type = 'charge'`,
       ledgerParams,
     )) as any[];
 
     // Calculate total collected from payments
     const [collectedRows] = (await db.query(
-      `SELECT SUM(amount) AS total FROM payments WHERE ${paymentFilter} AND status = 'cleared'`,
+      `SELECT SUM(amount) AS total FROM payments WHERE ${paymentFilter} AND status = 'recorded'`,
       paymentParams,
     )) as any[];
 
