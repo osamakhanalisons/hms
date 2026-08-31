@@ -824,7 +824,8 @@ async function seedAskariSocieties(conn: mysql.Connection, pwHash: string): Prom
   }
 
   for (const s of DEMO_SOCIETIES) {
-    const targetResidentCount = s.scale === "small" ? 500 : s.scale === "medium" ? 500 : 1000;
+    const baseCount = s.scale === "small" ? 400 : s.scale === "medium" ? 600 : 900;
+    const targetResidentCount = baseCount + Math.floor(Math.random() * 200);
     const codeSum = s.code.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
     console.log(
       `\n[ASKARI] 🏛️ ${s.name} (${s.city}) [${s.code}] — Populating ${targetResidentCount} Units & Residents + All Modules`,
@@ -1209,72 +1210,82 @@ async function seedAskariSocieties(conn: mysql.Connection, pwHash: string): Prom
       }
 
       const totalCharge = maintFee + rentFee + 2500 + 1500 + 1000;
-      const receiptNo = nextReceipt(s.code.replace(/[^A-Z0-9]/g, ""));
+      const historyMonths = [
+        { label: "Apr 2026", period: "2026-04", date: "2026-04-05" },
+        { label: "May 2026", period: "2026-05", date: "2026-05-05" },
+        { label: "Jun 2026", period: "2026-06", date: "2026-06-05" },
+        { label: "Jul 2026", period: "2026-07", date: "2026-07-05" },
+        { label: "Aug 2026", period: "2026-08", date: "2026-08-05" }
+      ];
 
       walletsRows.push([crypto.randomUUID(), s.tenantId, u.id, 0.0, 5000.0]);
-      ledgerRows.push([
-        crypto.randomUUID(),
-        s.tenantId,
-        u.id,
-        "charge",
-        chMaintId,
-        maintFee,
-        `Monthly Maintenance Fee - Aug 2026`,
-        "2026-08",
-        maintFee,
-        socAdminId,
-      ]);
-      if (resType === "tenant" && rentFee > 0) {
+
+      for (const m of historyMonths) {
+        const receiptNo = nextReceipt(s.code.replace(/[^A-Z0-9]/g, ""));
         ledgerRows.push([
           crypto.randomUUID(),
           s.tenantId,
           u.id,
           "charge",
-          chRentId,
-          rentFee,
-          `Monthly Property Rent - Aug 2026`,
-          "2026-08",
-          maintFee + rentFee,
+          chMaintId,
+          maintFee,
+          `Monthly Maintenance Fee - ${m.label}`,
+          m.period,
+          maintFee,
+          socAdminId,
+        ]);
+        if (resType === "tenant" && rentFee > 0) {
+          ledgerRows.push([
+            crypto.randomUUID(),
+            s.tenantId,
+            u.id,
+            "charge",
+            chRentId,
+            rentFee,
+            `Monthly Property Rent - ${m.label}`,
+            m.period,
+            maintFee + rentFee,
+            socAdminId,
+          ]);
+        }
+        ledgerRows.push([
+          crypto.randomUUID(),
+          s.tenantId,
+          u.id,
+          "charge",
+          chSecId,
+          2500.0,
+          `Security & CCTV Charge - ${m.label}`,
+          m.period,
+          maintFee + rentFee + 2500,
+          socAdminId,
+        ]);
+        paymentsRows.push([
+          crypto.randomUUID(),
+          s.tenantId,
+          u.id,
+          totalCharge,
+          "bank_transfer",
+          receiptNo,
+          m.date,
+          `TXN-${receiptNo}`,
+          "Paid via Habib Bank / Meezan Online",
+          "recorded",
+          socAdminId,
+        ]);
+        ledgerRows.push([
+          crypto.randomUUID(),
+          s.tenantId,
+          u.id,
+          "payment",
+          chMaintId,
+          totalCharge,
+          `Payment Received - Receipt #${receiptNo}`,
+          m.period,
+          0.0,
           socAdminId,
         ]);
       }
-      ledgerRows.push([
-        crypto.randomUUID(),
-        s.tenantId,
-        u.id,
-        "charge",
-        chSecId,
-        2500.0,
-        `Security & CCTV Charge - Aug 2026`,
-        "2026-08",
-        maintFee + rentFee + 2500,
-        socAdminId,
-      ]);
-      paymentsRows.push([
-        crypto.randomUUID(),
-        s.tenantId,
-        u.id,
-        totalCharge,
-        "bank_transfer",
-        receiptNo,
-        "2026-08-01",
-        `TXN-${receiptNo}`,
-        "Paid via Habib Bank / Meezan Online",
-        "recorded",
-        socAdminId,
-      ]);
-      ledgerRows.push([
-        crypto.randomUUID(),
-        s.tenantId,
-        u.id,
-        "payment",
-        chMaintId,
-        totalCharge,
-        `Payment Received - Receipt #${receiptNo}`,
-        "2026-08",
-        0.0,
-        socAdminId,
-      ]);
 
       residentMetas.push({
         userId: resUserId,
@@ -2347,6 +2358,56 @@ async function seedAskariSocieties(conn: mysql.Connection, pwHash: string): Prom
         "Replaced fused tube light and re-energized circuit",
       ],
     ];
+
+    // Add extra random work orders to differentiate societies
+    const extraWoCount = 3 + Math.floor(Math.random() * 6); // 3 to 8 extra jobs
+    const woTitles = [
+      "Staircase Railing Welding Repair",
+      "Basement Drainage Pump De-silting",
+      "Fire Extinguisher Annual Pressure Test",
+      "Intercom Cable Fault Localization",
+      "Sewer Mainline High-Pressure Jetting",
+      "Security Guard Cabin Fan Replacement",
+      "Main Water Tank Valve Greasing",
+      "Roof Waterproofing Patch Work"
+    ];
+    const woDescs = [
+      "Weld loose joints on Block A staircase railing.",
+      "Clear silt and debris from primary drainage sump in basement.",
+      "Check pressure gauge and refill dry chemical powder.",
+      "Trace and splice broken audio wire for Apartment 402.",
+      "Clear blockage using mechanical high-pressure jetting machine.",
+      "Replace faulty ceiling fan capacitor in guard room.",
+      "Apply heavy industrial grease to main gate valves.",
+      "Apply bitumen coat to minor cracks on roof floor."
+    ];
+    const assetsForWo = [assetGenId, assetLift1Id, assetLift2Id, assetPumpId, null];
+    
+    for (let w = 0; w < extraWoCount; w++) {
+      const idx = Math.floor(Math.random() * woTitles.length);
+      const isCompleted = Math.random() > 0.4;
+      const priority = Math.random() > 0.7 ? "high" : Math.random() > 0.4 ? "normal" : "low";
+      const costVal = 1500 + Math.floor(Math.random() * 20000);
+      
+      workOrdersRows.push([
+        crypto.randomUUID(),
+        s.tenantId,
+        assetsForWo[Math.floor(Math.random() * assetsForWo.length)],
+        woTitles[idx],
+        woDescs[idx],
+        isCompleted ? "completed" : Math.random() > 0.5 ? "in_progress" : "open",
+        priority,
+        staffIds["technician"],
+        Math.random() > 0.5 ? vLiftId : null,
+        costVal,
+        costVal + 500,
+        isCompleted ? costVal : 0,
+        "2026-08-30",
+        isCompleted ? "2026-08-30 15:30:00" : null,
+        "Standard repair completed.",
+      ]);
+    }
+
     await batchInsert(
       conn,
       "maintenance_work_orders",
@@ -2371,7 +2432,8 @@ async function seedAskariSocieties(conn: mysql.Connection, pwHash: string): Prom
     );
 
     // 13. COMPLAINTS, COMMENTS & HISTORY
-    const numComplaints = s.scale === "small" ? 50 : s.scale === "medium" ? 50 : 100;
+    const numComplaints = Math.floor(targetResidentCount * (0.06 + Math.random() * 0.08));
+
     const complaintsRows: any[][] = [];
     const complaintDefs = [
       {
@@ -2515,7 +2577,7 @@ async function seedAskariSocieties(conn: mysql.Connection, pwHash: string): Prom
       patrolsRows,
     );
 
-    const numVisitors = s.scale === "small" ? 80 : s.scale === "medium" ? 80 : 160;
+    const numVisitors = Math.floor(targetResidentCount * (0.15 + Math.random() * 0.15));
     const visitorRows: any[][] = [];
     for (let vp = 1; vp <= numVisitors; vp++) {
       const targetRes = residentMetas[vp % residentMetas.length];
@@ -2917,6 +2979,39 @@ async function seedAskariSocieties(conn: mysql.Connection, pwHash: string): Prom
       [crypto.randomUUID(), poll2Id, residentMetas[2].userId],
     );
 
+    // Inject 1 to 3 extra polls
+    const extraPollsCount = 1 + Math.floor(Math.random() * 3);
+    const pollTemplates = [
+      {
+        question: "Should we designate Block B rear lawn as a Pet-Free zone?",
+        options: "[\"Yes, restrict pets\", \"No restriction\", \"Neutral\"]"
+      },
+      {
+        question: "Approve PKR 5,000 one-time levy for Independence Day Gala?",
+        options: "[\"Approve\", \"Reject\", \"Reduce to 2500\"]"
+      },
+      {
+        question: "Preferred day for Weekly Society Fruit & Vegetable Market?",
+        options: "[\"Friday\", \"Saturday\", \"Sunday\"]"
+      },
+      {
+        question: "Proposal to install electronic speed signs on Main Boulevard",
+        options: "[\"Agree, high priority\", \"Disagree, waste of funds\"]"
+      }
+    ];
+    for (let pIdx = 0; pIdx < extraPollsCount; pIdx++) {
+      const template = pollTemplates[(codeSum + pIdx) % pollTemplates.length];
+      const pollId = crypto.randomUUID();
+      await conn.query(
+        "INSERT INTO polls (id, tenant_id, question, type, options, opens_at, closes_at, is_anonymous, eligible_voters) VALUES (?, ?, ?, 'single', ?, '2026-08-01 00:00:00', '2026-09-15 00:00:00', FALSE, 'all')",
+        [pollId, s.tenantId, template.question, template.options],
+      );
+      await conn.query(
+        "INSERT INTO poll_votes (id, poll_id, user_id, choice, option_selected) VALUES (?, ?, ?, 'Answer option', '0')",
+        [crypto.randomUUID(), pollId, residentMetas[pIdx % residentMetas.length].userId],
+      );
+    }
+
     // Events & RSVPs
     const ev1Id = crypto.randomUUID();
     const ev2Id = crypto.randomUUID();
@@ -2937,6 +3032,35 @@ async function seedAskariSocieties(conn: mysql.Connection, pwHash: string): Prom
       "INSERT INTO event_rsvps (id, event_id, user_id, status, guests_count, notes) VALUES (?, ?, ?, 'yes', 2, 'Attending')",
       [crypto.randomUUID(), ev1Id, residentMetas[1].userId],
     );
+
+    // Inject 1 to 2 extra events
+    const extraEventsCount = 1 + Math.floor(Math.random() * 2);
+    const eventTemplates = [
+      {
+        title: "Eid Milad-un-Nabi Spiritual Gathering & Dinner",
+        desc: "Annual religious assembly with guest speaker, Durood recitation, and traditional dinner box distribution.",
+        venue: "Askari Central Mosque Yard"
+      },
+      {
+        title: "Defense Day Kids Painting Competition",
+        desc: "Bring your kids to draw and paint their tribute to national heroes. Free painting kits provided.",
+        venue: "Block A Community Club House"
+      },
+      {
+        title: "Winter Badminton Championship 2026",
+        desc: "Open doubles tournament for all age brackets. Register with society sports secretary.",
+        venue: "Society Sports Court"
+      }
+    ];
+    for (let eIdx = 0; eIdx < extraEventsCount; eIdx++) {
+      const template = eventTemplates[(codeSum + eIdx) % eventTemplates.length];
+      const evId = crypto.randomUUID();
+      await conn.query(
+        "INSERT INTO events (id, tenant_id, title, cover_url, starts_at, ends_at, venue, allow_rsvp, capacity, description) VALUES (?, ?, ?, 'https://images.unsplash.com/photo-1540575467063-178a50c2df87', '2026-09-06 17:00:00', '2026-09-06 20:00:00', ?, TRUE, 100, ?)",
+        [evId, s.tenantId, template.title, template.venue, template.desc],
+      );
+    }
+
 
     // Amenities & Bookings
     const amHallId = crypto.randomUUID();

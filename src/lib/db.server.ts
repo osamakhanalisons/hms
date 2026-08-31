@@ -342,6 +342,17 @@ export async function initDb() {
     ) ENGINE=InnoDB;
   `);
 
+  // Safety performance indexes
+  try {
+    await db.query("CREATE INDEX idx_residents_tenant_id ON residents (tenant_id)");
+  } catch (_) {}
+  try {
+    await db.query("CREATE INDEX idx_residents_is_current ON residents (is_current)");
+  } catch (_) {}
+  try {
+    await db.query("CREATE INDEX idx_resident_vehicles_tenant_id ON resident_vehicles (tenant_id)");
+  } catch (_) {}
+
   // ─── LEDGER MODULE ────────────────────────────────────────────────────────
 
   await db.query(`

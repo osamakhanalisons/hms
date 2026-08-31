@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -71,10 +71,21 @@ function ParkingPage() {
   const [vehiclePlate, setVehiclePlate] = useState("");
   const [vehicleType, setVehicleType] = useState("");
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 12;
+
   const { data: slots = [], isLoading } = useQuery({
     queryKey: ["parking-slots"],
     queryFn: () => getParkingSlotsFn(),
   });
+
+  const paginatedSlots = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return slots.slice(start, start + itemsPerPage);
+  }, [slots, page]);
+
+  const totalPages = Math.ceil(slots.length / itemsPerPage) || 1;
 
   const { data: units = [] } = useQuery({
     queryKey: ["units-for-parking"],
@@ -204,7 +215,7 @@ function ParkingPage() {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(slots as any[]).map((slot) => (
+            {(paginatedSlots as any[]).map((slot) => (
               <Card
                 key={slot.id}
                 className="border-border/70 shadow-soft hover:shadow-md transition-shadow"
@@ -279,6 +290,37 @@ function ParkingPage() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t p-4 text-xs text-muted-foreground bg-surface border rounded-lg mt-4 shadow-soft">
+            <div>
+              Showing {(page - 1) * itemsPerPage + 1} to{" "}
+              {Math.min(page * itemsPerPage, slots.length)} of {slots.length} parking slots
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                className="h-8 text-xs px-3"
+              >
+                Previous
+              </Button>
+              <span className="font-medium text-foreground">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                className="h-8 text-xs px-3"
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </div>

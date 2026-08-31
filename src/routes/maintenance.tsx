@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Wrench,
   Calendar,
@@ -203,6 +203,20 @@ function MaintenancePage() {
   const [vendorFilter, setVendorFilter] = useState("all");
   const [activeTab, setActiveTab] = useState("work-orders");
 
+  // Pagination states
+  const [woPage, setWoPage] = useState(1);
+  const [schedPage, setSchedPage] = useState(1);
+  const woItemsPerPage = 9;
+  const schedItemsPerPage = 10;
+
+  useEffect(() => {
+    setWoPage(1);
+  }, [search, statusFilter, priorityFilter, assetFilter, vendorFilter]);
+
+  useEffect(() => {
+    setSchedPage(1);
+  }, [search]);
+
   // Create Work Order modal state
   const [createWoOpen, setCreateWoOpen] = useState(false);
   const [woAssetId, setWoAssetId] = useState("");
@@ -395,6 +409,18 @@ function MaintenancePage() {
     );
   }, [schedules, search]);
 
+  const paginatedWorkOrders = useMemo(() => {
+    const start = (woPage - 1) * woItemsPerPage;
+    return workOrders.slice(start, start + woItemsPerPage);
+  }, [workOrders, woPage]);
+  const totalWoPages = Math.ceil(workOrders.length / woItemsPerPage) || 1;
+
+  const paginatedSchedules = useMemo(() => {
+    const start = (schedPage - 1) * schedItemsPerPage;
+    return filteredSchedules.slice(start, start + schedItemsPerPage);
+  }, [filteredSchedules, schedPage]);
+  const totalSchedPages = Math.ceil(filteredSchedules.length / schedItemsPerPage) || 1;
+
   return (
     <AppShell
       title="Maintenance & Work Orders"
@@ -563,7 +589,7 @@ function MaintenancePage() {
               </Card>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {workOrders.map((wo) => (
+                {paginatedWorkOrders.map((wo) => (
                   <Card key={wo.id} className={`border-border/70 shadow-soft hover:border-border transition-colors ${wo.isOverdue ? "border-rose-300 dark:border-rose-900 bg-rose-500/5" : ""}`}>
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-2">
@@ -649,6 +675,37 @@ function MaintenancePage() {
                 ))}
               </div>
             )}
+            {totalWoPages > 1 && (
+              <div className="flex items-center justify-between border-t p-4 text-xs text-muted-foreground bg-surface border rounded-lg mt-4 shadow-soft">
+                <div>
+                  Showing {(woPage - 1) * woItemsPerPage + 1} to{" "}
+                  {Math.min(woPage * woItemsPerPage, workOrders.length)} of {workOrders.length} work orders
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={woPage === 1}
+                    onClick={() => setWoPage((p) => Math.max(p - 1, 1))}
+                    className="h-8 text-xs px-3"
+                  >
+                    Previous
+                  </Button>
+                  <span className="font-medium text-foreground">
+                    Page {woPage} of {totalWoPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={woPage >= totalWoPages}
+                    onClick={() => setWoPage((p) => Math.min(p + 1, totalWoPages))}
+                    className="h-8 text-xs px-3"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           {/* PREVENTIVE SCHEDULES TAB */}
@@ -681,7 +738,7 @@ function MaintenancePage() {
                   </div>
                 ) : (
                   <div className="divide-y divide-border/60">
-                    {filteredSchedules.map((s) => (
+                    {paginatedSchedules.map((s) => (
                       <div key={s.id} className="p-4 flex flex-wrap items-center justify-between gap-3 hover:bg-muted/20 transition-colors">
                         <div className="space-y-1 min-w-0 max-w-md">
                           <div className="flex items-center gap-2">
@@ -724,6 +781,37 @@ function MaintenancePage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+                {totalSchedPages > 1 && (
+                  <div className="flex items-center justify-between border-t p-4 text-xs text-muted-foreground bg-surface border-t">
+                    <div>
+                      Showing {(schedPage - 1) * schedItemsPerPage + 1} to{" "}
+                      {Math.min(schedPage * schedItemsPerPage, filteredSchedules.length)} of {filteredSchedules.length} schedules
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={schedPage === 1}
+                        onClick={() => setSchedPage((p) => Math.max(p - 1, 1))}
+                        className="h-8 text-xs px-3"
+                      >
+                        Previous
+                      </Button>
+                      <span className="font-medium text-foreground">
+                        Page {schedPage} of {totalSchedPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={schedPage >= totalSchedPages}
+                        onClick={() => setSchedPage((p) => Math.min(p + 1, totalSchedPages))}
+                        className="h-8 text-xs px-3"
+                      >
+                        Next
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>

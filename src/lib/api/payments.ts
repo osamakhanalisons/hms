@@ -6,14 +6,43 @@ import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantSc
 import { requirePermission } from "./permissions";
 
 export const getPaymentsFn = createServerFn({ method: "GET" })
-  .validator(z.object({ unitId: z.string().optional(), tenantId: z.string().optional() }).optional())
-  .handler(async ({ data, request }: any) => {
+  .validator(
+    z
+      .object({
+        unitId: z.string().optional(),
+        tenantId: z.string().optional(),
+        page: z.number().optional(),
+        pageSize: z.number().optional(),
+      })
+      .optional(),
+  )
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const { tenantId, roles, userId } = await requirePermission(request, "payments", "view");
     const isAdmin = isAdminRole(roles);
     const db = getDb();
 
     const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "p.tenant_id");
 
+    // Count query
+    let countQuery = `
+      SELECT COUNT(*) AS total
+      FROM payments p
+      JOIN units u ON u.id = p.unit_id
+      LEFT JOIN residents r ON r.unit_id = u.id AND r.is_current = TRUE
+      WHERE ${sqlFilter}
+    `;
+    const countParams: any[] = [...sqlParams];
+    if (!isAdmin) {
+      countQuery += " AND r.person_id IN (SELECT id FROM persons WHERE user_id = ?)";
+      countParams.push(userId);
+    } else if (data?.unitId) {
+      countQuery += " AND p.unit_id = ?";
+      countParams.push(data.unitId);
+    }
+    const [[{ total }]] = (await db.query(countQuery, countParams)) as any[];
+
+    // Main query
     let query = `
       SELECT p.*, u.unit_number, pr.full_name
       FROM payments p
@@ -34,8 +63,17 @@ export const getPaymentsFn = createServerFn({ method: "GET" })
     }
     query += " ORDER BY p.created_at DESC";
 
+    if (data?.page && data?.pageSize) {
+      const offset = (data.page - 1) * data.pageSize;
+      query += " LIMIT ? OFFSET ?";
+      params.push(data.pageSize, offset);
+    }
+
     const [rows] = (await db.query(query, params)) as any[];
-    return rows;
+    return {
+      payments: rows,
+      totalItems: total,
+    };
   });
 
 export const recordPaymentFn = createServerFn({ method: "POST" })
@@ -125,7 +163,8 @@ export const recordPaymentFn = createServerFn({ method: "POST" })
     }
   });
 
-export const getDailySummaryFn = createServerFn({ method: "GET" }).handler(async ({ request }: any) => {
+export const getDailySummaryFn = createServerFn({ method: "GET" }).handler(async (ctx: any) => {
+  const { request } = ctx;
   const { tenantId } = await requirePermission(request, "payments", "view");
 
   const db = getDb();

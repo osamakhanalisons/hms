@@ -61,6 +61,12 @@ export const Route = createFileRoute("/residents")({
   component: ResidentsRoute,
 });
 
+function getCookieVal(name: string): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]*)'));
+  return match ? match[2] : "";
+}
+
 function ResidentsRoute() {
   return (
     <ModuleGate moduleKey="residents">
@@ -108,26 +114,28 @@ function ResidentsPage() {
   const [plateNumber, setPlateNumber] = useState("");
   const [color, setColor] = useState("");
 
-  const { data: residents = [], isLoading } = useQuery({
-    queryKey: ["residents", search],
-    queryFn: async () => getResidentsFn({ data: { search } }),
+  const selectedTenantId = getCookieVal("selected_tenant_id");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["residents", { search, page, pageSize }],
+    queryFn: async () => getResidentsFn({ data: { search, page, pageSize } }),
   });
+
+  const residents = data?.residents ?? [];
+  const totalItems = data?.totalItems ?? 0;
 
   useEffect(() => {
     setPage(1);
   }, [search]);
 
-  const totalItems = residents.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
 
-  const paginatedResidents = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return residents.slice(start, start + pageSize);
-  }, [residents, page, pageSize]);
+  const paginatedResidents = residents;
 
   const { data: units = [] } = useQuery({
     queryKey: ["units", { vacantOnly: true }],
     queryFn: async () => getUnitsFn({ data: { vacantOnly: true } }),
+    enabled: !!selectedTenantId,
   });
 
   const uniqueUnits = useMemo(() => {
@@ -280,15 +288,21 @@ function ResidentsPage() {
             />
           </div>
           <PermissionGate moduleKey="residents" action="create" fallback={null}>
-            <Button
-              onClick={() => {
-                createResident.reset();
-                setAddDialogOpen(true);
-              }}
-              className="gap-1.5 size-sm"
-            >
-              <UserPlus className="size-4" /> Add Resident
-            </Button>
+            {selectedTenantId ? (
+              <Button
+                onClick={() => {
+                  createResident.reset();
+                  setAddDialogOpen(true);
+                }}
+                className="gap-1.5 size-sm"
+              >
+                <UserPlus className="size-4" /> Add Resident
+              </Button>
+            ) : (
+              <div className="text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-md border border-border/70">
+                Select a society from the top header to add residents.
+              </div>
+            )}
           </PermissionGate>
         </header>
 

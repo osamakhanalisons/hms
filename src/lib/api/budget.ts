@@ -7,13 +7,21 @@ import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantSc
 
 export const getBudgetsFn = createServerFn({ method: "GET" })
   .validator(z.object({ tenantId: z.string().optional() }).optional())
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
 
     const db = getDb();
-    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "tenant_id");
-    const [rows] = (await db.query(`SELECT * FROM budgets WHERE ${sqlFilter} ORDER BY year DESC`, sqlParams)) as any[];
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "b.tenant_id");
+    const [rows] = (await db.query(
+      `SELECT b.*, t.name AS tenant_name
+       FROM budgets b
+       LEFT JOIN tenants t ON t.id = b.tenant_id
+       WHERE ${sqlFilter}
+       ORDER BY b.year DESC`,
+      sqlParams,
+    )) as any[];
     return rows;
   });
 
@@ -24,7 +32,8 @@ export const createBudgetFn = createServerFn({ method: "POST" })
       title: z.string().min(1),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
     const tenantId = await getUserTenantId(userId);
@@ -46,7 +55,8 @@ export const createBudgetFn = createServerFn({ method: "POST" })
 
 export const getBudgetLineItemsFn = createServerFn({ method: "GET" })
   .validator(z.object({ budgetId: z.string(), tenantId: z.string().optional() }))
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
 
@@ -68,7 +78,8 @@ export const addBudgetLineItemFn = createServerFn({ method: "POST" })
       actualAmount: z.number().nonnegative().optional(),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
     const tenantId = await getUserTenantId(userId);

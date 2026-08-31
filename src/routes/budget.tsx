@@ -140,7 +140,7 @@ function BudgetPage() {
               <SelectContent>
                 {budgets.map((b: any) => (
                   <SelectItem key={b.id} value={b.id}>
-                    {b.title} (FY {b.year})
+                    {b.title} (FY {b.year}) {b.tenant_name ? `— ${b.tenant_name}` : ""}
                   </SelectItem>
                 ))}
               </SelectContent>

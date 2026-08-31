@@ -30,6 +30,12 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { CreditCard, Landmark, CircleDollarSign, Plus, Coins } from "lucide-react";
 
+function getCookieVal(name: string): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]*)'));
+  return match ? match[2] : "";
+}
+
 export const Route = createFileRoute("/payments")({
   head: () => ({
     meta: [
@@ -67,14 +73,22 @@ function PaymentsPage() {
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
 
-  const { data: payments = [], isLoading } = useQuery({
-    queryKey: ["payments"],
-    queryFn: async () => getPaymentsFn(),
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
+  const selectedTenantId = getCookieVal("selected_tenant_id");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["payments", { page, pageSize: itemsPerPage }],
+    queryFn: async () => getPaymentsFn({ data: { page, pageSize: itemsPerPage } }),
   });
+
+  const payments = data?.payments ?? [];
+  const totalItems = data?.totalItems ?? 0;
 
   const { data: units = [] } = useQuery({
     queryKey: ["units"],
     queryFn: async () => getUnitsFn(),
+    enabled: !!selectedTenantId,
   });
 
   const { data: summary = { todayCollected: 0, count: 0 } } = useQuery({
@@ -118,10 +132,8 @@ function PaymentsPage() {
     });
   };
 
-  const [page, setPage] = useState(1);
-  const itemsPerPage = 10;
-  const totalPages = Math.ceil(payments.length / itemsPerPage) || 1;
-  const paginatedPayments = payments.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const paginatedPayments = payments;
 
   return (
     <AppShell
@@ -161,11 +173,19 @@ function PaymentsPage() {
               </CardContent>
             </Card>
             <PermissionGate moduleKey="payments" action="create" fallback={null}>
-              <Card className="border-border/70 shadow-soft flex items-center justify-center p-5">
-                <Button onClick={() => setRecordDialogOpen(true)} className="w-full gap-1.5 h-10">
-                  <Plus className="size-4" /> Record Payment
-                </Button>
-              </Card>
+              {selectedTenantId ? (
+                <Card className="border-border/70 shadow-soft flex items-center justify-center p-5">
+                  <Button onClick={() => setRecordDialogOpen(true)} className="w-full gap-1.5 h-10">
+                    <Plus className="size-4" /> Record Payment
+                  </Button>
+                </Card>
+              ) : (
+                <Card className="border-border/70 shadow-soft flex items-center justify-center p-5">
+                  <div className="text-xs text-muted-foreground text-center">
+                    Select a society from the top header to record payments.
+                  </div>
+                </Card>
+              )}
             </PermissionGate>
           </section>
         )}
@@ -178,7 +198,7 @@ function PaymentsPage() {
               <CardDescription className="text-xs">All cleared and logged receipts</CardDescription>
             </div>
             <span className="text-xs font-mono text-muted-foreground">
-              Total: {payments.length} receipts
+              Total: {totalItems} receipts
             </span>
           </CardHeader>
           <CardContent className="p-0">
@@ -217,7 +237,7 @@ function PaymentsPage() {
                           </td>
                         </tr>
                       ))}
-                      {payments.length === 0 && (
+                      {totalItems === 0 && (
                         <tr>
                           <td
                             colSpan={6}
@@ -232,11 +252,11 @@ function PaymentsPage() {
                 </div>
 
                 {/* Pagination Controls */}
-                {payments.length > itemsPerPage && (
+                {totalItems > itemsPerPage && (
                   <div className="flex items-center justify-between border-t p-4 text-xs text-muted-foreground">
                     <div>
                       Showing {(page - 1) * itemsPerPage + 1} to{" "}
-                      {Math.min(page * itemsPerPage, payments.length)} of {payments.length} receipts
+                      {Math.min(page * itemsPerPage, totalItems)} of {totalItems} receipts
                     </div>
                     <div className="flex items-center gap-2">
                       <Button

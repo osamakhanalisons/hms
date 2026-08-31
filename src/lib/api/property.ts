@@ -8,21 +8,27 @@ import { requirePermission } from "./permissions";
 // ── Get full property tree ─────────────────────────────────────────────────
 export const getPropertyTreeFn = createServerFn({ method: "GET" })
   .validator(z.object({ tenantId: z.string().optional() }).optional())
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
 
     const db = getDb();
     const { sqlFilter, sqlParams } = await getTenantScoping(request, data?.tenantId, "tenant_id");
 
-    const [societies] = (await db.query(`SELECT * FROM societies WHERE ${sqlFilter} ORDER BY name`, sqlParams)) as any[];
-    const [blocks] = (await db.query(`SELECT * FROM blocks WHERE ${sqlFilter} ORDER BY name`, sqlParams)) as any[];
-    const [buildings] = (await db.query(`SELECT * FROM buildings WHERE ${sqlFilter} ORDER BY name`, sqlParams)) as any[];
-    const [floors] = (await db.query(
-      `SELECT * FROM floors WHERE ${sqlFilter} ORDER BY floor_number`,
-      sqlParams,
-    )) as any[];
-    const [units] = (await db.query(`SELECT * FROM units WHERE ${sqlFilter} ORDER BY unit_number`, sqlParams)) as any[];
+    const [
+      [societies],
+      [blocks],
+      [buildings],
+      [floors],
+      [units],
+    ] = (await Promise.all([
+      db.query(`SELECT id, name, address, city FROM societies WHERE ${sqlFilter} ORDER BY name`, sqlParams),
+      db.query(`SELECT id, society_id, name FROM blocks WHERE ${sqlFilter} ORDER BY name`, sqlParams),
+      db.query(`SELECT id, block_id, name, floors_count FROM buildings WHERE ${sqlFilter} ORDER BY name`, sqlParams),
+      db.query(`SELECT id, building_id, floor_number, name FROM floors WHERE ${sqlFilter} ORDER BY floor_number`, sqlParams),
+      db.query(`SELECT id, floor_id, building_id, block_id, society_id, unit_number, unit_type, status, area_sqft, bedrooms FROM units WHERE ${sqlFilter} ORDER BY unit_number`, sqlParams),
+    ])) as any[];
 
     return { societies, blocks, buildings, floors, units };
   });
