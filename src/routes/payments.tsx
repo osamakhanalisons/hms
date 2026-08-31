@@ -288,7 +288,7 @@ function PaymentsPage() {
                   <SelectContent>
                     {units.map((u: any) => (
                       <SelectItem key={u.id} value={u.id}>
-                        {u.full_path || `Unit ${u.unit_number} ${u.building_name && `(${u.building_name})`} ${u.block_name && `Block ${u.block_name}`}`}
+                        {u.full_path || `Unit ${u.unit_number} ${u.building_name ? `(${u.building_name})` : ""} ${u.block_name ? (u.block_name.startsWith("Block") ? u.block_name : `Block ${u.block_name}`) : ""}`}
                       </SelectItem>
                     ))}
                   </SelectContent>

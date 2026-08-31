@@ -130,7 +130,7 @@ function daysBetween(date1: Date, date2: Date): number {
 // ─── GET AI MAINTENANCE INSIGHTS ─────────────────────────────────────────────
 
 export const getAIMaintenanceInsightsFn = createServerFn({ method: "GET" }).handler(
-  async ({ request }) => {
+  async ({ request }: any) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
 
@@ -153,7 +153,7 @@ export const getAIMaintenanceInsightsFn = createServerFn({ method: "GET" }).hand
 
     // Get all assets
     const [assets] = (await db.query(
-      `SELECT id, name, category, location, status, purchase_date, warranty_expiry_date
+      `SELECT id, name, category, location, status, purchase_date, warranty_expires_at
        FROM assets
        WHERE tenant_id = ? AND status != 'scrapped'
        ORDER BY name`,
@@ -379,7 +379,9 @@ export const getAIMaintenanceInsightsFn = createServerFn({ method: "GET" }).hand
       const monthCost = completedWOs
         .filter((wo: any) => {
           const completedDate = wo.completed_at || wo.created_at;
-          return completedDate && completedDate.substring(0, 7) === monthStr;
+          if (!completedDate) return false;
+          const dateStr = completedDate instanceof Date ? completedDate.toISOString() : String(completedDate);
+          return dateStr.substring(0, 7) === monthStr;
         })
         .reduce((sum: number, wo: any) => sum + Number(wo.effective_cost || 0), 0);
 
@@ -497,8 +499,8 @@ export const getAIMaintenanceInsightsFn = createServerFn({ method: "GET" }).hand
 
     // Recommendation 2: Assets with warranty expiry
     assets.forEach((asset: any) => {
-      if (asset.warranty_expiry_date) {
-        const expiryDate = new Date(asset.warranty_expiry_date);
+      if (asset.warranty_expires_at) {
+        const expiryDate = new Date(asset.warranty_expires_at);
         const daysUntilExpiry = daysBetween(now, expiryDate);
 
         if (daysUntilExpiry <= 90 && daysUntilExpiry >= 0) {
@@ -690,7 +692,7 @@ export const storeAIAnalysisFn = createServerFn({ method: "POST" })
       resultData: z.any(),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async ({ data, request }: any) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
 
@@ -724,7 +726,7 @@ export const getAIAnalysisHistoryFn = createServerFn({ method: "GET" })
       })
       .optional(),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async ({ data, request }: any) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
 

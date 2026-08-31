@@ -72,6 +72,7 @@ function PropertyPage() {
   const [city, setCity] = useState("");
   const [unitType, setUnitType] = useState("flat");
   const [areaSqft, setAreaSqft] = useState("");
+  const [selectedBlockId, setSelectedBlockId] = useState("");
 
   const {
     data: treeData = { societies: [], blocks: [], buildings: [], floors: [], units: [] },
@@ -85,12 +86,22 @@ function PropertyPage() {
     const { societies, blocks, buildings, floors, units } = treeData;
 
     return societies.map((s: any): PropertyNode => {
-      const sBlocks = blocks.filter((b: any) => b.society_id === s.id);
-      return {
-        id: s.id,
-        name: s.name,
-        type: "society",
-        children: sBlocks.map((bl: any): PropertyNode => {
+      // 1. Apartment Area blocks (only blocks that contain buildings)
+      const sApartmentBlocks = blocks.filter((b: any) =>
+        b.society_id === s.id && buildings.some((bu: any) => bu.block_id === b.id)
+      );
+
+      // 2. House/Villa Area units (units with unit_type house/villa OR building_id IS NULL)
+      const sHouseVillas = units.filter((u: any) =>
+        u.society_id === s.id && (u.unit_type === "house" || u.unit_type === "villa" || !u.building_id)
+      );
+
+      const apartmentAreaNode: PropertyNode = {
+        id: `${s.id}-apartments`,
+        name: "Apartment Area",
+        type: "apartment_area" as any,
+        societyId: s.id,
+        children: sApartmentBlocks.map((bl: any): PropertyNode => {
           const blBuildings = buildings.filter((bu: any) => bu.block_id === bl.id);
           return {
             id: bl.id,
@@ -102,18 +113,94 @@ function PropertyPage() {
                 id: bu.id,
                 name: bu.name,
                 type: "building",
-                children: buUnits.map((u: any): PropertyNode => ({
-                  id: u.id,
-                  name: `Unit ${u.unit_number}`,
-                  type: "unit",
-                  unitNumber: u.unit_number,
-                  unitType: u.unit_type,
-                  status: u.status,
-                })),
+                children: buUnits.map((u: any): PropertyNode => {
+                  const numStr = String(u.unit_number || "");
+                  const label = numStr.toLowerCase().startsWith("flat") || numStr.toLowerCase().startsWith("penthouse") || numStr.toLowerCase().startsWith("shop")
+                    ? numStr
+                    : `${u.unit_type === "penthouse" ? "Penthouse" : u.unit_type === "shop" ? "Shop" : "Flat"} ${numStr}`;
+                  return {
+                    id: u.id,
+                    name: label,
+                    type: "unit",
+                    unitNumber: u.unit_number,
+                    unitType: u.unit_type,
+                    status: u.status,
+                  };
+                }),
               };
             }),
           };
         }),
+      };
+
+      // Group sHouseVillas by block_id
+      const houseBlocksMap = new Map<string, any[]>();
+      const unblockedHouses: any[] = [];
+
+      for (const u of sHouseVillas) {
+        if (u.block_id) {
+          if (!houseBlocksMap.has(u.block_id)) {
+            houseBlocksMap.set(u.block_id, []);
+          }
+          houseBlocksMap.get(u.block_id)!.push(u);
+        } else {
+          unblockedHouses.push(u);
+        }
+      }
+
+      const houseBlockChildren: PropertyNode[] = [];
+      houseBlocksMap.forEach((hUnits, blockId) => {
+        const bl = blocks.find((b: any) => b.id === blockId);
+        houseBlockChildren.push({
+          id: `${blockId}-houseblock`,
+          name: bl?.name || "Officer Housing Sector",
+          type: "block",
+          children: hUnits.map((u: any): PropertyNode => {
+            const numStr = String(u.unit_number || "");
+            const label = numStr.toLowerCase().startsWith("house") || numStr.toLowerCase().startsWith("villa")
+              ? numStr
+              : `${u.unit_type === "villa" ? "Villa" : "House"} ${numStr}`;
+            return {
+              id: u.id,
+              name: label,
+              type: "unit",
+              unitNumber: u.unit_number,
+              unitType: u.unit_type,
+              status: u.status,
+              blockName: bl?.name,
+            };
+          }),
+        });
+      });
+
+      unblockedHouses.forEach((u: any) => {
+        const numStr = String(u.unit_number || "");
+        const label = numStr.toLowerCase().startsWith("house") || numStr.toLowerCase().startsWith("villa")
+          ? numStr
+          : `${u.unit_type === "villa" ? "Villa" : "House"} ${numStr}`;
+        houseBlockChildren.push({
+          id: u.id,
+          name: label,
+          type: "unit",
+          unitNumber: u.unit_number,
+          unitType: u.unit_type,
+          status: u.status,
+        });
+      });
+
+      const houseVillaAreaNode: PropertyNode = {
+        id: `${s.id}-housevillas`,
+        name: "House / Villa Area",
+        type: "house_villa_area" as any,
+        societyId: s.id,
+        children: houseBlockChildren,
+      };
+
+      return {
+        id: s.id,
+        name: s.name,
+        type: "society",
+        children: [apartmentAreaNode, houseVillaAreaNode],
       };
     });
   }, [treeData]);
@@ -247,16 +334,23 @@ function PropertyPage() {
     setCity("");
     setUnitType("flat");
     setAreaSqft("");
+    setSelectedBlockId("");
   };
 
   const handleAddChild = (parent: PropertyNode) => {
     setParentRecord(parent);
     if (parent.type === "society") {
       setAddType("block");
+    } else if (parent.type === "apartment_area" as any) {
+      setAddType("block");
+    } else if (parent.type === "house_villa_area" as any) {
+      setAddType("unit");
+      setUnitType("house");
     } else if (parent.type === "block") {
       setAddType("building");
     } else if (parent.type === "building") {
       setAddType("unit");
+      setUnitType("flat");
     }
     setAddDialogOpen(true);
   };
@@ -270,11 +364,23 @@ function PropertyPage() {
     } else if (addType === "building" && parentRecord) {
       createBuilding.mutate({ data: { blockId: parentRecord.id, name: newName } });
     } else if (addType === "unit" && parentRecord) {
-      // Find grandparent block/society
-      const building = treeData.buildings.find((b: any) => b.id === parentRecord.id);
-      const blockId = building?.block_id;
-      const block = treeData.blocks.find((bl: any) => bl.id === blockId);
-      const societyId = block?.society_id;
+      let societyId: string;
+      let blockId: string | undefined = undefined;
+      let buildingId: string | undefined = undefined;
+
+      if (parentRecord.type === "house_villa_area" as any) {
+        societyId = parentRecord.societyId!;
+        blockId = (selectedBlockId && selectedBlockId !== "none") ? selectedBlockId : undefined;
+      } else if (parentRecord.type === "building") {
+        const building = treeData.buildings.find((b: any) => b.id === parentRecord.id);
+        blockId = building?.block_id;
+        const block = treeData.blocks.find((bl: any) => bl.id === blockId);
+        societyId = block?.society_id;
+        buildingId = parentRecord.id;
+      } else {
+        toast.error("Hierarchy error: Invalid parent for unit");
+        return;
+      }
 
       if (!societyId) {
         toast.error("Hierarchy error: Society not resolved");
@@ -285,7 +391,7 @@ function PropertyPage() {
         data: {
           societyId,
           blockId,
-          buildingId: parentRecord.id,
+          buildingId,
           unitNumber: newName,
           unitType: unitType as any,
           areaSqft: areaSqft ? parseFloat(areaSqft) : undefined,
@@ -374,22 +480,50 @@ function PropertyPage() {
                     </div>
                   </div>
 
-                  {selectedNode.type === "unit" && (
-                    <div className="grid grid-cols-2 gap-4 border-t pt-4">
-                      <div>
-                        <div className="text-xs text-muted-foreground">Unit Type</div>
-                        <div className="text-sm font-semibold capitalize">
-                          {selectedNode.unitType || "flat"}
+                  {selectedNode.type === "unit" && (() => {
+                    const un = treeData.units.find((u: any) => u.id === selectedNode.id);
+                    const block = treeData.blocks.find((b: any) => b.id === un?.block_id);
+                    return (
+                      <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                        <div>
+                          <div className="text-xs text-muted-foreground">Property Type</div>
+                          <div className="text-sm font-semibold capitalize">
+                            {un?.unit_type || "flat"}
+                          </div>
                         </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">Status</div>
-                        <div className="text-sm font-semibold capitalize">
-                          {selectedNode.status || "vacant"}
+                        <div>
+                          <div className="text-xs text-muted-foreground">Status</div>
+                          <div className="text-sm font-semibold capitalize">
+                            {un?.status || "vacant"}
+                          </div>
                         </div>
+                        {un?.area_sqft && (
+                          <div>
+                            <div className="text-xs text-muted-foreground">Area</div>
+                            <div className="text-sm font-semibold">
+                              {un.area_sqft} sqft
+                            </div>
+                          </div>
+                        )}
+                        {un?.bedrooms && (
+                          <div>
+                            <div className="text-xs text-muted-foreground">Bedrooms</div>
+                            <div className="text-sm font-semibold">
+                              {un.bedrooms} Bed(s)
+                            </div>
+                          </div>
+                        )}
+                        {block && (
+                          <div>
+                            <div className="text-xs text-muted-foreground">Block</div>
+                            <div className="text-sm font-semibold">
+                              {block.name}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-center py-20 text-muted-foreground text-sm">
@@ -447,13 +581,36 @@ function PropertyPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="flat">Flat/Apartment</SelectItem>
-                      <SelectItem value="villa">Villa/House</SelectItem>
+                      <SelectItem value="apartment">Apartment</SelectItem>
+                      <SelectItem value="house">Independent House</SelectItem>
+                      <SelectItem value="villa">Villa</SelectItem>
                       <SelectItem value="shop">Commercial Shop</SelectItem>
                       <SelectItem value="office">Office Suite</SelectItem>
                       <SelectItem value="penthouse">Penthouse</SelectItem>
+                      <SelectItem value="other">Other Type</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {parentRecord?.type === "house_villa_area" as any && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-muted-foreground">Block (Optional)</label>
+                    <Select value={selectedBlockId} onValueChange={setSelectedBlockId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Block" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No Block</SelectItem>
+                        {treeData.blocks
+                          .filter((b: any) => b.society_id === parentRecord?.societyId)
+                          .map((b: any) => (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-muted-foreground">Area (Sqft)</label>
                   <Input
@@ -511,10 +668,13 @@ function PropertyPage() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="flat">Flat/Apartment</SelectItem>
-                      <SelectItem value="villa">Villa/House</SelectItem>
+                      <SelectItem value="apartment">Apartment</SelectItem>
+                      <SelectItem value="house">Independent House</SelectItem>
+                      <SelectItem value="villa">Villa</SelectItem>
                       <SelectItem value="shop">Commercial Shop</SelectItem>
                       <SelectItem value="office">Office Suite</SelectItem>
                       <SelectItem value="penthouse">Penthouse</SelectItem>
+                      <SelectItem value="other">Other Type</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

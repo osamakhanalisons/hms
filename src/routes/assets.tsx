@@ -190,6 +190,10 @@ function AssetsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [amcFilter, setAmcFilter] = useState("all");
 
+  // Pagination
+  const ASSETS_PER_PAGE = 9;
+  const [assetPage, setAssetPage] = useState(1);
+
   // Register Asset modal
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
@@ -330,6 +334,22 @@ function AssetsPage() {
   const assets = data?.assets ?? [];
   const vendors = data?.vendorsList ?? [];
 
+  // Pagination helpers
+  const totalPages = Math.max(1, Math.ceil(assets.length / ASSETS_PER_PAGE));
+  const paginatedAssets = assets.slice((assetPage - 1) * ASSETS_PER_PAGE, assetPage * ASSETS_PER_PAGE);
+
+  function getPageNumbers(current: number, total: number): (number | "…")[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (current > 3) pages.push("…");
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push("…");
+    pages.push(total);
+    return pages;
+  }
+
   return (
     <AppShell
       title="Asset Register"
@@ -448,23 +468,31 @@ function AssetsPage() {
         </Card>
 
         {/* Assets Grid */}
-        {isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-56 animate-pulse rounded-lg bg-muted" />
-            ))}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-serif text-base font-bold">Asset Register</h2>
+            <span className="text-xs text-muted-foreground">
+              {assets.length} assets &mdash; page {assetPage} of {totalPages}
+            </span>
           </div>
-        ) : !assets.length ? (
-          <Card className="border-border/70 border-dashed p-12 text-center text-muted-foreground">
-            <Package className="size-10 mx-auto opacity-30 mb-2" />
-            <p className="text-sm font-medium">No assets found</p>
-            {canManage && (
-              <p className="text-[11px] opacity-60 mt-1">Click "Register Asset" to add the first equipment item.</p>
-            )}
-          </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {assets.map((asset) => (
+
+          {isLoading ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-56 animate-pulse rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : !assets.length ? (
+            <Card className="border-border/70 border-dashed p-12 text-center text-muted-foreground">
+              <Package className="size-10 mx-auto opacity-30 mb-2" />
+              <p className="text-sm font-medium">No assets found</p>
+              {canManage && (
+                <p className="text-[11px] opacity-60 mt-1">Click "Register Asset" to add the first equipment item.</p>
+              )}
+            </Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {paginatedAssets.map((asset) => (
               <Card key={asset.id} className="border-border/70 shadow-soft hover:border-border transition-colors">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
@@ -559,8 +587,45 @@ function AssetsPage() {
               </Card>
             ))}
           </div>
-        )}
-      </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-1 pt-2">
+              <button
+                onClick={() => setAssetPage((p) => Math.max(1, p - 1))}
+                disabled={assetPage === 1}
+                className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+              >
+                ← Prev
+              </button>
+              {getPageNumbers(assetPage, totalPages).map((pg, i) =>
+                pg === "…" ? (
+                  <span key={`ep-${i}`} className="px-1.5 text-muted-foreground text-[11px] select-none">…</span>
+                ) : (
+                  <button
+                    key={pg}
+                    onClick={() => setAssetPage(pg as number)}
+                    className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                      assetPage === pg
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border/70 hover:bg-muted"
+                    }`}
+                  >
+                    {pg}
+                  </button>
+                )
+              )}
+              <button
+                onClick={() => setAssetPage((p) => Math.min(totalPages, p + 1))}
+                disabled={assetPage === totalPages}
+                className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </div>
 
       {/* Register Asset Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -753,6 +818,7 @@ function AssetsPage() {
           </form>
         </DialogContent>
       </Dialog>
+      </div>
     </AppShell>
   );
 }

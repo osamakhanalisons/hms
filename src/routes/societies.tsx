@@ -20,6 +20,8 @@ import {
   Wrench,
   Dumbbell,
   DoorOpen,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -37,6 +39,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import {
@@ -160,10 +172,15 @@ function SocietiesAdmin() {
   const [formError, setFormError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Pagination
+  const SOCIETIES_PER_PAGE = 9;
+  const [societyPage, setSocietyPage] = useState(1);
+
   // Assignment dialog states
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [selectedAdminId, setSelectedAdminId] = useState("");
   const [assignedTenantIds, setAssignedTenantIds] = useState<string[]>([]);
+  const [comboOpen, setComboOpen] = useState(false);
 
   // ── Queries ────────────────────────────────────────────────────────────
 
@@ -196,6 +213,24 @@ function SocietiesAdmin() {
     queryFn: () => listAllSocietiesFn(),
     retry: 1,
   });
+
+  const totalPages = Math.max(1, Math.ceil(societies.length / SOCIETIES_PER_PAGE));
+  const paginatedSocieties = societies.slice(
+    (societyPage - 1) * SOCIETIES_PER_PAGE,
+    societyPage * SOCIETIES_PER_PAGE
+  );
+
+  function getPageNumbers(current: number, total: number): (number | "…")[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (current > 3) pages.push("…");
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push("…");
+    pages.push(total);
+    return pages;
+  }
 
   const { data: detailData, isLoading: detailLoading } = useQuery({
     queryKey: ["society-detail", detailSocietyId],
@@ -441,120 +476,173 @@ function SocietiesAdmin() {
             <p className="text-sm">No societies yet. Create the first one.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {societies.map((society) => (
-              <Card key={society.id} className="overflow-hidden hover:shadow-md transition-shadow border-border/70 bg-card">
-                <CardContent className="p-5 space-y-4">
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary text-sm font-bold">
-                        {society.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-sm leading-tight">{society.name}</h3>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <code className="rounded bg-muted px-1.5 py-0.2 text-[9px] font-mono text-muted-foreground">
-                            {society.code ?? "no-code"}
-                          </code>
-                          <span className="text-muted-foreground text-[9px]">·</span>
-                          <span className="text-muted-foreground text-[9px] truncate max-w-[80px]">{society.slug}</span>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {paginatedSocieties.map((society) => (
+                <Card key={society.id} className="overflow-hidden hover:shadow-md transition-shadow border-border/70 bg-card">
+                  <CardContent className="p-5 space-y-4">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary text-sm font-bold">
+                          {society.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-sm leading-tight">{society.name}</h3>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <code className="rounded bg-muted px-1.5 py-0.2 text-[9px] font-mono text-muted-foreground">
+                              {society.code ?? "no-code"}
+                            </code>
+                            <span className="text-muted-foreground text-[9px]">·</span>
+                            <span className="text-muted-foreground text-[9px] truncate max-w-[80px]">{society.slug}</span>
+                          </div>
                         </div>
                       </div>
+                      <Badge
+                        variant={society.is_active ? "default" : "secondary"}
+                        className={
+                          society.is_active
+                            ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400 border-green-200/50 hover:bg-green-50"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {society.is_active ? "Active" : "Inactive"}
+                      </Badge>
                     </div>
-                    <Badge
-                      variant={society.is_active ? "default" : "secondary"}
-                      className={
-                        society.is_active
-                          ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400 border-green-200/50 hover:bg-green-50"
-                          : "text-muted-foreground"
-                      }
-                    >
-                      {society.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </div>
 
-                  {/* Admin info */}
-                  <div className="rounded-md bg-muted/30 p-2.5 text-xs space-y-0.5 border border-border/40">
-                    <div className="font-semibold text-muted-foreground text-[9px] uppercase tracking-wide">
-                      Society Admin
+                    {/* Admin info */}
+                    <div className="rounded-md bg-muted/30 p-2.5 text-xs space-y-0.5 border border-border/40">
+                      <div className="font-semibold text-muted-foreground text-[9px] uppercase tracking-wide">
+                        Society Admin
+                      </div>
+                      {society.admin_name ? (
+                        <>
+                          <div className="font-medium text-foreground">{society.admin_name}</div>
+                          <div className="text-muted-foreground text-[10px]">{society.admin_email}</div>
+                        </>
+                      ) : (
+                        <div className="text-muted-foreground text-[10px] italic">No admin assigned</div>
+                      )}
                     </div>
-                    {society.admin_name ? (
-                      <>
-                        <div className="font-medium text-foreground">{society.admin_name}</div>
-                        <div className="text-muted-foreground text-[10px]">{society.admin_email}</div>
-                      </>
+
+                    {/* Module Stats Grid */}
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="rounded border bg-card/50 p-1.5">
+                        <div className="font-bold text-foreground">{society.resident_count}</div>
+                        <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Residents</div>
+                      </div>
+                      <div className="rounded border bg-card/50 p-1.5">
+                        <div className="font-bold text-foreground">{society.complaint_count}</div>
+                        <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Complaints</div>
+                      </div>
+                      <div className="rounded border bg-card/50 p-1.5">
+                        <div className="font-bold text-foreground">{society.maintenance_count}</div>
+                        <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Maint. Jobs</div>
+                      </div>
+                      <div className="rounded border bg-card/50 p-1.5">
+                        <div className="font-bold text-foreground">{society.poll_count}</div>
+                        <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Polls</div>
+                      </div>
+                      <div className="rounded border bg-card/50 p-1.5">
+                        <div className="font-bold text-foreground">{society.event_count}</div>
+                        <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Events</div>
+                      </div>
+                      <div className="rounded border bg-card/50 p-1.5">
+                        <div className="font-bold text-foreground">{society.visitor_count}</div>
+                        <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Visitors</div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-between pt-2 border-t text-xs">
+                      <span className="text-muted-foreground text-[9px]">
+                        Created {safeFormatDate(society.created_at)}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="h-8 px-2.5 text-[11px] gap-1 bg-primary text-primary-foreground hover:bg-primary/95"
+                          onClick={() => handleOpenSociety(society.id)}
+                        >
+                          <Building2 className="size-3" />
+                          Open Society
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 text-[11px]"
+                          onClick={() => setDetailSocietyId(society.id)}
+                          title="View Details Summary"
+                        >
+                          <Eye className="size-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 text-[11px]"
+                          onClick={() => handleToggleStatus(society)}
+                          disabled={toggleMutation.isPending}
+                        >
+                          {society.is_active ? "Deactivate" : "Activate"}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-4">
+                <span className="text-xs text-muted-foreground">
+                  Showing {paginatedSocieties.length} of {societies.length} societies &mdash; page {societyPage} of {totalPages}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSocietyPage((p) => Math.max(1, p - 1))}
+                    disabled={societyPage === 1}
+                    className="h-8 px-3 text-[11px]"
+                  >
+                    ← Prev
+                  </Button>
+                  {getPageNumbers(societyPage, totalPages).map((pg, idx) =>
+                    pg === "…" ? (
+                      <span key={`dots-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                        …
+                      </span>
                     ) : (
-                      <div className="text-muted-foreground text-[10px] italic">No admin assigned</div>
-                    )}
-                  </div>
-
-                  {/* Module Stats Grid */}
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                    <div className="rounded border bg-card/50 p-1.5">
-                      <div className="font-bold text-foreground">{society.resident_count}</div>
-                      <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Residents</div>
-                    </div>
-                    <div className="rounded border bg-card/50 p-1.5">
-                      <div className="font-bold text-foreground">{society.complaint_count}</div>
-                      <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Complaints</div>
-                    </div>
-                    <div className="rounded border bg-card/50 p-1.5">
-                      <div className="font-bold text-foreground">{society.maintenance_count}</div>
-                      <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Maint. Jobs</div>
-                    </div>
-                    <div className="rounded border bg-card/50 p-1.5">
-                      <div className="font-bold text-foreground">{society.poll_count}</div>
-                      <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Polls</div>
-                    </div>
-                    <div className="rounded border bg-card/50 p-1.5">
-                      <div className="font-bold text-foreground">{society.event_count}</div>
-                      <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Events</div>
-                    </div>
-                    <div className="rounded border bg-card/50 p-1.5">
-                      <div className="font-bold text-foreground">{society.visitor_count}</div>
-                      <div className="text-[8px] text-muted-foreground uppercase tracking-wide">Visitors</div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center justify-between pt-2 border-t text-xs">
-                    <span className="text-muted-foreground text-[9px]">
-                      Created {safeFormatDate(society.created_at)}
-                    </span>
-                    <div className="flex items-center gap-1.5">
                       <Button
-                        variant="default"
+                        key={`page-${pg}`}
+                        variant={societyPage === pg ? "default" : "outline"}
                         size="sm"
-                        className="h-8 px-2.5 text-[11px] gap-1 bg-primary text-primary-foreground hover:bg-primary/95"
-                        onClick={() => handleOpenSociety(society.id)}
+                        onClick={() => setSocietyPage(pg as number)}
+                        className={cn(
+                          "h-8 w-8 p-0 text-[11px]",
+                          societyPage === pg
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-muted"
+                        )}
                       >
-                        <Building2 className="size-3" />
-                        Open Society
+                        {pg}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2 text-[11px]"
-                        onClick={() => setDetailSocietyId(society.id)}
-                        title="View Details Summary"
-                      >
-                        <Eye className="size-3" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2 text-[11px]"
-                        onClick={() => handleToggleStatus(society)}
-                        disabled={toggleMutation.isPending}
-                      >
-                        {society.is_active ? "Deactivate" : "Activate"}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    )
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSocietyPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={societyPage === totalPages}
+                    className="h-8 px-3 text-[11px]"
+                  >
+                    Next →
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -808,21 +896,59 @@ function SocietiesAdmin() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex flex-col">
               <Label htmlFor="admin-select">Select Society Admin</Label>
-              <select
-                id="admin-select"
-                value={selectedAdminId}
-                onChange={(e) => setSelectedAdminId(e.target.value)}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="">-- Choose Admin --</option>
-                {adminsList.map((a: any) => (
-                  <option key={a.id} value={a.id}>
-                    {a.full_name || a.email} ({a.email})
-                  </option>
-                ))}
-              </select>
+              <Popover open={comboOpen} onOpenChange={setComboOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="admin-select"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={comboOpen}
+                    className="w-full h-10 justify-between font-normal text-left text-sm border border-input bg-background hover:bg-accent hover:text-accent-foreground px-3 py-2"
+                  >
+                    {selectedAdminId
+                      ? (() => {
+                          const admin = adminsList.find((a: any) => a.id === selectedAdminId);
+                          return admin
+                            ? `${admin.full_name || admin.email} (${admin.email})`
+                            : "-- Choose Admin --";
+                        })()
+                      : "-- Choose Admin --"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search admin..." />
+                    <CommandList>
+                      <CommandEmpty>No admin found.</CommandEmpty>
+                      <CommandGroup>
+                        {adminsList.map((a: any) => (
+                          <CommandItem
+                            key={a.id}
+                            value={`${a.full_name || ""} ${a.email}`}
+                            onSelect={() => {
+                              setSelectedAdminId(a.id);
+                              setComboOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4 shrink-0",
+                                selectedAdminId === a.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span className="truncate">
+                              {a.full_name || a.email} <span className="text-muted-foreground text-xs">({a.email})</span>
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             {selectedAdminId && (

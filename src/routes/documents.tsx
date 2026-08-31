@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
 import { PermissionGate } from "@/components/permission-gate";
@@ -26,6 +26,16 @@ import { getDocumentsFn, uploadDocumentFn, deleteDocumentFn } from "@/lib/api/do
 import { toast } from "sonner";
 import { FileText, Plus, Search, Trash2, Calendar, FileDown } from "lucide-react";
 import { format, parseISO } from "date-fns";
+
+interface DocumentItem {
+  id: string;
+  name: string;
+  category: string;
+  file_url: string;
+  uploader_name?: string;
+  created_at: string;
+  expiry_date?: string;
+}
 
 export const Route = createFileRoute("/documents")({
   head: () => ({
@@ -53,6 +63,12 @@ function DocumentsPage() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<any>("all");
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, category]);
 
   // Form states
   const [name, setName] = useState("");
@@ -89,11 +105,19 @@ function DocumentsPage() {
     },
   });
 
-  const filtered = documents.filter((d: any) => {
+  const filtered = documents.filter((d: DocumentItem) => {
     const matchesSearch = d.name.toLowerCase().includes(q.toLowerCase());
     const matchesCategory = category === "all" || d.category === category;
     return matchesSearch && matchesCategory;
   });
+
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+
+  const paginatedDocuments = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return filtered.slice(start, start + itemsPerPage);
+  }, [filtered, page]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,69 +194,141 @@ function DocumentsPage() {
                 </p>
               </div>
             ) : (
-              <div className="divide-y">
-                {filtered.map((d: any) => (
-                  <div
-                    key={d.id}
-                    className="flex items-center justify-between py-4 first:pt-0 last:pb-0 gap-4"
-                  >
-                    <div className="flex flex-1 min-w-0 items-start gap-3">
-                      <div className="p-2 bg-muted rounded shrink-0">
-                        <FileText className="size-5 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium truncate" title={d.name}>{d.name}</h4>
-                        <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
-                          <span className="uppercase text-[10px] font-semibold tracking-wider bg-accent text-accent-foreground px-1.5 py-0.5 rounded">
-                            {d.category}
-                          </span>
-                          <span>·</span>
-                          <span>Uploaded by {d.uploader_name || "Admin"}</span>
-                          <span>·</span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="size-3" />
-                            {format(
-                              typeof d.created_at === 'string' ? parseISO(d.created_at) : new Date(d.created_at),
-                              "MMM d, yyyy"
+              <>
+                <div className="divide-y">
+                  {paginatedDocuments.map((d: DocumentItem) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between py-4 first:pt-0 last:pb-0 gap-4"
+                    >
+                      <div className="flex flex-1 min-w-0 items-start gap-3">
+                        <div className="p-2 bg-muted rounded shrink-0">
+                          <FileText className="size-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-medium truncate" title={d.name}>
+                            {d.name}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
+                            <span className="uppercase text-[10px] font-semibold tracking-wider bg-accent text-accent-foreground px-1.5 py-0.5 rounded">
+                              {d.category}
+                            </span>
+                            <span>·</span>
+                            <span>Uploaded by {d.uploader_name || "Admin"}</span>
+                            <span>·</span>
+                            <span className="flex items-center gap-1">
+                              <Calendar className="size-3" />
+                              {format(
+                                typeof d.created_at === "string"
+                                  ? parseISO(d.created_at)
+                                  : new Date(d.created_at),
+                                "MMM d, yyyy",
+                              )}
+                            </span>
+                            {d.expiry_date && (
+                              <>
+                                <span>·</span>
+                                <span className="text-red-500 font-medium">
+                                  Expires:{" "}
+                                  {format(
+                                    typeof d.expiry_date === "string"
+                                      ? parseISO(d.expiry_date)
+                                      : new Date(d.expiry_date),
+                                    "MMM d, yyyy",
+                                  )}
+                                </span>
+                              </>
                             )}
-                          </span>
-                          {d.expiry_date && (
-                            <>
-                              <span>·</span>
-                              <span className="text-red-500 font-medium">
-                                Expires: {format(
-                                  typeof d.expiry_date === 'string' ? parseISO(d.expiry_date) : new Date(d.expiry_date),
-                                  "MMM d, yyyy"
-                                )}
-                              </span>
-                            </>
-                          )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button variant="outline" size="icon" asChild>
-                        <a href={d.file_url} target="_blank" rel="noreferrer" download>
-                          <FileDown className="size-4" />
-                        </a>
-                      </Button>
-                      <PermissionGate moduleKey="documents" action="delete" fallback={null}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            if (confirm("Are you sure you want to delete this document?")) {
-                            deleteDoc.mutate({ id: d.id });
-                          }
-                        }}
-                        >
-                          <Trash2 className="size-4 text-destructive" />
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button variant="outline" size="icon" asChild>
+                          <a href={d.file_url} target="_blank" rel="noreferrer" download>
+                            <FileDown className="size-4" />
+                          </a>
                         </Button>
-                      </PermissionGate>
+                        <PermissionGate moduleKey="documents" action="delete" fallback={null}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              if (confirm("Are you sure you want to delete this document?")) {
+                                deleteDoc.mutate({ data: { id: d.id } });
+                              }
+                            }}
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                        </PermissionGate>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalItems > itemsPerPage && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border/70 pt-4 mt-4 text-xs text-muted-foreground">
+                    <div>
+                      Showing{" "}
+                      <span className="font-semibold text-foreground">
+                        {(page - 1) * itemsPerPage + 1}
+                      </span>{" "}
+                      to{" "}
+                      <span className="font-semibold text-foreground">
+                        {Math.min(page * itemsPerPage, totalItems)}
+                      </span>{" "}
+                      of{" "}
+                      <span className="font-semibold text-foreground">
+                        {totalItems.toLocaleString()}
+                      </span>{" "}
+                      documents
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page === 1}
+                        onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                        className="h-8 text-xs px-2.5 border-border/70 bg-background"
+                      >
+                        Previous
+                      </Button>
+
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                        .map((p, idx, arr) => {
+                          const prev = arr[idx - 1];
+                          return (
+                            <Fragment key={p}>
+                              {prev && p - prev > 1 && (
+                                <span className="text-xs text-muted-foreground px-1">...</span>
+                              )}
+                              <Button
+                                variant={p === page ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => setPage(p)}
+                                className="h-8 w-8 text-xs p-0 font-medium border-border/70"
+                              >
+                                {p}
+                              </Button>
+                            </Fragment>
+                          );
+                        })}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page === totalPages}
+                        onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                        className="h-8 text-xs px-2.5 border-border/70 bg-background"
+                      >
+                        Next
+                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

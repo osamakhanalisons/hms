@@ -2,7 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, hasAnyRole, getTenantScoping } from "./auth-helper";
+import {
+  getSessionUser,
+  getUserTenantId,
+  getUserRoles,
+  isAdminRole,
+  hasAnyRole,
+  getTenantScoping,
+  resolveTenantId,
+} from "./auth-helper";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type ProjectItem = {
@@ -72,7 +80,9 @@ const toISO = (v: any): string => {
 };
 
 function isProjectManager(roles: string[]): boolean {
-  return isAdminRole(roles) || hasAnyRole(roles, ["treasurer", "committee_member", "maintenance_head"]);
+  return (
+    isAdminRole(roles) || hasAnyRole(roles, ["treasurer", "committee_member", "maintenance_head"])
+  );
 }
 
 // ─── GET OVERVIEW ────────────────────────────────────────────────────────────
@@ -95,13 +105,59 @@ export const getProjectsOverviewFn = createServerFn({ method: "GET" })
 
     const db = getDb();
 
-    const { sqlFilter: sumFilter, sqlParams: sumParamsBase } = await getTenantScoping(request, data?.tenantId, "p.tenant_id");
-    const { sqlFilter: spentFilter, sqlParams: spentParamsBase } = await getTenantScoping(request, data?.tenantId, "pe.tenant_id");
-    const { sqlFilter: projFilter, sqlParams: projParamsBase } = await getTenantScoping(request, data?.tenantId, "p.tenant_id");
-    const { sqlFilter: milFilter, sqlParams: milParamsBase } = await getTenantScoping(request, data?.tenantId, "pm.tenant_id");
-    const { sqlFilter: expFilter, sqlParams: expParamsBase } = await getTenantScoping(request, data?.tenantId, "pe.tenant_id");
-    const { sqlFilter: vendorFilter, sqlParams: vendorParams } = await getTenantScoping(request, data?.tenantId, "tenant_id");
-    const { sqlFilter: userFilter, sqlParams: userParams } = await getTenantScoping(request, data?.tenantId, "p.tenant_id");
+    // Super Admin with "all" selection → tenantId="" → sqlFilter="1=1" (no tenant filter)
+    // For non-super-admins fallback to their home tenant or first tenant
+    const scopingCheck = await getTenantScoping(request, data?.tenantId);
+    let tenantId = scopingCheck.tenantId;
+
+    if (!scopingCheck.isSuperAdmin && !tenantId) {
+      tenantId = scopingCheck.userTenantId || "";
+    }
+    if (!scopingCheck.isSuperAdmin && !tenantId) {
+      const [tenants] = (await db.query(
+        "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1",
+      )) as unknown as [{ id: string }[], unknown];
+      if (tenants.length > 0) {
+        tenantId = tenants[0].id;
+      }
+    }
+
+    // Re-resolve all SQL filters using the final tenantId (empty = all for super admin)
+    const { sqlFilter: sumFilter, sqlParams: sumParamsBase } = await getTenantScoping(
+      request,
+      tenantId || null,
+      "p.tenant_id",
+    );
+    const { sqlFilter: spentFilter, sqlParams: spentParamsBase } = await getTenantScoping(
+      request,
+      tenantId || null,
+      "pe.tenant_id",
+    );
+    const { sqlFilter: projFilter, sqlParams: projParamsBase } = await getTenantScoping(
+      request,
+      tenantId || null,
+      "p.tenant_id",
+    );
+    const { sqlFilter: milFilter, sqlParams: milParamsBase } = await getTenantScoping(
+      request,
+      tenantId || null,
+      "pm.tenant_id",
+    );
+    const { sqlFilter: expFilter, sqlParams: expParamsBase } = await getTenantScoping(
+      request,
+      tenantId || null,
+      "pe.tenant_id",
+    );
+    const { sqlFilter: vendorFilter, sqlParams: vendorParams } = await getTenantScoping(
+      request,
+      tenantId || null,
+      "tenant_id",
+    );
+    const { sqlFilter: userFilter, sqlParams: userParams } = await getTenantScoping(
+      request,
+      tenantId || null,
+      "p.tenant_id",
+    );
 
     // ── Summary aggregates ────────────────────────────────────────────────────
     let summaryQuery = `
@@ -291,8 +347,7 @@ export const createProjectFn = createServerFn({ method: "POST" })
   .handler(async ({ data, request }) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const roles = await getUserRoles(userId);
     if (!isProjectManager(roles)) throw new Error("Forbidden – project manager access required");
@@ -339,8 +394,7 @@ export const updateProjectStatusFn = createServerFn({ method: "POST" })
   .handler(async ({ data, request }) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const roles = await getUserRoles(userId);
     if (!isProjectManager(roles)) throw new Error("Forbidden – project manager access required");
@@ -372,8 +426,7 @@ export const addProjectMilestoneFn = createServerFn({ method: "POST" })
   .handler(async ({ data, request }) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const roles = await getUserRoles(userId);
     if (!isProjectManager(roles)) throw new Error("Forbidden – project manager access required");
@@ -381,10 +434,10 @@ export const addProjectMilestoneFn = createServerFn({ method: "POST" })
     const db = getDb();
 
     // Verify project belongs to tenant
-    const [[proj]] = (await db.query(
-      "SELECT id FROM projects WHERE id = ? AND tenant_id = ?",
-      [data.projectId, tenantId],
-    )) as any[];
+    const [[proj]] = (await db.query("SELECT id FROM projects WHERE id = ? AND tenant_id = ?", [
+      data.projectId,
+      tenantId,
+    ])) as any[];
     if (!proj) throw new Error("Project not found or unauthorized");
 
     const milestoneId = crypto.randomUUID();
@@ -416,8 +469,7 @@ export const updateMilestoneStatusFn = createServerFn({ method: "POST" })
   .handler(async ({ data, request }) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const roles = await getUserRoles(userId);
     if (!isProjectManager(roles)) throw new Error("Forbidden – project manager access required");
@@ -451,8 +503,7 @@ export const addProjectExpenseFn = createServerFn({ method: "POST" })
   .handler(async ({ data, request }) => {
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const roles = await getUserRoles(userId);
     if (!isProjectManager(roles)) throw new Error("Forbidden – project manager access required");

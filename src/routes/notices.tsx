@@ -84,6 +84,23 @@ function NoticesPage() {
     queryFn: async () => getNoticesFn(),
   });
 
+  // Pagination
+  const NOTICES_PER_PAGE = 10;
+  const [noticePage, setNoticePage] = useState(1);
+  const totalNoticePages = Math.max(1, Math.ceil(notices.length / NOTICES_PER_PAGE));
+  const paginatedNotices = notices.slice((noticePage - 1) * NOTICES_PER_PAGE, noticePage * NOTICES_PER_PAGE);
+
+  function getPageNums(cur: number, tot: number): (number | "…")[] {
+    if (tot <= 7) return Array.from({ length: tot }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (cur > 3) pages.push("…");
+    const s = Math.max(2, cur - 1), e = Math.min(tot - 1, cur + 1);
+    for (let i = s; i <= e; i++) pages.push(i);
+    if (cur < tot - 2) pages.push("…");
+    pages.push(tot);
+    return pages;
+  }
+
   const composeNotice = useMutation({
     mutationFn: createNoticeFn,
     onSuccess: () => {
@@ -158,7 +175,7 @@ function NoticesPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {notices.map((n: any) => (
+            {paginatedNotices.map((n: any) => (
               <Card
                 key={n.id}
                 className={`border-border/70 shadow-soft transition-all ${
@@ -215,11 +232,52 @@ function NoticesPage() {
               </Card>
             ))}
 
-            {notices.length === 0 && (
+            {paginatedNotices.length === 0 && notices.length === 0 && (
               <div className="py-20 text-center text-muted-foreground text-sm border rounded-lg border-dashed border-border/70">
                 No active announcements on the notice board.
               </div>
             )}
+
+            {/* Pagination */}
+            {totalNoticePages > 1 && (
+              <div className="flex items-center justify-center gap-1.5 pt-2">
+                <button
+                  onClick={() => setNoticePage((p) => Math.max(1, p - 1))}
+                  disabled={noticePage === 1}
+                  className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+                >
+                  ← Prev
+                </button>
+                {getPageNums(noticePage, totalNoticePages).map((pg, i) =>
+                  pg === "…" ? (
+                    <span key={`e${i}`} className="px-1.5 text-[11px] text-muted-foreground select-none">…</span>
+                  ) : (
+                    <button
+                      key={pg}
+                      onClick={() => setNoticePage(pg as number)}
+                      className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                        noticePage === pg
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border/70 hover:bg-muted"
+                      }`}
+                    >
+                      {pg}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => setNoticePage((p) => Math.min(totalNoticePages, p + 1))}
+                  disabled={noticePage === totalNoticePages}
+                  className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
+            <div className="text-center text-[11px] text-muted-foreground">
+              {notices.length} notices &mdash; page {noticePage} of {totalNoticePages}
+            </div>
           </div>
         )}
       </div>

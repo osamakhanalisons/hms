@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ModuleGate } from "@/components/module-gate";
 import { PermissionGate } from "@/components/permission-gate";
@@ -74,6 +74,8 @@ function ResidentsPage() {
   const { roles } = useAuth();
   const isAdmin = roles.includes("super_admin") || roles.includes("society_admin");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
   const [selectedResident, setSelectedResident] = useState<any | null>(null);
@@ -110,6 +112,18 @@ function ResidentsPage() {
     queryKey: ["residents", search],
     queryFn: async () => getResidentsFn({ data: { search } }),
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  const totalItems = residents.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+  const paginatedResidents = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return residents.slice(start, start + pageSize);
+  }, [residents, page, pageSize]);
 
   const { data: units = [] } = useQuery({
     queryKey: ["units", { vacantOnly: true }],
@@ -283,142 +297,217 @@ function ResidentsPage() {
             <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {residents.map((r: any) => (
-              <Card key={r.id} className="border-border/70 shadow-soft">
-                <CardContent className="p-5 space-y-3">
-                  {/* Header row: avatar + name + type badge */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="grid size-10 place-items-center rounded-full bg-primary-soft text-primary">
-                        <User className="size-5" />
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {paginatedResidents.map((r: any) => (
+                <Card key={r.id} className="border-border/70 shadow-soft">
+                  <CardContent className="p-5 space-y-3">
+                    {/* Header row: avatar + name + type badge */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="grid size-10 place-items-center rounded-full bg-primary-soft text-primary">
+                          <User className="size-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-serif text-sm font-bold leading-tight">{r.full_name}</h4>
+                          <p className="text-xs text-muted-foreground">Unit {r.unit_number}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-serif text-sm font-bold leading-tight">{r.full_name}</h4>
-                        <p className="text-xs text-muted-foreground">Unit {r.unit_number}</p>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={r.type === "owner" ? "default" : "outline"}
-                      className="text-[10px] uppercase shrink-0"
-                    >
-                      {r.type}
-                    </Badge>
-                  </div>
-
-                  {/* Location info — hierarchy */}
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                    <MapPin className="size-3 shrink-0" />
-                    <span>
-                      {[
-                        r.society_name,
-                        r.block_name && `Block ${r.block_name}`,
-                        r.building_name,
-                      ]
-                        .filter(Boolean)
-                        .join(" › ")}
-                    </span>
-                  </div>
-
-                  {/* Account linked / not linked badge */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {r.user_id ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200">
-                        <CheckCircle2 className="size-3" /> Account Linked
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600 border border-red-200">
-                          <XCircle className="size-3" /> No Login Account
-                        </span>
-                        {isAdmin && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-[10px] h-6 px-2 py-0"
-                            onClick={() => {
-                              setCreatingAccountFor(r);
-                              setAccountEmail(r.email || "");
-                            }}
-                          >
-                            + Create Account
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Contact info */}
-                  <div className="space-y-1 text-xs text-muted-foreground border-t pt-3">
-                    {r.phone && (
-                      <div>
-                        Phone: <span className="text-foreground font-mono">{r.phone}</span>
-                      </div>
-                    )}
-                    {r.email && (
-                      <div>
-                        Email: <span className="text-foreground font-mono">{r.email}</span>
-                      </div>
-                    )}
-                    {r.cnic && (
-                      <div>
-                        CNIC: <span className="text-foreground font-mono">{r.cnic}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Vehicles */}
-                  {r.vehicles && r.vehicles.length > 0 && (
-                    <div className="border-t pt-3 space-y-1.5">
-                      <div className="text-xs font-semibold text-foreground flex items-center gap-1">
-                        <Car className="size-3.5 text-muted-foreground" />
-                        <span>Registered Vehicles ({r.vehicles.length})</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {r.vehicles.map((v: any) => (
-                          <span
-                            key={v.id}
-                            className="inline-flex items-center gap-1 rounded bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground border font-mono"
-                          >
-                            <span className="font-sans uppercase text-[9px] text-muted-foreground">{v.vehicle_type}:</span> {v.plate_number} {v.make && `(${v.make}${v.model ? ` ${v.model}` : ""})`}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action buttons (admin only) */}
-                  <PermissionGate moduleKey="residents" action="create" fallback={null}>
-                    <div className="flex items-center justify-between border-t pt-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 text-xs px-2 h-7"
-                        onClick={() => {
-                          setSelectedResident(r);
-                          setVehicleDialogOpen(true);
-                        }}
+                      <Badge
+                        variant={r.type === "owner" ? "default" : "outline"}
+                        className="text-[10px] uppercase shrink-0"
                       >
-                        <Car className="size-3.5" /> Add Vehicle
-                      </Button>
-                      <PermissionGate moduleKey="residents" action="edit" fallback={null}>
+                        {r.type}
+                      </Badge>
+                    </div>
+
+                    {/* Location info — hierarchy */}
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+                      <MapPin className="size-3 shrink-0" />
+                      <span>
+                        {[
+                          r.society_name,
+                          r.block_name && (r.block_name.startsWith("Block") ? r.block_name : `Block ${r.block_name}`),
+                          r.building_name,
+                        ]
+                          .filter(Boolean)
+                          .join(" › ")}
+                      </span>
+                    </div>
+
+                    {/* Account linked / not linked badge */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {r.user_id ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="size-3" /> Account Linked
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600 border border-red-200">
+                            <XCircle className="size-3" /> No Login Account
+                          </span>
+                          {isAdmin && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-[10px] h-6 px-2 py-0"
+                              onClick={() => {
+                                setCreatingAccountFor(r);
+                                setAccountEmail(r.email || "");
+                              }}
+                            >
+                              + Create Account
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Contact info */}
+                    <div className="space-y-1 text-xs text-muted-foreground border-t pt-3">
+                      {r.phone && (
+                        <div>
+                          Phone: <span className="text-foreground font-mono">{r.phone}</span>
+                        </div>
+                      )}
+                      {r.email && (
+                        <div>
+                          Email: <span className="text-foreground font-mono">{r.email}</span>
+                        </div>
+                      )}
+                      {r.cnic && (
+                        <div>
+                          CNIC: <span className="text-foreground font-mono">{r.cnic}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Vehicles */}
+                    {r.vehicles && r.vehicles.length > 0 && (
+                      <div className="border-t pt-3 space-y-1.5">
+                        <div className="text-xs font-semibold text-foreground flex items-center gap-1">
+                          <Car className="size-3.5 text-muted-foreground" />
+                          <span>Registered Vehicles ({r.vehicles.length})</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {r.vehicles.map((v: any) => (
+                            <span
+                              key={v.id}
+                              className="inline-flex items-center gap-1 rounded bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground border font-mono"
+                            >
+                              <span className="font-sans uppercase text-[9px] text-muted-foreground">{v.vehicle_type}:</span> {v.plate_number} {v.make && `(${v.make}${v.model ? ` ${v.model}` : ""})`}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action buttons (admin only) */}
+                    <PermissionGate moduleKey="residents" action="create" fallback={null}>
+                      <div className="flex items-center justify-between border-t pt-3">
                         <Button
                           size="sm"
-                          variant="ghost"
-                          className="gap-1 text-xs text-destructive hover:bg-destructive/10 px-2 h-7"
-                          onClick={() => handleMoveOut(r.id)}
+                          variant="outline"
+                          className="gap-1 text-xs px-2 h-7"
+                          onClick={() => {
+                            setSelectedResident(r);
+                            setVehicleDialogOpen(true);
+                          }}
                         >
-                          <LogOut className="size-3.5" /> Move Out
+                          <Car className="size-3.5" /> Add Vehicle
                         </Button>
-                      </PermissionGate>
-                    </div>
-                  </PermissionGate>
-                </CardContent>
-              </Card>
-            ))}
-            {residents.length === 0 && (
-              <div className="col-span-full py-20 text-center text-muted-foreground text-sm border rounded-lg border-dashed border-border/70">
-                No residents matched the search filter.
+                        <PermissionGate moduleKey="residents" action="edit" fallback={null}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1 text-xs text-destructive hover:bg-destructive/10 px-2 h-7"
+                            onClick={() => handleMoveOut(r.id)}
+                          >
+                            <LogOut className="size-3.5" /> Move Out
+                          </Button>
+                        </PermissionGate>
+                      </div>
+                    </PermissionGate>
+                  </CardContent>
+                </Card>
+              ))}
+              {residents.length === 0 && (
+                <div className="col-span-full py-20 text-center text-muted-foreground text-sm border rounded-lg border-dashed border-border/70">
+                  No residents matched the search filter.
+                </div>
+              )}
+            </div>
+
+            {/* Pagination Controls Toolbar */}
+            {totalItems > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border/70 pt-4">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  <span>
+                    Showing <span className="font-semibold text-foreground">{(page - 1) * pageSize + 1}</span> to{" "}
+                    <span className="font-semibold text-foreground">{Math.min(page * pageSize, totalItems)}</span> of{" "}
+                    <span className="font-semibold text-foreground">{totalItems.toLocaleString()}</span> residents
+                  </span>
+                  <span>·</span>
+                  <div className="flex items-center gap-1.5">
+                    <span>Cards per page:</span>
+                    <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setPage(1); }}>
+                      <SelectTrigger className="h-7 w-16 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="12">12</SelectItem>
+                        <SelectItem value="24">24</SelectItem>
+                        <SelectItem value="48">48</SelectItem>
+                        <SelectItem value="96">96</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="h-8 text-xs px-2.5"
+                    >
+                      Previous
+                    </Button>
+
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                      .map((p, idx, arr) => {
+                        const prev = arr[idx - 1];
+                        return (
+                          <Fragment key={p}>
+                            {prev && p - prev > 1 && (
+                              <span className="text-xs text-muted-foreground px-1">...</span>
+                            )}
+                            <Button
+                              variant={p === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setPage(p)}
+                              className="h-8 w-8 text-xs p-0 font-medium"
+                            >
+                              {p}
+                            </Button>
+                          </Fragment>
+                        );
+                      })}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                      className="h-8 text-xs px-2.5"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>

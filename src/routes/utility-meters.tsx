@@ -106,6 +106,26 @@ function UtilityMetersPage() {
     queryFn: () => getUnitsForMetersFn(),
   });
 
+  // Pagination for readings
+  const READINGS_PER_PAGE = 15;
+  const [readingPage, setReadingPage] = useState(1);
+  const totalReadingPages = Math.max(1, Math.ceil((readings as any[]).length / READINGS_PER_PAGE));
+  const paginatedReadings = (readings as any[]).slice(
+    (readingPage - 1) * READINGS_PER_PAGE,
+    readingPage * READINGS_PER_PAGE,
+  );
+
+  function getPageNums(cur: number, tot: number): (number | "…")[] {
+    if (tot <= 7) return Array.from({ length: tot }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (cur > 3) pages.push("…");
+    const s = Math.max(2, cur - 1), e = Math.min(tot - 1, cur + 1);
+    for (let i = s; i <= e; i++) pages.push(i);
+    if (cur < tot - 2) pages.push("…");
+    pages.push(tot);
+    return pages;
+  }
+
   const recordReading = useMutation({
     mutationFn: recordMeterReadingFn,
     onSuccess: (res: any) => {
@@ -220,7 +240,7 @@ function UtilityMetersPage() {
                 </div>
               ) : (
                 <div className="divide-y">
-                  {(readings as any[]).map((r) => {
+                  {paginatedReadings.map((r) => {
                     const Icon = METER_ICONS[r.meter_type] ?? Gauge;
                     const colors = METER_COLORS[r.meter_type] ?? "bg-muted text-muted-foreground";
                     return (
@@ -266,6 +286,46 @@ function UtilityMetersPage() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Pagination */}
+              {totalReadingPages > 1 && (
+                <div className="flex items-center justify-between gap-3 flex-wrap border-t pt-4 mt-2">
+                  <span className="text-[11px] text-muted-foreground">{(readings as any[]).length} readings &mdash; page {readingPage} of {totalReadingPages}</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setReadingPage((p) => Math.max(1, p - 1))}
+                      disabled={readingPage === 1}
+                      className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:opacity-40 transition-colors"
+                    >
+                      ← Prev
+                    </button>
+                    {getPageNums(readingPage, totalReadingPages).map((pg, i) =>
+                      pg === "…" ? (
+                        <span key={`e${i}`} className="px-1 text-[11px] text-muted-foreground">…</span>
+                      ) : (
+                        <button
+                          key={pg}
+                          onClick={() => setReadingPage(pg as number)}
+                          className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                            readingPage === pg
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border/70 hover:bg-muted"
+                          }`}
+                        >
+                          {pg}
+                        </button>
+                      )
+                    )}
+                    <button
+                      onClick={() => setReadingPage((p) => Math.min(totalReadingPages, p + 1))}
+                      disabled={readingPage === totalReadingPages}
+                      className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:opacity-40 transition-colors"
+                    >
+                      Next →
+                    </button>
+                  </div>
                 </div>
               )}
             </CardContent>

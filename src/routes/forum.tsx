@@ -135,6 +135,26 @@ function ForumPage() {
   const filteredThreads =
     categoryFilter === "all" ? threads : threads.filter((t: any) => t.category === categoryFilter);
 
+  // Pagination — reset to page 1 when category changes
+  const THREADS_PER_PAGE = 10;
+  const [threadPage, setThreadPage] = useState(1);
+  const totalThreadPages = Math.max(1, Math.ceil(filteredThreads.length / THREADS_PER_PAGE));
+  const paginatedThreads = filteredThreads.slice(
+    (threadPage - 1) * THREADS_PER_PAGE,
+    threadPage * THREADS_PER_PAGE,
+  );
+
+  function getPageNums(cur: number, tot: number): (number | "…")[] {
+    if (tot <= 7) return Array.from({ length: tot }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (cur > 3) pages.push("…");
+    const s = Math.max(2, cur - 1), e = Math.min(tot - 1, cur + 1);
+    for (let i = s; i <= e; i++) pages.push(i);
+    if (cur < tot - 2) pages.push("…");
+    pages.push(tot);
+    return pages;
+  }
+
   const categories = [
     { key: "all", label: "All Topics" },
     { key: "general", label: "General" },
@@ -163,7 +183,7 @@ function ForumPage() {
               key={c.key}
               variant={categoryFilter === c.key ? "default" : "outline"}
               size="sm"
-              onClick={() => setCategoryFilter(c.key)}
+              onClick={() => { setCategoryFilter(c.key); setThreadPage(1); }}
               className="text-xs"
             >
               {c.label}
@@ -177,7 +197,7 @@ function ForumPage() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {filteredThreads.map((t: any) => (
+            {paginatedThreads.map((t: any) => (
               <Card
                 key={t.id}
                 className="border-border/70 shadow-soft cursor-pointer hover:border-primary/40 hover:bg-primary-soft/10 transition-all"
@@ -220,11 +240,52 @@ function ForumPage() {
               </Card>
             ))}
 
-            {filteredThreads.length === 0 && (
+            {paginatedThreads.length === 0 && (
               <div className="py-20 text-center text-muted-foreground text-sm border rounded-lg border-dashed border-border/70">
                 No discussion threads found in this category.
               </div>
             )}
+
+            {/* Pagination */}
+            {totalThreadPages > 1 && (
+              <div className="flex items-center justify-center gap-1.5 pt-2">
+                <button
+                  onClick={() => setThreadPage((p) => Math.max(1, p - 1))}
+                  disabled={threadPage === 1}
+                  className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+                >
+                  ← Prev
+                </button>
+                {getPageNums(threadPage, totalThreadPages).map((pg, i) =>
+                  pg === "…" ? (
+                    <span key={`e${i}`} className="px-1.5 text-[11px] text-muted-foreground select-none">…</span>
+                  ) : (
+                    <button
+                      key={pg}
+                      onClick={() => setThreadPage(pg as number)}
+                      className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                        threadPage === pg
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border/70 hover:bg-muted"
+                      }`}
+                    >
+                      {pg}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => setThreadPage((p) => Math.min(totalThreadPages, p + 1))}
+                  disabled={threadPage === totalThreadPages}
+                  className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
+            <div className="text-center text-[11px] text-muted-foreground">
+              {filteredThreads.length} threads &mdash; page {threadPage} of {totalThreadPages}
+            </div>
           </div>
         )}
       </div>

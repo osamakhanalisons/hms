@@ -91,6 +91,43 @@ function AmenitiesPage() {
     queryFn: () => getBookingsFn({ data: { myOnly: false } }),
   });
 
+  // Pagination
+  const AMENITIES_PER_PAGE = 6;
+  const BOOKINGS_PER_PAGE = 10;
+  const [amenityPage, setAmenityPage] = useState(1);
+  const [bookingPage, setBookingPage] = useState(1);
+
+  const totalAmenityPages = Math.max(1, Math.ceil(amenities.length / AMENITIES_PER_PAGE));
+  const totalBookingPages = Math.max(1, Math.ceil(bookings.length / BOOKINGS_PER_PAGE));
+  const paginatedAmenities = amenities.slice((amenityPage - 1) * AMENITIES_PER_PAGE, amenityPage * AMENITIES_PER_PAGE);
+  const paginatedBookings  = bookings.slice ((bookingPage  - 1) * BOOKINGS_PER_PAGE,  bookingPage  * BOOKINGS_PER_PAGE);
+
+  function getPageNums(cur: number, tot: number): (number | "…")[] {
+    if (tot <= 7) return Array.from({ length: tot }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (cur > 3) pages.push("…");
+    const s = Math.max(2, cur - 1), e = Math.min(tot - 1, cur + 1);
+    for (let i = s; i <= e; i++) pages.push(i);
+    if (cur < tot - 2) pages.push("…");
+    pages.push(tot);
+    return pages;
+  }
+
+  function Paginator({ page, total, set, span3 = false }: { page: number; total: number; set: (p: number) => void; span3?: boolean }) {
+    if (total <= 1) return null;
+    return (
+      <div className={`flex items-center justify-center gap-1.5 pt-3 ${span3 ? "sm:col-span-3" : ""}`}>
+        <button onClick={() => set(Math.max(1, page - 1))} disabled={page === 1} className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">← Prev</button>
+        {getPageNums(page, total).map((pg, i) =>
+          pg === "…" ? <span key={`e${i}`} className="px-1.5 text-[11px] text-muted-foreground">…</span> : (
+            <button key={pg} onClick={() => set(pg as number)} className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${page === pg ? "border-primary bg-primary text-primary-foreground" : "border-border/70 hover:bg-muted"}`}>{pg}</button>
+          )
+        )}
+        <button onClick={() => set(Math.min(total, page + 1))} disabled={page === total} className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">Next →</button>
+      </div>
+    );
+  }
+
   const createBookingMutation = useMutation({
     mutationFn: createBookingFn,
     onSuccess: () => {
@@ -191,7 +228,7 @@ function AmenitiesPage() {
             </div>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {amenities.map((a: any) => (
+              {paginatedAmenities.map((a: any) => (
                 <Card
                   key={a.id}
                   className="border-border/70 shadow-soft overflow-hidden flex flex-col justify-between"
@@ -247,11 +284,15 @@ function AmenitiesPage() {
                 </Card>
               ))}
 
-              {amenities.length === 0 && (
+              {paginatedAmenities.length === 0 && amenities.length === 0 && (
                 <div className="py-10 text-center text-muted-foreground text-xs border rounded-lg border-dashed border-border/70 sm:col-span-3">
                   No public amenities available at this moment.
                 </div>
               )}
+              <Paginator page={amenityPage} total={totalAmenityPages} set={setAmenityPage} span3 />
+              <div className="sm:col-span-3 text-center text-[11px] text-muted-foreground -mt-1">
+                {amenities.length} amenities &mdash; page {amenityPage} of {totalAmenityPages}
+              </div>
             </div>
           )}
         </section>
@@ -279,7 +320,7 @@ function AmenitiesPage() {
                       </td>
                     </tr>
                   ) : (
-                    bookings.map((b: any) => {
+                    paginatedBookings.map((b: any) => {
                       const statusColors: Record<string, string> = {
                         pending: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
                         approved: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
@@ -320,6 +361,10 @@ function AmenitiesPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="border-t px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+              <span className="text-[11px] text-muted-foreground">{bookings.length} bookings &mdash; page {bookingPage} of {totalBookingPages}</span>
+              <Paginator page={bookingPage} total={totalBookingPages} set={setBookingPage} />
             </div>
           </Card>
         </section>

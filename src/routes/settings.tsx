@@ -746,6 +746,15 @@ function UserRolesTable() {
   const { data: users = [], isLoading, error } = useQuery<TenantUser[], Error>({ queryKey: ["tenant-users"], queryFn: getTenantUsersFn });
   const { data: customRoles = [] } = useQuery<CustomRole[], Error>({ queryKey: ["custom-roles"], queryFn: getCustomRolesFn });
 
+  // Pagination state
+  const USERS_PER_PAGE = 10;
+  const [userPage, setUserPage] = useState(1);
+
+  // Reset page on search term change
+  useEffect(() => {
+    setUserPage(1);
+  }, [searchTerm]);
+
   const filteredUsers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return users;
@@ -753,6 +762,23 @@ function UserRolesTable() {
       user.full_name.toLowerCase().includes(term) || user.email.toLowerCase().includes(term),
     );
   }, [searchTerm, users]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+  const paginatedUsers = useMemo(() => {
+    return filteredUsers.slice((userPage - 1) * USERS_PER_PAGE, userPage * USERS_PER_PAGE);
+  }, [filteredUsers, userPage]);
+
+  function getPageNumbers(current: number, total: number): (number | "…")[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (current > 3) pages.push("…");
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push("…");
+    pages.push(total);
+    return pages;
+  }
 
   if (isLoading) return <div className="py-8 text-center text-sm text-muted-foreground">Loading users...</div>;
   if (error) return <div className="py-8 text-center text-sm text-destructive">Error: {error?.message ?? "Failed to load users"}</div>;
@@ -779,45 +805,97 @@ function UserRolesTable() {
       {filteredUsers.length === 0 ? (
         <div className="py-8 text-center text-sm text-muted-foreground">No users match your search.</div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Roles</TableHead>
-              <TableHead className="text-right">Manage</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredUsers.map((u) => (
-              <TableRow key={u.id}>
-                <TableCell>{u.full_name}</TableCell>
-                <TableCell>{u.email}</TableCell>
-                <TableCell>
-                  {u.roles.map((r) => (
-                    <Badge key={r} variant="secondary" className="mr-1 capitalize">
-                      {getRoleLabelFromOptions(r, customRoles)}
-                    </Badge>
-                  ))}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex flex-wrap justify-end gap-2">
-                    <EditUserDialog
-                      user={u}
-                      customRoles={customRoles}
-                      onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenant-users"] })}
-                    />
-                    <DeleteUserDialog
-                      user={u}
-                      onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenant-users"] })}
-                      disabled={u.roles.includes("super_admin")}
-                    />
-                  </div>
-                </TableCell>
+        <div className="space-y-4">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Roles</TableHead>
+                <TableHead className="text-right">Manage</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {paginatedUsers.map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell>{u.full_name}</TableCell>
+                  <TableCell>{u.email}</TableCell>
+                  <TableCell>
+                    {u.roles.map((r) => (
+                      <Badge key={r} variant="secondary" className="mr-1 capitalize">
+                        {getRoleLabelFromOptions(r, customRoles)}
+                      </Badge>
+                    ))}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <EditUserDialog
+                        user={u}
+                        customRoles={customRoles}
+                        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenant-users"] })}
+                      />
+                      <DeleteUserDialog
+                        user={u}
+                        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["tenant-users"] })}
+                        disabled={u.roles.includes("super_admin")}
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-4">
+              <span className="text-xs text-muted-foreground">
+                Showing {paginatedUsers.length} of {filteredUsers.length} users &mdash; page {userPage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUserPage((p) => Math.max(1, p - 1))}
+                  disabled={userPage === 1}
+                  className="h-8 px-3 text-[11px]"
+                >
+                  ← Prev
+                </Button>
+                {getPageNumbers(userPage, totalPages).map((pg, idx) =>
+                  pg === "…" ? (
+                    <span key={`dots-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                      …
+                    </span>
+                  ) : (
+                    <Button
+                      key={`page-${pg}`}
+                      variant={userPage === pg ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setUserPage(pg as number)}
+                      className={`h-8 w-8 p-0 text-[11px] ${
+                        userPage === pg
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "hover:bg-muted"
+                      }`}
+                    >
+                      {pg}
+                    </Button>
+                  )
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUserPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={userPage === totalPages}
+                  className="h-8 px-3 text-[11px]"
+                >
+                  Next →
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -1744,6 +1822,39 @@ function RolePermissionsEditor() {
     return JSON.stringify(permissions) !== JSON.stringify(initial);
   }, [permissions, rolePermissions]);
 
+  // Pagination for permissions
+  const [permPage, setPermPage] = useState(1);
+  const MODULES_PER_PAGE = 8;
+  const totalPermPages = Math.max(1, Math.ceil(permissions.length / MODULES_PER_PAGE));
+  const paginatedPermissions = useMemo(() => {
+    return permissions.slice((permPage - 1) * MODULES_PER_PAGE, permPage * MODULES_PER_PAGE);
+  }, [permissions, permPage]);
+
+  // Pagination for custom roles
+  const [rolesPage, setRolesPage] = useState(1);
+  const ROLES_PER_PAGE = 5;
+  const totalRolesPages = Math.max(1, Math.ceil(customRoles.length / ROLES_PER_PAGE));
+  const paginatedCustomRoles = useMemo(() => {
+    return customRoles.slice((rolesPage - 1) * ROLES_PER_PAGE, rolesPage * ROLES_PER_PAGE);
+  }, [customRoles, rolesPage]);
+
+  // Reset page when role changes
+  useEffect(() => {
+    setPermPage(1);
+  }, [selectedRole]);
+
+  function getPageNumbers(current: number, total: number): (number | "…")[] {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (current > 3) pages.push("…");
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push("…");
+    pages.push(total);
+    return pages;
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid gap-2 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)] items-end">
@@ -1804,68 +1915,120 @@ function RolePermissionsEditor() {
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="min-w-full border-collapse text-sm">
-          <thead className="bg-muted/10 text-left text-[11px] uppercase text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Module</th>
-              <th className="w-16 px-4 py-3 text-center font-semibold">All</th>
-              <th className="w-16 px-4 py-3 text-center font-semibold">View</th>
-              <th className="w-16 px-4 py-3 text-center font-semibold">Create</th>
-              <th className="w-16 px-4 py-3 text-center font-semibold">Edit</th>
-              <th className="w-16 px-4 py-3 text-center font-semibold">Delete</th>
-            </tr>
-            <tr className="bg-muted/5 text-left text-[11px] uppercase text-muted-foreground">
-              <th className="px-4 py-3 font-semibold">All Modules</th>
-              <th className="w-16 px-4 py-3 text-center">
-                <div className="flex justify-center">
-                  <Checkbox
-                    checked={permissions.every(hasFullRowAccess)}
-                    onCheckedChange={() => setPermissions((prev) => toggleEveryPermission(prev))}
-                  />
-                </div>
-              </th>
-              {PERMISSION_FIELDS.map((field) => (
-                <th key={field} className="w-16 px-4 py-3 text-center">
+      <div className="space-y-4">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="min-w-full border-collapse text-sm">
+            <thead className="bg-muted/10 text-left text-[11px] uppercase text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Module</th>
+                <th className="w-16 px-4 py-3 text-center font-semibold">All</th>
+                <th className="w-16 px-4 py-3 text-center font-semibold">View</th>
+                <th className="w-16 px-4 py-3 text-center font-semibold">Create</th>
+                <th className="w-16 px-4 py-3 text-center font-semibold">Edit</th>
+                <th className="w-16 px-4 py-3 text-center font-semibold">Delete</th>
+              </tr>
+              <tr className="bg-muted/5 text-left text-[11px] uppercase text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">All Modules</th>
+                <th className="w-16 px-4 py-3 text-center">
                   <div className="flex justify-center">
                     <Checkbox
-                      checked={permissions.every((row) => row[field])}
-                      onCheckedChange={() => toggleAllPermissions(field)}
+                      checked={permissions.every(hasFullRowAccess)}
+                      onCheckedChange={() => setPermissions((prev) => toggleEveryPermission(prev))}
                     />
                   </div>
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {permissions.map((permission) => (
-              <tr
-                key={permission.module_key}
-                className={`border-t border-border/60 ${hasFullRowAccess(permission) ? "bg-primary/5" : ""}`}
-              >
-                <td className="px-4 py-3 font-medium">{permission.label}</td>
-                <td className="w-16 px-4 py-3 text-center">
-                  <div className="flex justify-center">
-                    <Checkbox
-                      checked={hasFullRowAccess(permission)}
-                      onCheckedChange={() => setPermissions((prev) => togglePermissionRow(prev, permission.module_key))}
-                    />
-                  </div>
-                </td>
                 {PERMISSION_FIELDS.map((field) => (
-                  <td key={field} className="w-16 px-4 py-3 text-center">
+                  <th key={field} className="w-16 px-4 py-3 text-center">
                     <div className="flex justify-center">
                       <Checkbox
-                        checked={permission[field]}
-                        onCheckedChange={() => togglePermission(permission.module_key, field)}
+                        checked={permissions.every((row) => row[field])}
+                        onCheckedChange={() => toggleAllPermissions(field)}
+                      />
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedPermissions.map((permission) => (
+                <tr
+                  key={permission.module_key}
+                  className={`border-t border-border/60 ${hasFullRowAccess(permission) ? "bg-primary/5" : ""}`}
+                >
+                  <td className="px-4 py-3 font-medium">{permission.label}</td>
+                  <td className="w-16 px-4 py-3 text-center">
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={hasFullRowAccess(permission)}
+                        onCheckedChange={() => setPermissions((prev) => togglePermissionRow(prev, permission.module_key))}
                       />
                     </div>
                   </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  {PERMISSION_FIELDS.map((field) => (
+                    <td key={field} className="w-16 px-4 py-3 text-center">
+                      <div className="flex justify-center">
+                        <Checkbox
+                          checked={permission[field]}
+                          onCheckedChange={() => togglePermission(permission.module_key, field)}
+                        />
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Permissions Table Pagination Controls */}
+        {totalPermPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-4">
+            <span className="text-xs text-muted-foreground">
+              Showing {paginatedPermissions.length} of {permissions.length} modules &mdash; page {permPage} of {totalPermPages}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPermPage((p) => Math.max(1, p - 1))}
+                disabled={permPage === 1}
+                className="h-8 px-3 text-[11px]"
+              >
+                ← Prev
+              </Button>
+              {getPageNumbers(permPage, totalPermPages).map((pg, idx) =>
+                pg === "…" ? (
+                  <span key={`perm-dots-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                    …
+                  </span>
+                ) : (
+                  <Button
+                    key={`perm-page-${pg}`}
+                    variant={permPage === pg ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setPermPage(pg as number)}
+                    className={`h-8 w-8 p-0 text-[11px] ${
+                      permPage === pg
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    {pg}
+                  </Button>
+                )
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPermPage((p) => Math.min(totalPermPages, p + 1))}
+                disabled={permPage === totalPermPages}
+                className="h-8 px-3 text-[11px]"
+              >
+                Next →
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-background">
@@ -1876,36 +2039,88 @@ function RolePermissionsEditor() {
         {customRoles.length === 0 ? (
           <div className="p-4 text-sm text-muted-foreground">No custom roles created yet.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-collapse text-sm">
-              <thead className="bg-muted/10 text-left text-[11px] uppercase text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Role Name</th>
-                  <th className="px-4 py-3 font-semibold">Description</th>
-                  <th className="px-4 py-3 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customRoles.map((role) => (
-                  <tr key={role.id} className="border-t border-border/60">
-                    <td className="px-4 py-3">{role.label}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{role.description || "—"}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="inline-flex items-center gap-2">
-                        <EditCustomRoleDialog
-                          role={role}
-                          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["custom-roles"] })}
-                        />
-                        <DeleteCustomRoleButton
-                          role={role}
-                          onSuccess={() => queryClient.invalidateQueries({ queryKey: ["custom-roles"] })}
-                        />
-                      </div>
-                    </td>
+          <div className="space-y-4">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse text-sm">
+                <thead className="bg-muted/10 text-left text-[11px] uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Role Name</th>
+                    <th className="px-4 py-3 font-semibold">Description</th>
+                    <th className="px-4 py-3 font-semibold text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {paginatedCustomRoles.map((role) => (
+                    <tr key={role.id} className="border-t border-border/60">
+                      <td className="px-4 py-3">{role.label}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{role.description || "—"}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <EditCustomRoleDialog
+                            role={role}
+                            onSuccess={() => queryClient.invalidateQueries({ queryKey: ["custom-roles"] })}
+                          />
+                          <DeleteCustomRoleButton
+                            role={role}
+                            onSuccess={() => queryClient.invalidateQueries({ queryKey: ["custom-roles"] })}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Custom Roles Table Pagination Controls */}
+            {totalRolesPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-4 px-4 pb-4">
+                <span className="text-xs text-muted-foreground">
+                  Showing {paginatedCustomRoles.length} of {customRoles.length} roles &mdash; page {rolesPage} of {totalRolesPages}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRolesPage((p) => Math.max(1, p - 1))}
+                    disabled={rolesPage === 1}
+                    className="h-8 px-3 text-[11px]"
+                  >
+                    ← Prev
+                  </Button>
+                  {getPageNumbers(rolesPage, totalRolesPages).map((pg, idx) =>
+                    pg === "…" ? (
+                      <span key={`roles-dots-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                        …
+                      </span>
+                    ) : (
+                      <Button
+                        key={`roles-page-${pg}`}
+                        variant={rolesPage === pg ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setRolesPage(pg as number)}
+                        className={`h-8 w-8 p-0 text-[11px] ${
+                          rolesPage === pg
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                            : "hover:bg-muted"
+                        }`}
+                      >
+                        {pg}
+                      </Button>
+                    )
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRolesPage((p) => Math.min(totalRolesPages, p + 1))}
+                    disabled={rolesPage === totalRolesPages}
+                    className="h-8 px-3 text-[11px]"
+                  >
+                    Next →
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

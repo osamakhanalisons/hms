@@ -2,7 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, hasAnyRole, getTenantScoping } from "./auth-helper";
+import {
+  getSessionUser,
+  getUserTenantId,
+  getUserRoles,
+  hasAnyRole,
+  getTenantScoping,
+} from "./auth-helper";
 import { requirePermission } from "./permissions";
 
 export type VendorInvoiceItem = {
@@ -57,7 +63,21 @@ export const getVendorFinanceFn = createServerFn({ method: "GET" })
     if (!userId) throw new Error("Unauthorized");
 
     const scoping = await getTenantScoping(request, data?.tenantId);
-    const tenantId = scoping.tenantId;
+    let tenantId = scoping.tenantId;
+    const db = getDb();
+
+    if (!tenantId) {
+      tenantId = scoping.userTenantId || "";
+    }
+    if (!tenantId) {
+      const [tenants] = (await db.query(
+        "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1",
+      )) as unknown as [{ id: string }[], unknown];
+      if (tenants.length > 0) {
+        tenantId = tenants[0].id;
+      }
+    }
+
     if (!tenantId) {
       return {
         summary: { totalInvoiced: 0, totalPaid: 0, totalOutstanding: 0, overdueCount: 0 },
@@ -66,8 +86,6 @@ export const getVendorFinanceFn = createServerFn({ method: "GET" })
         purchaseOrdersList: [],
       } satisfies VendorFinanceOverview;
     }
-
-    const db = getDb();
     const todayStr = new Date().toISOString().split("T")[0];
 
     // Auto-update overdue status for unpaid past-due invoices
@@ -195,10 +213,10 @@ export const createVendorInvoiceFn = createServerFn({ method: "POST" })
     const db = getDb();
 
     // Verify vendor belongs to tenant
-    const [[vRow]] = (await db.query(
-      "SELECT id FROM vendors WHERE id = ? AND tenant_id = ?",
-      [data.vendorId, tenantId],
-    )) as any[];
+    const [[vRow]] = (await db.query("SELECT id FROM vendors WHERE id = ? AND tenant_id = ?", [
+      data.vendorId,
+      tenantId,
+    ])) as any[];
     if (!vRow) throw new Error("Invalid vendor selected");
 
     // Verify purchase order if provided

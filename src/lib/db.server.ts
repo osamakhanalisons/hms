@@ -289,6 +289,10 @@ export async function initDb() {
     ) ENGINE=InnoDB;
   `);
 
+  try {
+    await db.query("ALTER TABLE units MODIFY COLUMN unit_type ENUM('flat','apartment','villa','house','shop','office','penthouse','other') NOT NULL DEFAULT 'flat'");
+  } catch (_) {}
+
   // ─── RESIDENTS MODULE ─────────────────────────────────────────────────────
 
   await db.query(`
@@ -981,12 +985,76 @@ export async function initDb() {
   } catch (err) { console.error("Visitor passes migration error:", err); }
 
   try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS domestic_staff (
+        id VARCHAR(36) PRIMARY KEY,
+        tenant_id VARCHAR(36) NOT NULL,
+        resident_id VARCHAR(36) NOT NULL,
+        staff_code VARCHAR(32) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        phone VARCHAR(32) NULL,
+        staff_type ENUM('maid', 'driver', 'gardener', 'cook', 'nanny', 'other') NOT NULL,
+        photo_url VARCHAR(512) NULL,
+        valid_from DATE NOT NULL,
+        valid_until DATE NOT NULL,
+        allowed_days VARCHAR(255) NOT NULL,
+        entry_start_time TIME NULL,
+        entry_end_time TIME NULL,
+        vehicle_plate VARCHAR(32) NULL,
+        notes TEXT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_by VARCHAR(36) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+        FOREIGN KEY (resident_id) REFERENCES residents(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY uniq_tenant_staff_code (tenant_id, staff_code)
+      ) ENGINE=InnoDB;
+    `);
+  } catch (err) {
+    console.error("Domestic staff table migration error:", err);
+  }
+
+  try {
+    const [staffCols] = (await db.query(`SHOW COLUMNS FROM domestic_staff`)) as any[];
+    const staffColNames = new Set(staffCols.map((c: any) => c.Field));
+    if (!staffColNames.has("staff_code")) {
+      console.log("[DB] Adding staff_code column to domestic_staff...");
+      await db.query("ALTER TABLE domestic_staff ADD COLUMN staff_code VARCHAR(32) NULL");
+      
+      // Generate valid sequential codes for all existing rows
+      const [rows] = await db.query("SELECT id, tenant_id FROM domestic_staff WHERE staff_code IS NULL") as any[];
+      for (const row of rows) {
+        const [seqRows] = await db.query("SELECT staff_code FROM domestic_staff WHERE tenant_id = ? AND staff_code IS NOT NULL", [row.tenant_id]) as any[];
+        let maxSeq = 0;
+        for (const sr of seqRows) {
+          if (sr.staff_code.startsWith("DS-")) {
+            const num = parseInt(sr.staff_code.substring(3), 10);
+            if (!isNaN(num) && num > maxSeq) maxSeq = num;
+          }
+        }
+        const code = `DS-${String(maxSeq + 1).padStart(5, "0")}`;
+        await db.query("UPDATE domestic_staff SET staff_code = ? WHERE id = ?", [code, row.id]);
+      }
+      
+      // Convert to NOT NULL and add UNIQUE index
+      await db.query("ALTER TABLE domestic_staff MODIFY COLUMN staff_code VARCHAR(32) NOT NULL");
+      await db.query("ALTER TABLE domestic_staff ADD CONSTRAINT uniq_tenant_staff_code UNIQUE (tenant_id, staff_code)");
+      console.log("[DB] staff_code column successfully added and constraints created.");
+    }
+  } catch (err) {
+    console.error("Domestic staff table alteration error:", err);
+  }
+
+  try {
     const [logCols] = (await db.query(`SHOW COLUMNS FROM entry_exit_log`)) as any[];
     const logColNames = new Set(logCols.map((c: any) => c.Field));
     const logColumnsToAdd = [
       { name: "verified_by", sql: "ALTER TABLE entry_exit_log ADD COLUMN verified_by VARCHAR(36) NULL" },
       { name: "unit_id", sql: "ALTER TABLE entry_exit_log ADD COLUMN unit_id VARCHAR(36) NULL" },
       { name: "notes", sql: "ALTER TABLE entry_exit_log ADD COLUMN notes TEXT NULL" },
+      { name: "domestic_staff_id", sql: "ALTER TABLE entry_exit_log ADD COLUMN domestic_staff_id VARCHAR(36) NULL" },
     ];
     for (const col of logColumnsToAdd) {
       if (!logColNames.has(col.name)) await db.query(col.sql);
@@ -1466,6 +1534,7 @@ export async function initDb() {
     "ALTER TABLE entry_exit_log ADD CONSTRAINT fk_logs_verified FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL",
     "ALTER TABLE entry_exit_log ADD CONSTRAINT fk_logs_unit FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL",
     "ALTER TABLE entry_exit_log ADD CONSTRAINT fk_logs_gate FOREIGN KEY (gate_id) REFERENCES gate_terminals(id) ON DELETE SET NULL",
+    "ALTER TABLE entry_exit_log ADD CONSTRAINT fk_logs_domestic_staff FOREIGN KEY (domestic_staff_id) REFERENCES domestic_staff(id) ON DELETE SET NULL",
     "ALTER TABLE ledger_entries ADD CONSTRAINT fk_ledger_head FOREIGN KEY (charge_head_id) REFERENCES charge_heads(id) ON DELETE SET NULL",
     "ALTER TABLE ledger_entries ADD CONSTRAINT fk_ledger_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL",
     "ALTER TABLE payments ADD CONSTRAINT fk_payments_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE",

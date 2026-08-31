@@ -62,6 +62,23 @@ function EventsPage() {
     queryFn: () => getEventsFn(),
   });
 
+  // Pagination
+  const EVENTS_PER_PAGE = 6;
+  const [eventPage, setEventPage] = useState(1);
+  const totalEventPages = Math.max(1, Math.ceil(events.length / EVENTS_PER_PAGE));
+  const paginatedEvents = events.slice((eventPage - 1) * EVENTS_PER_PAGE, eventPage * EVENTS_PER_PAGE);
+
+  function getPageNums(cur: number, tot: number): (number | "…")[] {
+    if (tot <= 7) return Array.from({ length: tot }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (cur > 3) pages.push("…");
+    const s = Math.max(2, cur - 1), e = Math.min(tot - 1, cur + 1);
+    for (let i = s; i <= e; i++) pages.push(i);
+    if (cur < tot - 2) pages.push("…");
+    pages.push(tot);
+    return pages;
+  }
+
   const createMutation = useMutation({
     mutationFn: createEventFn,
     onSuccess: () => {
@@ -124,7 +141,7 @@ function EventsPage() {
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2">
-            {events.map((e: any) => {
+            {paginatedEvents.map((e: any) => {
               const start = new Date(e.starts_at);
               const formattedDate = format(start, "eeee, MMMM d, yyyy");
               const formattedTime = `${format(start, "h:mm a")} - ${format(new Date(e.ends_at), "h:mm a")}`;
@@ -221,11 +238,52 @@ function EventsPage() {
               );
             })}
 
-            {events.length === 0 && (
+            {paginatedEvents.length === 0 && events.length === 0 && (
               <div className="py-20 text-center text-muted-foreground text-sm border rounded-lg border-dashed border-border/70 sm:col-span-2">
                 No upcoming community events found.
               </div>
             )}
+
+            {/* Pagination */}
+            {totalEventPages > 1 && (
+              <div className="sm:col-span-2 flex items-center justify-center gap-1.5 pt-2">
+                <button
+                  onClick={() => setEventPage((p) => Math.max(1, p - 1))}
+                  disabled={eventPage === 1}
+                  className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+                >
+                  ← Prev
+                </button>
+                {getPageNums(eventPage, totalEventPages).map((pg, i) =>
+                  pg === "…" ? (
+                    <span key={`e${i}`} className="px-1.5 text-[11px] text-muted-foreground select-none">…</span>
+                  ) : (
+                    <button
+                      key={pg}
+                      onClick={() => setEventPage(pg as number)}
+                      className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                        eventPage === pg
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border/70 hover:bg-muted"
+                      }`}
+                    >
+                      {pg}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => setEventPage((p) => Math.min(totalEventPages, p + 1))}
+                  disabled={eventPage === totalEventPages}
+                  className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
+            <div className="sm:col-span-2 text-center text-[11px] text-muted-foreground">
+              {events.length} events &mdash; page {eventPage} of {totalEventPages}
+            </div>
           </div>
         )}
       </div>

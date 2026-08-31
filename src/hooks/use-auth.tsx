@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { getCurrentUserFn, signInFn, signUpFn, signOutFn } from "@/lib/api/db-functions";
 
 export type AppRole =
@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const rolesRef = useRef<string>("");
 
   const loadUserData = async () => {
     try {
@@ -56,7 +57,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(data.session);
         setUser(data.user);
         setProfile(data.profile);
-        setRoles(data.roles as AppRole[]);
+        // Only update roles if the content actually changed — avoids new array
+        // reference every render which would cascade into infinite re-renders.
+        const newRolesKey = (data.roles as AppRole[]).slice().sort().join(",");
+        if (newRolesKey !== rolesRef.current) {
+          rolesRef.current = newRolesKey;
+          setRoles(data.roles as AppRole[]);
+        }
       } else {
         setSession(null);
         setUser(null);

@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { getDb } from "../db.server";
-import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, hasAnyRole, getTenantScoping } from "./auth-helper";
+import { getSessionUser, getUserTenantId, resolveTenantId, getUserRoles, isAdminRole, hasAnyRole, getTenantScoping } from "./auth-helper";
 import { requirePermission } from "./permissions";
 
 
@@ -108,10 +108,7 @@ export const createNoticeFn = createServerFn({ method: "POST" })
 export const markNoticeReadFn = createServerFn({ method: "POST" })
   .validator(z.object({ noticeId: z.string() }))
   .handler(async ({ data, request }) => {
-    const userId = await getSessionUser(request);
-    if (!userId) throw new Error("Unauthorized");
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant");
+    const tenantId = await resolveTenantId(request);
 
     const db = getDb();
 

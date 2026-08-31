@@ -58,11 +58,11 @@ async function run() {
   }
 
   // Ensure Test Society A & B exist
-  const tenantAId = await ensureTenant("Test Society A", "TEST-A", "test-society-a");
-  const tenantBId = await ensureTenant("Test Society B", "TEST-B", "test-society-b");
+  const tenantAId = await ensureTenant("Askari Heights A", "TEST-A", "askari-heights-a");
+  const tenantBId = await ensureTenant("Askari Heights B", "TEST-B", "askari-heights-b");
 
-  console.log(`[SEED-TEST] Test Society A ID: ${tenantAId}`);
-  console.log(`[SEED-TEST] Test Society B ID: ${tenantBId}`);
+  console.log(`[SEED-TEST] Askari Heights A ID: ${tenantAId}`);
+  console.log(`[SEED-TEST] Askari Heights B ID: ${tenantBId}`);
 
   // Helper to provision modules, societies, block, unit, resident user, complaint, and poll
   async function seedTestData(tenantId: string, suffix: string, emailPrefix: string) {
@@ -84,7 +84,7 @@ async function run() {
       await conn.query("INSERT INTO societies (id, tenant_id, name) VALUES (?, ?, ?)", [
         societyId,
         tenantId,
-        `Test Society ${suffix}`
+        `Askari Heights ${suffix}`
       ]);
     }
 
@@ -129,7 +129,7 @@ async function run() {
       await conn.query("INSERT INTO profiles (id, full_name, society_name, phone, tenant_id) VALUES (?, ?, ?, '+1234567890', ?)", [
         adminUserId,
         `Admin ${suffix}`,
-        `Test Society ${suffix}`,
+        `Askari Heights ${suffix}`,
         tenantId
       ]);
       await conn.query("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'society_admin')", [
@@ -152,7 +152,7 @@ async function run() {
       await conn.query("INSERT INTO profiles (id, full_name, society_name, phone, tenant_id) VALUES (?, ?, ?, '+1234567890', ?)", [
         resUserId,
         `Resident ${suffix} Unique`,
-        `Test Society ${suffix}`,
+        `Askari Heights ${suffix}`,
         tenantId
       ]);
       await conn.query("INSERT INTO user_roles (id, user_id, role) VALUES (?, ?, 'resident')", [
@@ -185,7 +185,7 @@ async function run() {
         crypto.randomUUID(),
         tenantId,
         `Unique complaint in Society ${suffix}`,
-        `This is a test complaint scoped strictly to Test Society ${suffix}.`
+        `This is a test complaint scoped strictly to Askari Heights ${suffix}.`
       ]);
     }
 

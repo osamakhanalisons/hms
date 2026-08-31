@@ -1,3 +1,4 @@
+import { useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "./use-auth";
 import { getMyPermissionsFn } from "@/lib/api/permissions";
@@ -27,48 +28,51 @@ export function usePermissions() {
     staleTime: 5 * 60 * 1000, // 5 minutes cache
   });
 
-  // Convert array to map for easier access
-  const permissions: PermissionsMap = {};
-  permissionsArray.forEach((perm: any) => {
-    permissions[perm.module_key] = {
-      can_view: perm.can_view,
-      can_create: perm.can_create,
-      can_edit: perm.can_edit,
-      can_delete: perm.can_delete,
-    };
-  });
+  // Convert array to map for easier access - memoized to keep reference stable
+  const permissions = useMemo(() => {
+    const map: PermissionsMap = {};
+    permissionsArray.forEach((perm: any) => {
+      map[perm.module_key] = {
+        can_view: perm.can_view,
+        can_create: perm.can_create,
+        can_edit: perm.can_edit,
+        can_delete: perm.can_delete,
+      };
+    });
+    return map;
+  }, [permissionsArray]);
 
-  // Helper functions
+  // Helper functions - wrapped in useCallback to keep references stable
   
-  function canView(moduleKey: string): boolean {
+  const canView = useCallback((moduleKey: string): boolean => {
     // Super admin has full access
     if (roles.includes("super_admin")) return true;
     // Society admin has full access
     if (roles.includes("society_admin")) return true;
     return permissions[moduleKey]?.can_view ?? false;
-  }
+  }, [roles, permissions]);
   
-  function canCreate(moduleKey: string): boolean {
+  const canCreate = useCallback((moduleKey: string): boolean => {
     if (roles.includes("super_admin")) return true;
     if (roles.includes("society_admin")) return true;
     return permissions[moduleKey]?.can_create ?? false;
-  }
+  }, [roles, permissions]);
   
-  function canEdit(moduleKey: string): boolean {
+  const canEdit = useCallback((moduleKey: string): boolean => {
     if (roles.includes("super_admin")) return true;
     if (roles.includes("society_admin")) return true;
     return permissions[moduleKey]?.can_edit ?? false;
-  }
+  }, [roles, permissions]);
   
-  function canDelete(moduleKey: string): boolean {
+  const canDelete = useCallback((moduleKey: string): boolean => {
     if (roles.includes("super_admin")) return true;
     if (roles.includes("society_admin")) return true;
     return permissions[moduleKey]?.can_delete ?? false;
-  }
+  }, [roles, permissions]);
   
-  function hasModuleAccess(moduleKey: string): boolean {
+  const hasModuleAccess = useCallback((moduleKey: string): boolean => {
     return canView(moduleKey);
-  }
+  }, [canView]);
   
   return {
     permissions,

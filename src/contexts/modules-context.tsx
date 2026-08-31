@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { getActiveModulesFn } from "@/lib/api/tenants";
 
 interface ModuleState {
@@ -48,12 +48,12 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
     refreshModules();
   }, []);
 
-  const isModuleActive = (key: string) => {
+  const isModuleActive = useCallback((key: string) => {
     // If the system hasn't loaded modules yet, assume ALL modules are active by default
     // This ensures permissions work correctly even before module states are loaded
     if (allModules.length === 0) return true;
     return activeModules.has(key);
-  };
+  }, [allModules, activeModules]);
 
   return (
     <ModulesContext.Provider

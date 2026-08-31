@@ -75,6 +75,23 @@ function PollsPage() {
     queryFn: () => getPollsFn(),
   });
 
+  // Pagination
+  const POLLS_PER_PAGE = 8;
+  const [pollPage, setPollPage] = useState(1);
+  const totalPollPages = Math.max(1, Math.ceil(polls.length / POLLS_PER_PAGE));
+  const paginatedPolls = polls.slice((pollPage - 1) * POLLS_PER_PAGE, pollPage * POLLS_PER_PAGE);
+
+  function getPageNums(cur: number, tot: number): (number | "…")[] {
+    if (tot <= 7) return Array.from({ length: tot }, (_, i) => i + 1);
+    const pages: (number | "…")[] = [1];
+    if (cur > 3) pages.push("…");
+    const s = Math.max(2, cur - 1), e = Math.min(tot - 1, cur + 1);
+    for (let i = s; i <= e; i++) pages.push(i);
+    if (cur < tot - 2) pages.push("…");
+    pages.push(tot);
+    return pages;
+  }
+
   const { data: voters = [], isLoading: isLoadingVoters } = useQuery({
     queryKey: ["poll-voters", votersPollId],
     queryFn: () => getPollVotersFn({ data: { pollId: votersPollId! } }),
@@ -144,7 +161,7 @@ function PollsPage() {
           </div>
         ) : (
           <div className="grid gap-6">
-            {polls.map((p: any) => {
+            {paginatedPolls.map((p: any) => {
               const isClosed = !isAfter(new Date(p.closes_at), new Date());
               const totalVotes = Object.values(p.results ?? {}).reduce(
                 (a: any, b: any) => a + b,
@@ -270,11 +287,52 @@ function PollsPage() {
               );
             })}
 
-            {polls.length === 0 && (
+            {paginatedPolls.length === 0 && polls.length === 0 && (
               <div className="py-20 text-center text-muted-foreground text-sm border rounded-lg border-dashed border-border/70">
                 No active or historical polls found.
               </div>
             )}
+
+            {/* Pagination */}
+            {totalPollPages > 1 && (
+              <div className="flex items-center justify-center gap-1.5 pt-2">
+                <button
+                  onClick={() => setPollPage((p) => Math.max(1, p - 1))}
+                  disabled={pollPage === 1}
+                  className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+                >
+                  ← Prev
+                </button>
+                {getPageNums(pollPage, totalPollPages).map((pg, i) =>
+                  pg === "…" ? (
+                    <span key={`e${i}`} className="px-1.5 text-[11px] text-muted-foreground select-none">…</span>
+                  ) : (
+                    <button
+                      key={pg}
+                      onClick={() => setPollPage(pg as number)}
+                      className={`rounded-md border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                        pollPage === pg
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border/70 hover:bg-muted"
+                      }`}
+                    >
+                      {pg}
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => setPollPage((p) => Math.min(totalPollPages, p + 1))}
+                  disabled={pollPage === totalPollPages}
+                  className="rounded-md border border-border/70 px-3 py-1.5 text-[11px] font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-40 transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
+
+            <div className="text-center text-[11px] text-muted-foreground">
+              {polls.length} polls &mdash; page {pollPage} of {totalPollPages}
+            </div>
           </div>
         )}
       </div>

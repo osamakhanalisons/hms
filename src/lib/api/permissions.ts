@@ -220,6 +220,14 @@ export async function requirePermission(
   if (roles.includes("super_admin") || roles.includes("society_admin")) {
     const scoping = await getTenantScoping(request);
     tenantId = scoping.tenantId;
+    if (!tenantId || tenantId === "all") {
+      const { getDb } = await import("../db.server");
+      const db = getDb();
+      const [tenants] = (await db.query("SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1")) as any[];
+      if (tenants.length > 0) {
+        tenantId = tenants[0].id as string;
+      }
+    }
   } else {
     const userTenantId = await getUserTenantId(userId);
     if (!userTenantId) throw new Error("No tenant session found");
@@ -285,7 +293,17 @@ export const getRolePermissionsFn = createServerFn({ method: "POST" })
     if (!isAdminRole(userRoles)) throw new Error("Forbidden");
 
     const scoping = await getTenantScoping(request);
-    const resolvedTenantId = (scoping.isSuperAdmin && data.tenantId) ? data.tenantId : scoping.tenantId;
+    let resolvedTenantId = (scoping.isSuperAdmin && data.tenantId) ? data.tenantId : scoping.tenantId;
+    if (!resolvedTenantId && scoping.isSuperAdmin) {
+      const { getDb } = await import("../db.server");
+      const db = getDb();
+      const [tenants] = (await db.query(
+        "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1",
+      )) as any[];
+      if (tenants.length > 0) {
+        resolvedTenantId = tenants[0].id;
+      }
+    }
     if (!resolvedTenantId) throw new Error("Forbidden — A specific society must be selected.");
 
     const { getDb } = await import("../db.server");
@@ -366,7 +384,17 @@ export const updateRolePermissionsFn = createServerFn({ method: "POST" })
     if (!isAdminRole(userRoles)) throw new Error("Forbidden");
 
     const scoping = await getTenantScoping(request);
-    const resolvedTenantId = (scoping.isSuperAdmin && data.tenantId) ? data.tenantId : scoping.tenantId;
+    let resolvedTenantId = (scoping.isSuperAdmin && data.tenantId) ? data.tenantId : scoping.tenantId;
+    if (!resolvedTenantId && scoping.isSuperAdmin) {
+      const { getDb } = await import("../db.server");
+      const db = getDb();
+      const [tenants] = (await db.query(
+        "SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1",
+      )) as any[];
+      if (tenants.length > 0) {
+        resolvedTenantId = tenants[0].id;
+      }
+    }
     if (!resolvedTenantId) throw new Error("Forbidden — A specific society must be selected.");
 
     const { getDb } = await import("../db.server");

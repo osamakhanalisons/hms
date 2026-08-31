@@ -66,7 +66,10 @@ const COLUMNS: KanbanColumn[] = [
 
 function ComplaintsPage() {
   const { user, roles } = useAuth();
-  const isAdmin = roles.includes("super_admin") || roles.includes("society_admin") || roles.includes("maintenance_head");
+  const isAdmin =
+    roles.includes("super_admin") ||
+    roles.includes("society_admin") ||
+    roles.includes("maintenance_head");
   const queryClient = useQueryClient();
   const [submitOpen, setSubmitOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -95,14 +98,23 @@ function ComplaintsPage() {
     queryFn: async () => getUnitsFn(),
   });
 
-
   // Fetch staff users (society admin, technicians, guards, etc.)
   const { data: staffUsers = [] } = useQuery({
     queryKey: ["tenant-users-staff"],
     queryFn: async () => {
       const allUsers = await getTenantUsersFn();
-      return allUsers.filter((u: any) =>
-        u.roles.some((r: string) => r !== "resident" && r !== "tenant")
+      const excludedRoles = [
+        "super_admin",
+        "society_admin",
+        "finance_head",
+        "security_head",
+        "guard",
+        "resident",
+        "tenant",
+      ];
+      return allUsers.filter(
+        (u: { id: string; full_name: string; email: string; roles: string[] }) =>
+          u.roles.some((r: string) => !excludedRoles.includes(r)),
       );
     },
   });
@@ -318,7 +330,8 @@ function ComplaintsPage() {
           <DialogHeader>
             <DialogTitle className="font-serif text-lg">{selectedTicket?.title}</DialogTitle>
             <DialogDescription>
-              Raised by {selectedTicket?.submitter_name || "Resident"} for {selectedTicket?.full_path || "Global"}
+              Raised by {selectedTicket?.submitter_name || "Resident"} for{" "}
+              {selectedTicket?.full_path || "Global"}
             </DialogDescription>
           </DialogHeader>
 
@@ -356,12 +369,18 @@ function ComplaintsPage() {
                       <SelectContent>
                         {staffUsers.map((u: any) => (
                           <SelectItem key={u.id} value={u.id}>
-                            {u.full_name} ({u.roles.map((r: string) => r.replace("_", " ")).join(", ")})
+                            {u.full_name} (
+                            {u.roles.map((r: string) => r.replace("_", " ")).join(", ")})
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button onClick={handleAssign} disabled={!assigneeId} size="sm" className="gap-1">
+                    <Button
+                      onClick={handleAssign}
+                      disabled={!assigneeId}
+                      size="sm"
+                      className="gap-1"
+                    >
                       <UserCheck className="size-4" /> Assign
                     </Button>
                   </div>
@@ -375,14 +394,16 @@ function ComplaintsPage() {
                     {selectedTicket.assignee_name ? (
                       <span>{selectedTicket.assignee_name}</span>
                     ) : (
-                      <span className="text-muted-foreground font-normal italic">Pending Assignment</span>
+                      <span className="text-muted-foreground font-normal italic">
+                        Pending Assignment
+                      </span>
                     )}
                   </div>
                 </div>
               )}
 
               {/* Workflow Actions */}
-              {(isAdmin || isAssignedStaff) ? (
+              {isAdmin || isAssignedStaff ? (
                 <div className="space-y-3 border-t pt-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     Workflow Transition

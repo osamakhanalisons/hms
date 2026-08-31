@@ -571,27 +571,24 @@ export const getAuditLogsFn = createServerFn({ method: "GET" })
     )) as any[];
     if (roleRows.length === 0) throw new Error("Forbidden - Admin access required");
     
-    const [profiles] = (await db.query("SELECT tenant_id FROM profiles WHERE id = ?", [
-      userId,
-    ])) as any[];
-    const tenantId = profiles[0]?.tenant_id ?? null;
-    if (!tenantId) return [];
+    const isSuperAdmin = roleRows.some((r: any) => r.role === "super_admin");
+    const { sqlFilter, sqlParams } = await getTenantScoping(request, undefined, "al.tenant_id");
 
     let query = `
       SELECT al.*, u.email AS actor_email
       FROM audit_logs al
       LEFT JOIN users u ON u.id = al.user_id
-      WHERE al.tenant_id = ?
+      WHERE ${sqlFilter}
     `;
-    const params: any[] = [tenantId];
+    const params: any[] = [...sqlParams];
 
     if (data?.moduleKey) {
-      query += " AND al.module_key = ?";
-      params.push(data.moduleKey);
+      query += " AND (al.entity_type = ? OR al.action LIKE ?)";
+      params.push(data.moduleKey, `%${data.moduleKey}%`);
     }
     if (data?.actionType) {
-      query += " AND al.action = ?";
-      params.push(data.actionType);
+      query += " AND al.action LIKE ?";
+      params.push(`%${data.actionType}%`);
     }
     if (data?.fromDate) {
       query += " AND al.created_at >= ?";
