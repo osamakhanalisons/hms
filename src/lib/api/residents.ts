@@ -33,10 +33,13 @@ export const getResidentsFn = createServerFn({ method: "GET" })
         unitId: z.string().optional(),
         search: z.string().optional(),
         tenantId: z.string().optional(),
+        page: z.number().optional(),
+        pageSize: z.number().optional(),
       })
       .optional(),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
 
@@ -50,6 +53,27 @@ export const getResidentsFn = createServerFn({ method: "GET" })
         data?.tenantId,
         "r.tenant_id",
       );
+
+      // Admin: count query first for pagination
+      let countQuery = `
+        SELECT COUNT(*) AS total
+        FROM residents r
+        JOIN persons p ON p.id = r.person_id
+        WHERE ${sqlFilter} AND r.is_current = TRUE
+      `;
+      const countParams: any[] = [...sqlParams];
+
+      if (data?.unitId) {
+        countQuery += " AND r.unit_id = ?";
+        countParams.push(data.unitId);
+      }
+      if (data?.search) {
+        countQuery += " AND (p.full_name LIKE ? OR p.email LIKE ? OR p.phone LIKE ?)";
+        const s = `%${data.search}%`;
+        countParams.push(s, s, s);
+      }
+
+      const [[{ total }]] = (await db.query(countQuery, countParams)) as any[];
 
       // Admin: return residents matching scoped filter
       let query = `
@@ -76,24 +100,29 @@ export const getResidentsFn = createServerFn({ method: "GET" })
       }
       query += " ORDER BY p.full_name";
 
+      if (data?.page && data?.pageSize) {
+        const offset = (data.page - 1) * data.pageSize;
+        query += " LIMIT ? OFFSET ?";
+        params.push(data.pageSize, offset);
+      }
+
       const [rows] = (await db.query(query, params)) as any[];
 
       if (rows.length > 0) {
-        const { sqlFilter: vFilter, sqlParams: vParams } = await getTenantScoping(
-          request,
-          data?.tenantId,
-          "tenant_id",
-        );
+        const residentIds = rows.map((r: any) => r.id);
         const [vehicles] = (await db.query(
-          `SELECT * FROM resident_vehicles WHERE ${vFilter}`,
-          vParams,
+          "SELECT * FROM resident_vehicles WHERE resident_id IN (?)",
+          [residentIds],
         )) as any[];
-        return rows.map((resident: any) => ({
-          ...resident,
-          vehicles: vehicles.filter((v: any) => v.resident_id === resident.id),
-        }));
+        return {
+          residents: rows.map((resident: any) => ({
+            ...resident,
+            vehicles: vehicles.filter((v: any) => v.resident_id === resident.id),
+          })),
+          totalItems: total,
+        };
       }
-      return rows;
+      return { residents: [], totalItems: total };
     } else {
       // Resident/tenant: return only their own record (lookup by user_id — no tenantId required)
       const [rows] = (await db.query(
@@ -116,12 +145,15 @@ export const getResidentsFn = createServerFn({ method: "GET" })
           "SELECT * FROM resident_vehicles WHERE resident_id IN (?)",
           [residentIds]
         )) as any[];
-        return rows.map((resident: any) => ({
-          ...resident,
-          vehicles: vehicles.filter((v: any) => v.resident_id === resident.id),
-        }));
+        return {
+          residents: rows.map((resident: any) => ({
+            ...resident,
+            vehicles: vehicles.filter((v: any) => v.resident_id === resident.id),
+          })),
+          totalItems: rows.length,
+        };
       }
-      return rows;
+      return { residents: [], totalItems: 0 };
     }
   });
 
@@ -139,7 +171,8 @@ export const createResidentFn = createServerFn({ method: "POST" })
       moveInDate: z.string().optional(),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const { tenantId } = await requirePermission(request, "residents", "create");
 
     const db = getDb();
@@ -264,7 +297,8 @@ export const addVehicleFn = createServerFn({ method: "POST" })
       color: z.string().optional(),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const tenantId = await resolveTenantId(request);
 
     const db = getDb();
@@ -298,7 +332,8 @@ export const addVehicleFn = createServerFn({ method: "POST" })
 
 export const moveOutResidentFn = createServerFn({ method: "POST" })
   .validator(z.object({ residentId: z.string(), moveOutDate: z.string() }))
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const { tenantId } = await requirePermission(request, "residents", "edit");
 
     const db = getDb();
@@ -329,8 +364,11 @@ export const createResidentAccountFn = createServerFn({ method: "POST" })
       email: z.string().email(),
     }),
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const tenantId = await resolveTenantId(request);
+    const userId = await getSessionUser(request);
+    if (!userId) throw new Error("Unauthorized");
 
     const userRoles = await getUserRoles(userId);
     if (!isAdminRole(userRoles)) throw new Error("Forbidden");

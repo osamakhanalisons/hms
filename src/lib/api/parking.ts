@@ -65,7 +65,7 @@ export const createParkingSlotFn = createServerFn({ method: "POST" })
     }),
   )
   .handler(async (ctx: any) => {
-    const { request } = ctx;
+    const { data, request } = ctx;
     const { tenantId } = await requirePermission(request, "parking", "create");
 
     const db = getDb();
@@ -134,7 +134,7 @@ export const allocateParkingSlotFn = createServerFn({ method: "POST" })
 export const deallocateParkingSlotFn = createServerFn({ method: "POST" })
   .validator(z.object({ slotId: z.string() }))
   .handler(async (ctx: any) => {
-    const { request } = ctx;
+    const { data, request } = ctx;
     const { tenantId } = await requirePermission(request, "parking", "edit");
 
     const db = getDb();
