@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getNotificationsFn, markAsReadFn } from "@/lib/api/notifications";
-import { Bell, CheckCheck, ShieldAlert, Wrench, FileText, Loader2, Calendar } from "lucide-react";
+import { Bell, CheckCheck, ShieldAlert, Wrench, FileText, Loader2, Calendar, Receipt, Users } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -50,9 +50,18 @@ function NotificationsPage() {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "maintenance":
+      case "maintenance_update":
         return <Wrench className="size-4 text-amber-500" />;
       case "visitor":
+      case "visitor_arrival":
         return <ShieldAlert className="size-4 text-emerald-500" />;
+      case "domestic_staff_checkin":
+      case "domestic_staff_checkout":
+        return <Users className="size-4 text-purple-500" />;
+      case "bill_generated":
+      case "bill_reminder":
+      case "billing":
+        return <Receipt className="size-4 text-blue-500" />;
       case "document":
         return <FileText className="size-4 text-blue-500" />;
       default:
@@ -61,12 +70,12 @@ function NotificationsPage() {
   };
 
   const handleMarkAllRead = () => {
-    markAllRead.mutate({});
+    markAllRead.mutate({ data: {} });
   };
 
   const handleMarkSingleRead = (id: string, currentStatus: string) => {
     if (currentStatus === "read") return;
-    markSingleRead.mutate({ notificationId: id });
+    markSingleRead.mutate({ data: { notificationId: id } });
   };
 
   return (

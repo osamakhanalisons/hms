@@ -69,7 +69,7 @@ export type ProjectsOverview = {
   projects: ProjectItem[];
   milestones: ProjectMilestone[];
   expenses: ProjectExpense[];
-  vendorsList: { id: string; name: string }[];
+  vendorsList: { id: string; name: string; category?: string | null; address?: string | null }[];
   usersList: { id: string; name: string }[];
 };
 
@@ -305,7 +305,7 @@ export const getProjectsOverviewFn = createServerFn({ method: "GET" })
 
     // ── Dropdowns: Vendors & Users ────────────────────────────────────────────
     const [vendorRows] = (await db.query(
-      `SELECT id, name FROM vendors WHERE ${vendorFilter} ORDER BY name ASC`,
+      `SELECT id, name, category, address FROM vendors WHERE ${vendorFilter} ORDER BY name ASC`,
       vendorParams,
     )) as any[];
 
@@ -325,7 +325,12 @@ export const getProjectsOverviewFn = createServerFn({ method: "GET" })
       projects,
       milestones,
       expenses,
-      vendorsList: (vendorRows as any[]).map((v) => ({ id: v.id, name: v.name })),
+      vendorsList: (vendorRows as any[]).map((v) => ({
+        id: v.id,
+        name: v.name,
+        category: v.category ?? null,
+        address: v.address ?? null,
+      })),
       usersList: (userRows as any[]).map((u) => ({ id: u.id, name: u.name })),
     } satisfies ProjectsOverview;
   });

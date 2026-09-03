@@ -82,6 +82,8 @@ export const DEDICATED_ROUTES: Record<string, string> = {
   amenities: "/amenities",
   governance: "/governance",
   ai_maintenance: "/ai-maintenance",
+  ai_complaints: "/ai-complaints",
+  ai_finance: "/ai-finance",
 };
 
 export const MODULES: ModuleDef[] = [
@@ -360,6 +362,7 @@ export const MODULES: ModuleDef[] = [
     icon: Sparkles,
     description: "Auto-categorize & prioritize",
     plan: "Professional",
+    route: "/ai-complaints",
   },
   {
     key: "ai_finance",
@@ -368,6 +371,7 @@ export const MODULES: ModuleDef[] = [
     icon: Sparkles,
     description: "Anomaly & forecast",
     plan: "Professional",
+    route: "/ai-finance",
   },
   {
     key: "ai_maintenance",
@@ -398,7 +402,7 @@ export const PRIMARY_NAV: {
 }[] = [
   { to: "/", label: "Dashboard", icon: Home },
   { to: "/societies", label: "Societies", icon: Building2, superAdminOnly: true },
-  { to: "/forms", label: "Forms catalog", icon: FileText },
+  // { to: "/forms", label: "Forms catalog", icon: FileText },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/audit-log", label: "Audit log", icon: ShieldCheck },
   { to: "/settings", label: "Settings", icon: Settings },

@@ -13,7 +13,6 @@ import {
   Sparkles,
   TrendingUp,
   AlertTriangle,
-  DollarSign,
   Calendar,
   RefreshCw,
   Package,
@@ -25,8 +24,12 @@ import {
   BarChart3,
   Wrench,
   ShieldAlert,
+  Building,
+  Zap,
+  DollarSign,
 } from "lucide-react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/ai-maintenance")({
   head: () => ({
@@ -41,6 +44,23 @@ export const Route = createFileRoute("/ai-maintenance")({
   component: AIMaintenanceRoute,
 });
 
+function getCookieVal(name: string): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]*)"));
+  return match ? match[2] : "";
+}
+
+function safeFormatDate(dateVal: any, formatStr: string, fallback = "—"): string {
+  if (!dateVal) return fallback;
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, formatStr);
+  } catch {
+    return fallback;
+  }
+}
+
 function AIMaintenanceRoute() {
   return (
     <ModuleGate moduleKey="ai_maintenance">
@@ -51,36 +71,39 @@ function AIMaintenanceRoute() {
 
 function AIMaintenancePage() {
   const queryClient = useQueryClient();
+  const selectedTenantId = getCookieVal("selected_tenant_id");
   const [activeTab, setActiveTab] = useState<string>("overview");
 
-  const { data: insights, isLoading, error } = useQuery({
-    queryKey: ["ai-maintenance-insights"],
-    queryFn: () => getAIMaintenanceInsightsFn(),
-    staleTime: 1000 * 60 * 5, // 5 minutes
+  const { data: insights, isLoading, error, isFetching, refetch } = useQuery({
+    queryKey: ["ai-maintenance-insights", selectedTenantId],
+    queryFn: () =>
+      getAIMaintenanceInsightsFn({ data: { tenantId: selectedTenantId || undefined } }),
   });
 
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["ai-maintenance-insights"] });
-    toast.info("Refreshing AI insights...");
+  const handleRefresh = async () => {
+    toast.info("Running fresh AI maintenance analysis...");
+    try {
+      await getAIMaintenanceInsightsFn({
+        data: { tenantId: selectedTenantId || undefined, refresh: true },
+      });
+      queryClient.invalidateQueries({ queryKey: ["ai-maintenance-insights", selectedTenantId] });
+      toast.success("Analysis updated and cached!");
+    } catch (err: any) {
+      toast.error(err instanceof Error ? err.message : "Analysis failed");
+    }
   };
 
   const getRiskBadge = (level: string) => {
-    const variants: Record<string, any> = {
-      low: "secondary",
-      medium: "default",
-      high: "destructive",
-      critical: "destructive",
-    };
     const colors: Record<string, string> = {
-      low: "bg-green-100 text-green-700 border-green-300",
-      medium: "bg-yellow-100 text-yellow-700 border-yellow-300",
-      high: "bg-orange-100 text-orange-700 border-orange-300",
-      critical: "bg-red-100 text-red-700 border-red-300",
+      low: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+      medium: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
+      high: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20",
+      critical: "bg-destructive/10 text-destructive border-destructive/20",
     };
     return (
       <Badge
         variant="outline"
-        className={`text-[10px] font-bold uppercase ${colors[level] || ""}`}
+        className={cn("text-[10px] font-bold uppercase font-mono px-2 py-0.5", colors[level] || "")}
       >
         {level}
       </Badge>
@@ -89,24 +112,58 @@ function AIMaintenancePage() {
 
   const getHealthColor = (status: string) => {
     const colors: Record<string, string> = {
-      excellent: "text-green-600",
-      good: "text-emerald-600",
-      fair: "text-yellow-600",
-      poor: "text-orange-600",
-      critical: "text-red-600",
+      excellent: "text-emerald-600 dark:text-emerald-400",
+      good: "text-emerald-500",
+      fair: "text-amber-500",
+      poor: "text-orange-500",
+      critical: "text-destructive",
     };
     return colors[status] || "text-muted-foreground";
   };
 
   if (isLoading) {
     return (
-      <AppShell title="AI Maintenance Intelligence" subtitle="Analyzing maintenance data...">
-        <div className="flex flex-col items-center justify-center py-32 gap-4">
-          <div className="size-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
-            <Sparkles className="size-4" />
-            AI is analyzing your maintenance data...
-          </p>
+      <AppShell>
+        <div className="max-w-7xl mx-auto space-y-8 pb-16 px-2 sm:px-4">
+          <div className="flex flex-col items-center justify-center py-32 gap-4">
+            <div className="size-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              AI is analyzing your maintenance data...
+            </p>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (insights?.isAllSocieties) {
+    return (
+      <AppShell>
+        <div className="max-w-7xl mx-auto space-y-8 pb-16 px-2 sm:px-4">
+          <div className="border-b border-border/80 pb-6 pt-2">
+            <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              AI Maintenance Intelligence
+            </h1>
+            <p className="text-xs text-muted-foreground mt-1">
+              Predictive asset health analytics, SLA breach risk assessment, and automated preventive recommendations.
+            </p>
+          </div>
+          <Card className="border-amber-500/30 bg-amber-500/5 shadow-soft rounded-2xl">
+            <CardContent className="flex items-start gap-4 p-6">
+              <div className="rounded-xl bg-amber-500/10 p-2.5 text-amber-600 border border-amber-500/20 shrink-0">
+                <Building className="size-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-serif font-bold text-foreground text-sm">
+                  All Societies (Platform-wide) Mode
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  You currently have &ldquo;All Societies&rdquo; selected. Predictive asset maintenance analysis is computed per-society. Please choose a specific society from the dropdown at the top of the screen.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </AppShell>
     );
@@ -114,19 +171,21 @@ function AIMaintenancePage() {
 
   if (error) {
     return (
-      <AppShell title="AI Maintenance Intelligence" subtitle="Error loading insights">
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <div className="grid size-16 place-items-center rounded-full bg-destructive/10 text-destructive">
-            <XCircle className="size-8" />
-          </div>
-          <div className="text-center space-y-2">
-            <h3 className="font-semibold text-lg">Failed to Load AI Insights</h3>
-            <p className="text-sm text-muted-foreground">
-              {(error as any)?.message || "Unable to generate maintenance intelligence"}
-            </p>
-            <Button onClick={handleRefresh} variant="outline" className="mt-4">
-              <RefreshCw className="size-4 mr-2" /> Try Again
-            </Button>
+      <AppShell>
+        <div className="max-w-7xl mx-auto space-y-8 pb-16 px-2 sm:px-4">
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div className="grid size-16 place-items-center rounded-2xl bg-destructive/10 text-destructive">
+              <XCircle className="size-8" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="font-serif font-semibold text-lg text-foreground">Failed to Load AI Insights</h3>
+              <p className="text-xs text-muted-foreground">
+                {(error as any)?.message || "Unable to generate maintenance intelligence"}
+              </p>
+              <Button onClick={handleRefresh} variant="outline" size="sm" className="mt-4 gap-2">
+                <RefreshCw className="size-3.5" /> Try Again
+              </Button>
+            </div>
           </div>
         </div>
       </AppShell>
@@ -135,155 +194,238 @@ function AIMaintenancePage() {
 
   if (!insights) return null;
 
+  const stats = insights.statistics || {
+    totalAssets: 0,
+    activeWorkOrders: 0,
+    overdueWorkOrders: 0,
+    completedWorkOrders: 0,
+    avgCompletionDays: 0,
+    slaComplianceRate: 100,
+    totalMaintenanceCost: 0,
+  };
+  const highRiskAssets = Array.isArray(insights.highRiskAssets) ? insights.highRiskAssets : [];
+  const slaRiskWorkOrders = Array.isArray(insights.slaRiskWorkOrders) ? insights.slaRiskWorkOrders : [];
+  const costAnalysis = insights.costAnalysis || {
+    totalMaintenanceCost: 0,
+    avgCostPerWorkOrder: 0,
+    highestCostAsset: null,
+    costByCategory: [],
+    costByVendor: [],
+    monthlyCostTrend: [],
+  };
+  const recurringPatterns = Array.isArray(insights.recurringPatterns) ? insights.recurringPatterns : [];
+  const preventiveRecommendations = Array.isArray(insights.preventiveRecommendations)
+    ? insights.preventiveRecommendations
+    : [];
+
   return (
-    <AppShell
-      title="AI Maintenance Intelligence"
-      subtitle="Predictive analytics, risk assessment and intelligent maintenance recommendations"
-      actions={
-        <Button onClick={handleRefresh} variant="outline" size="sm" className="gap-1.5">
-          <RefreshCw className="size-4" /> Refresh Insights
-        </Button>
-      }
-    >
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-10 space-y-8">
-        {/* Overall Health Score */}
-        <section className="relative overflow-hidden rounded-xl border border-border/70 bg-gradient-to-br from-primary/5 via-background to-background p-8">
-          <div className="flex items-center justify-between flex-wrap gap-6">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="grid size-10 place-items-center rounded-lg bg-primary text-primary-foreground">
-                  <Sparkles className="size-5" />
-                </div>
-                <h2 className="font-serif text-2xl font-bold">Maintenance Health Overview</h2>
+    <AppShell>
+      <div className="max-w-7xl mx-auto space-y-8 pb-16 px-2 sm:px-4">
+        {/* Page Header & Action Toolbar */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/80 pb-6 pt-2">
+          <div className="flex items-center gap-3.5">
+            <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-xs shrink-0">
+              <Wrench className="size-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  AI Maintenance Intelligence
+                </h1>
+                <Badge variant="secondary" className="font-mono text-xs px-2.5 py-0.5 font-medium">
+                  Predictive Diagnostics
+                </Badge>
               </div>
-              <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
-                {insights.summary}
-              </p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="size-3" />
-                Generated {format(new Date(insights.generatedAt), "MMM d, yyyy 'at' h:mm a")}
+              <p className="text-xs text-muted-foreground mt-1">
+                Predictive asset health analytics, SLA breach risk assessment, and automated preventive recommendations.
               </p>
             </div>
-            <div className="text-center">
-              <div className={`text-6xl font-bold font-mono ${getHealthColor(insights.overallHealthStatus)}`}>
-                {insights.overallHealthScore}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs border-border/80 hover:bg-muted cursor-pointer"
+              onClick={handleRefresh}
+              disabled={isFetching}
+            >
+              <RefreshCw className={cn("size-3.5 text-muted-foreground", isFetching && "animate-spin")} />
+              Refresh
+            </Button>
+
+            <Button
+              size="sm"
+              disabled={isFetching}
+              onClick={handleRefresh}
+              className="h-9 gap-1.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer px-4"
+            >
+              <Zap className="size-3.5 text-amber-300" />
+              Run Diagnostics Scan
+            </Button>
+          </div>
+        </div>
+
+        {/* Overall Health Score Card */}
+        <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-br from-primary/5 via-background to-background p-6 sm:p-8 shadow-soft">
+          <div className="flex items-center justify-between flex-wrap gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2.5">
+                <div className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground shadow-xs">
+                  <Sparkles className="size-5" />
+                </div>
+                <h2 className="font-serif text-xl sm:text-2xl font-bold text-foreground">Maintenance Health Overview</h2>
               </div>
-              <div className="text-sm font-medium uppercase tracking-wider mt-1">
+              <p className="text-xs sm:text-sm text-muted-foreground max-w-2xl leading-relaxed">
+                {insights.summary || "No summary available"}
+              </p>
+              <p className="text-[11px] text-muted-foreground font-mono flex items-center gap-1.5">
+                <Clock className="size-3.5 text-primary" />
+                Generated {safeFormatDate(insights.generatedAt, "MMM d, yyyy 'at' h:mm a", "recently")}
+              </p>
+            </div>
+            <div className="text-center bg-card border border-border/70 p-5 rounded-2xl shadow-soft min-w-[140px]">
+              <div className={`text-5xl font-bold font-mono ${getHealthColor(insights.overallHealthStatus || "good")}`}>
+                {insights.overallHealthScore ?? 100}
+              </div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mt-1">
                 Health Score
               </div>
-              <Badge variant="outline" className="mt-2 capitalize">
-                {insights.overallHealthStatus}
+              <Badge variant="outline" className="mt-2 capitalize font-mono text-[10px] px-2.5">
+                {insights.overallHealthStatus || "good"}
               </Badge>
             </div>
           </div>
         </section>
 
-        {/* Key Statistics Grid */}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Package className="size-4 text-muted-foreground" />
-                Total Assets
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{insights.statistics.totalAssets}</div>
-              <p className="text-xs text-muted-foreground mt-1">Under monitoring</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Activity className="size-4 text-amber-500" />
-                Active Work Orders
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">{insights.statistics.activeWorkOrders}</div>
-              <p className="text-xs text-muted-foreground mt-1">In progress</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <AlertTriangle className="size-4 text-destructive" />
-                Overdue Work Orders
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-destructive">
-                {insights.statistics.overdueWorkOrders}
+        {/* 4 KPI Summary Cards */}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Card className="border-border/70 shadow-soft p-5 rounded-2xl">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
+                  Monitored Assets
+                </p>
+                <p className="font-serif text-3xl font-bold tracking-tight text-foreground mt-2 truncate">
+                  {stats.totalAssets}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Require attention</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Target className="size-4 text-emerald-500" />
-                SLA Compliance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-emerald-600">
-                {insights.statistics.slaComplianceRate}%
+              <div className="grid size-11 place-items-center rounded-xl bg-blue-500/10 text-blue-600 border border-blue-500/20 shrink-0">
+                <Package className="size-5.5" />
               </div>
-              <p className="text-xs text-muted-foreground mt-1">On-time completion</p>
-            </CardContent>
+            </div>
           </Card>
-        </section>
 
-        {/* Tabs for detailed insights */}
+          <Card className="border-border/70 shadow-soft p-5 rounded-2xl">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
+                  Active Work Orders
+                </p>
+                <p className="font-serif text-3xl font-bold tracking-tight text-amber-600 mt-2 truncate">
+                  {stats.activeWorkOrders}
+                </p>
+              </div>
+              <div className="grid size-11 place-items-center rounded-xl bg-amber-500/10 text-amber-600 border border-amber-500/20 shrink-0">
+                <Activity className="size-5.5" />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="border-border/70 shadow-soft p-5 rounded-2xl">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
+                  Overdue Work Orders
+                </p>
+                <p className="font-serif text-3xl font-bold tracking-tight text-destructive mt-2 truncate">
+                  {stats.overdueWorkOrders}
+                </p>
+              </div>
+              <div className="grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive border border-destructive/20 shrink-0">
+                <AlertTriangle className="size-5.5" />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="border-border/70 shadow-soft p-5 rounded-2xl">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
+                  SLA Compliance
+                </p>
+                <p className="font-serif text-3xl font-bold tracking-tight text-emerald-600 mt-2 truncate">
+                  {stats.slaComplianceRate}%
+                </p>
+              </div>
+              <div className="grid size-11 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0">
+                <Target className="size-5.5" />
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Tab Navigation */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="risk">High Risk Assets</TabsTrigger>
-            <TabsTrigger value="sla">SLA Risk</TabsTrigger>
-            <TabsTrigger value="costs">Cost Analysis</TabsTrigger>
-            <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
+          <TabsList className="bg-muted/60 p-1 rounded-xl border border-border/70 h-auto flex flex-wrap">
+            <TabsTrigger value="overview" className="gap-2 text-xs py-2 px-3.5 rounded-lg cursor-pointer">
+              <Sparkles className="size-3.5" /> Overview & Metrics
+            </TabsTrigger>
+            <TabsTrigger value="risk" className="gap-2 text-xs py-2 px-3.5 rounded-lg cursor-pointer">
+              <ShieldAlert className="size-3.5" /> High Risk Assets
+              {highRiskAssets.length > 0 && (
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 font-mono text-destructive bg-destructive/10">
+                  {highRiskAssets.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="sla" className="gap-2 text-xs py-2 px-3.5 rounded-lg cursor-pointer">
+              <Calendar className="size-3.5" /> SLA Risk
+            </TabsTrigger>
+            <TabsTrigger value="costs" className="gap-2 text-xs py-2 px-3.5 rounded-lg cursor-pointer">
+              <BarChart3 className="size-3.5" /> Cost Analysis
+            </TabsTrigger>
+            <TabsTrigger value="recommendations" className="gap-2 text-xs py-2 px-3.5 rounded-lg cursor-pointer">
+              <TrendingUp className="size-3.5" /> Recommendations
+            </TabsTrigger>
           </TabsList>
 
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
+          {/* TAB 1: OVERVIEW */}
+          <TabsContent value="overview" className="space-y-6 pt-2">
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Cost Summary */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="size-5 text-primary" />
-                    Total Maintenance Cost
+              <Card className="border-border/70 shadow-soft rounded-2xl bg-card">
+                <CardHeader className="p-6 pb-4">
+                  <CardTitle className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                    <DollarSign className="size-5 text-primary" /> Total Maintenance Cost
                   </CardTitle>
-                  <CardDescription>Completed work orders only</CardDescription>
+                  <CardDescription className="text-xs">Completed work orders cumulative total</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="text-4xl font-bold font-mono">
-                    ₨{insights.statistics.totalMaintenanceCost.toLocaleString()}
+                <CardContent className="p-6 pt-0 space-y-4">
+                  <div className="text-3xl font-bold font-mono text-foreground">
+                    ₨ {Number(stats.totalMaintenanceCost || 0).toLocaleString()}
                   </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground text-xs">Avg Cost Per WO</p>
-                      <p className="font-semibold">
-                        ₨{Math.round(insights.costAnalysis.avgCostPerWorkOrder).toLocaleString()}
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div className="rounded-xl border border-border/70 p-3 bg-muted/20">
+                      <p className="text-muted-foreground text-[11px]">Avg Cost Per WO</p>
+                      <p className="font-semibold text-foreground text-sm font-mono mt-0.5">
+                        ₨ {Math.round(costAnalysis.avgCostPerWorkOrder || 0).toLocaleString()}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs">Completed WOs</p>
-                      <p className="font-semibold">{insights.statistics.completedWorkOrders}</p>
+                    <div className="rounded-xl border border-border/70 p-3 bg-muted/20">
+                      <p className="text-muted-foreground text-[11px]">Completed WOs</p>
+                      <p className="font-semibold text-foreground text-sm font-mono mt-0.5">{stats.completedWorkOrders || 0}</p>
                     </div>
                   </div>
-                  {insights.costAnalysis.highestCostAsset && (
-                    <div className="border-t pt-3">
+                  {costAnalysis.highestCostAsset && (
+                    <div className="border-t border-border/60 pt-3">
                       <p className="text-xs text-muted-foreground mb-1">Most Expensive Asset</p>
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">
-                          {insights.costAnalysis.highestCostAsset.name}
+                        <span className="font-medium text-xs text-foreground">
+                          {costAnalysis.highestCostAsset.name}
                         </span>
-                        <span className="font-mono text-sm font-bold">
-                          ₨{insights.costAnalysis.highestCostAsset.cost.toLocaleString()}
+                        <span className="font-mono text-xs font-bold text-primary">
+                          ₨ {Number(costAnalysis.highestCostAsset.cost || 0).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -292,40 +434,39 @@ function AIMaintenancePage() {
               </Card>
 
               {/* Completion Metrics */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle2 className="size-5 text-emerald-500" />
-                    Completion Metrics
+              <Card className="border-border/70 shadow-soft rounded-2xl bg-card">
+                <CardHeader className="p-6 pb-4">
+                  <CardTitle className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                    <CheckCircle2 className="size-5 text-emerald-500" /> Completion Metrics
                   </CardTitle>
-                  <CardDescription>Average performance indicators</CardDescription>
+                  <CardDescription className="text-xs">Average operational turnaround times</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="p-6 pt-0 space-y-5">
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">SLA Compliance Rate</span>
-                      <span className="text-lg font-bold text-emerald-600">
-                        {insights.statistics.slaComplianceRate}%
+                      <span className="text-xs font-medium text-foreground">SLA Compliance Rate</span>
+                      <span className="text-base font-bold font-mono text-emerald-600">
+                        {stats.slaComplianceRate ?? 100}%
                       </span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                       <div
-                        className="h-full bg-emerald-500"
-                        style={{ width: `${insights.statistics.slaComplianceRate}%` }}
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                        style={{ width: `${stats.slaComplianceRate ?? 100}%` }}
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground text-xs">Avg Completion Time</p>
-                      <p className="font-semibold text-lg">
-                        {insights.statistics.avgCompletionDays} days
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div className="rounded-xl border border-border/70 p-3 bg-muted/20">
+                      <p className="text-muted-foreground text-[11px]">Avg Completion Time</p>
+                      <p className="font-semibold text-base font-mono text-foreground mt-0.5">
+                        {stats.avgCompletionDays || 0} days
                       </p>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs">Completed This Period</p>
-                      <p className="font-semibold text-lg">
-                        {insights.statistics.completedWorkOrders}
+                    <div className="rounded-xl border border-border/70 p-3 bg-muted/20">
+                      <p className="text-muted-foreground text-[11px]">Completed This Period</p>
+                      <p className="font-semibold text-base font-mono text-foreground mt-0.5">
+                        {stats.completedWorkOrders || 0}
                       </p>
                     </div>
                   </div>
@@ -334,29 +475,28 @@ function AIMaintenancePage() {
             </div>
 
             {/* Recurring Patterns Preview */}
-            {insights.recurringPatterns.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="size-5 text-amber-500" />
-                    Recurring Failure Patterns
+            {recurringPatterns.length > 0 && (
+              <Card className="border-border/70 shadow-soft rounded-2xl bg-card">
+                <CardHeader className="p-6 pb-4">
+                  <CardTitle className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                    <TrendingUp className="size-5 text-amber-500" /> Recurring Failure Patterns
                   </CardTitle>
-                  <CardDescription>Assets with repeated maintenance issues</CardDescription>
+                  <CardDescription className="text-xs">Assets with repeated maintenance breakdowns</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {insights.recurringPatterns.slice(0, 3).map((pattern) => (
+                <CardContent className="p-6 pt-0">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {recurringPatterns.map((pattern) => (
                       <div
                         key={`${pattern.assetId}-${pattern.failurePattern}`}
-                        className="flex items-center justify-between border rounded-lg p-3 hover:bg-muted/50 transition-colors"
+                        className="flex items-center justify-between border border-border/70 rounded-xl p-3.5 bg-muted/20 hover:bg-muted/40 transition-colors"
                       >
                         <div className="space-y-1">
-                          <p className="font-semibold text-sm">{pattern.assetName}</p>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {pattern.failurePattern} · {pattern.occurrenceCount} occurrences
+                          <p className="font-semibold text-xs text-foreground">{pattern.assetName}</p>
+                          <p className="text-[11px] text-muted-foreground capitalize">
+                            {pattern.failurePattern} · <strong className="text-foreground">{pattern.occurrenceCount} occurrences</strong>
                           </p>
                         </div>
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-[9px] uppercase font-mono">
                           {pattern.assetCategory}
                         </Badge>
                       </div>
@@ -367,39 +507,38 @@ function AIMaintenancePage() {
             )}
           </TabsContent>
 
-          {/* High Risk Assets Tab */}
-          <TabsContent value="risk" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShieldAlert className="size-5 text-destructive" />
-                  High Risk Assets Analysis
+          {/* TAB 2: HIGH RISK ASSETS */}
+          <TabsContent value="risk" className="space-y-4 pt-2">
+            <Card className="border-border/70 shadow-soft rounded-2xl bg-card">
+              <CardHeader className="p-6 pb-4">
+                <CardTitle className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                  <ShieldAlert className="size-5 text-destructive" /> High Risk Assets Analysis
                 </CardTitle>
-                <CardDescription>
-                  Assets identified as high-risk based on maintenance frequency, cost, and priority
+                <CardDescription className="text-xs">
+                  Assets identified as high-risk based on maintenance frequency, expense, and failure velocity
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                {insights.highRiskAssets.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <CheckCircle2 className="size-12 mx-auto mb-3 text-green-500" />
-                    <p className="font-medium">No high-risk assets identified</p>
-                    <p className="text-xs mt-1">All assets are within acceptable maintenance parameters</p>
+              <CardContent className="p-6 pt-0">
+                {highRiskAssets.length === 0 ? (
+                  <div className="text-center py-14 text-muted-foreground border border-dashed rounded-xl">
+                    <CheckCircle2 className="size-10 mx-auto mb-2 text-emerald-500" />
+                    <p className="font-semibold text-sm text-foreground">No high-risk assets identified</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">All monitored assets are operating within safe parameters.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {insights.highRiskAssets.map((asset) => (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {highRiskAssets.map((asset) => (
                       <div
                         key={asset.assetId}
-                        className="border rounded-lg p-4 space-y-3 hover:border-primary/40 transition-colors"
+                        className="border border-border/70 rounded-xl p-5 space-y-3 bg-muted/10 hover:border-primary/40 transition-colors"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1 flex-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-semibold">{asset.assetName}</h4>
+                          <div className="space-y-1 flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-serif font-bold text-sm text-foreground truncate">{asset.assetName}</h4>
                               {getRiskBadge(asset.riskLevel)}
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <span className="capitalize">{asset.assetCategory}</span>
                               {asset.location && (
                                 <>
@@ -409,30 +548,30 @@ function AIMaintenancePage() {
                               )}
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold font-mono">{asset.riskScore}</div>
-                            <div className="text-[10px] text-muted-foreground uppercase">Risk Score</div>
+                          <div className="text-right shrink-0">
+                            <div className="text-2xl font-bold font-mono text-destructive">{asset.riskScore}</div>
+                            <div className="text-[9px] text-muted-foreground uppercase font-semibold">Risk Score</div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 text-xs border-t pt-3">
+                        <div className="grid grid-cols-3 gap-2 text-xs border-t border-border/60 pt-3 font-mono">
                           <div>
-                            <p className="text-muted-foreground mb-0.5">Maintenance Events</p>
-                            <p className="font-semibold">{asset.maintenanceCount}</p>
+                            <p className="text-muted-foreground text-[10px] uppercase font-sans">Events</p>
+                            <p className="font-semibold text-foreground">{asset.maintenanceCount || 0}</p>
                           </div>
                           <div>
-                            <p className="text-muted-foreground mb-0.5">Total Cost</p>
-                            <p className="font-semibold">₨{asset.totalCost.toLocaleString()}</p>
+                            <p className="text-muted-foreground text-[10px] uppercase font-sans">Total Cost</p>
+                            <p className="font-semibold text-foreground">₨ {Number(asset.totalCost || 0).toLocaleString()}</p>
                           </div>
                           <div>
-                            <p className="text-muted-foreground mb-0.5">Avg Cost</p>
-                            <p className="font-semibold">₨{Math.round(asset.avgCost).toLocaleString()}</p>
+                            <p className="text-muted-foreground text-[10px] uppercase font-sans">Avg Cost</p>
+                            <p className="font-semibold text-foreground">₨ {Math.round(asset.avgCost || 0).toLocaleString()}</p>
                           </div>
                         </div>
 
-                        <div className="bg-muted/50 rounded p-2 text-xs space-y-1">
-                          <p className="font-semibold text-foreground">Risk Factors:</p>
-                          <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                        <div className="bg-muted/40 rounded-lg p-3 text-xs space-y-1 border border-border/60">
+                          <p className="font-semibold text-foreground text-[11px]">Risk Factors:</p>
+                          <ul className="list-disc list-inside space-y-0.5 text-muted-foreground text-[11px]">
                             {asset.reasons.map((reason, idx) => (
                               <li key={idx}>{reason}</li>
                             ))}
@@ -446,47 +585,47 @@ function AIMaintenancePage() {
             </Card>
           </TabsContent>
 
-          {/* SLA Risk Tab */}
-          <TabsContent value="sla" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="size-5 text-amber-500" />
-                  SLA Risk Analysis
+          {/* TAB 3: SLA RISK */}
+          <TabsContent value="sla" className="space-y-4 pt-2">
+            <Card className="border-border/70 shadow-soft rounded-2xl bg-card">
+              <CardHeader className="p-6 pb-4">
+                <CardTitle className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                  <Calendar className="size-5 text-amber-500" /> SLA Risk Analysis
                 </CardTitle>
-                <CardDescription>
-                  Work orders that are overdue or at risk of missing SLA deadlines
+                <CardDescription className="text-xs">
+                  Work orders that are overdue or at imminent risk of missing SLA deadlines
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                {insights.slaRiskWorkOrders.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <CheckCircle2 className="size-12 mx-auto mb-3 text-green-500" />
-                    <p className="font-medium">All work orders are on track</p>
-                    <p className="text-xs mt-1">No SLA violations or risks detected</p>
+              <CardContent className="p-6 pt-0">
+                {slaRiskWorkOrders.length === 0 ? (
+                  <div className="text-center py-14 text-muted-foreground border border-dashed rounded-xl">
+                    <CheckCircle2 className="size-10 mx-auto mb-2 text-emerald-500" />
+                    <p className="font-semibold text-sm text-foreground">All work orders are on track</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">No SLA violations or critical delay risks detected.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {insights.slaRiskWorkOrders.map((wo) => (
+                    {slaRiskWorkOrders.map((wo) => (
                       <div
                         key={wo.id}
-                        className={`border rounded-lg p-4 ${
+                        className={cn(
+                          "border rounded-xl p-4 transition-colors",
                           wo.daysOverdue > 0
-                            ? "border-destructive/50 bg-destructive/5"
-                            : "border-amber-500/50 bg-amber-500/5"
-                        }`}
+                            ? "border-destructive/40 bg-destructive/5"
+                            : "border-amber-500/40 bg-amber-500/5"
+                        )}
                       >
                         <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="space-y-1 flex-1">
-                            <h4 className="font-semibold">{wo.title}</h4>
+                          <div className="space-y-1 flex-1 min-w-0">
+                            <h4 className="font-serif font-bold text-sm text-foreground">{wo.title}</h4>
                             {wo.assetName && (
-                              <p className="text-xs text-muted-foreground">Asset: {wo.assetName}</p>
+                              <p className="text-xs text-muted-foreground">Asset: <span className="font-medium text-foreground">{wo.assetName}</span></p>
                             )}
                           </div>
-                          <div className="flex flex-col items-end gap-1">
+                          <div className="flex flex-col items-end gap-1 shrink-0">
                             <Badge
                               variant={wo.daysOverdue > 0 ? "destructive" : "default"}
-                              className="text-[10px] uppercase font-bold"
+                              className="text-[10px] uppercase font-bold font-mono"
                             >
                               {wo.daysOverdue > 0
                                 ? `${wo.daysOverdue}d Overdue`
@@ -498,20 +637,20 @@ function AIMaintenancePage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between text-xs border-t pt-3">
+                        <div className="flex items-center justify-between text-xs border-t border-border/60 pt-3">
                           <div className="space-y-0.5">
-                            <p className="text-muted-foreground">SLA Due Date</p>
+                            <p className="text-muted-foreground text-[10px] uppercase">SLA Due Date</p>
                             <p className="font-mono font-semibold">
-                              {format(new Date(wo.slaDueAt), "MMM d, yyyy")}
+                              {safeFormatDate(wo.slaDueAt, "MMM d, yyyy")}
                             </p>
                           </div>
                           <div className="space-y-0.5 text-right">
-                            <p className="text-muted-foreground">Estimated Cost</p>
-                            <p className="font-mono font-semibold">₨{wo.estimatedCost.toLocaleString()}</p>
+                            <p className="text-muted-foreground text-[10px] uppercase">Estimated Cost</p>
+                            <p className="font-mono font-semibold">₨ {Number(wo.estimatedCost || 0).toLocaleString()}</p>
                           </div>
                           {wo.assignedTo && (
                             <div className="space-y-0.5 text-right">
-                              <p className="text-muted-foreground">Assigned To</p>
+                              <p className="text-muted-foreground text-[10px] uppercase">Assigned To</p>
                               <p className="font-semibold">{wo.assignedTo}</p>
                             </div>
                           )}
@@ -524,44 +663,43 @@ function AIMaintenancePage() {
             </Card>
           </TabsContent>
 
-          {/* Cost Analysis Tab */}
-          <TabsContent value="costs" className="space-y-6">
+          {/* TAB 4: COST ANALYSIS */}
+          <TabsContent value="costs" className="space-y-6 pt-2">
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Cost by Category */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="size-5 text-primary" />
-                    Cost by Category
+              <Card className="border-border/70 shadow-soft rounded-2xl bg-card">
+                <CardHeader className="p-6 pb-4">
+                  <CardTitle className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                    <BarChart3 className="size-5 text-primary" /> Cost by Category
                   </CardTitle>
-                  <CardDescription>Maintenance costs broken down by asset category</CardDescription>
+                  <CardDescription className="text-xs">Maintenance spending segmented by asset category</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  {insights.costAnalysis.costByCategory.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">
-                      No cost data available
+                <CardContent className="p-6 pt-0">
+                  {costAnalysis.costByCategory.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-10 border border-dashed rounded-xl">
+                      No cost data available.
                     </p>
                   ) : (
-                    <div className="space-y-3">
-                      {insights.costAnalysis.costByCategory.map((cat) => (
+                    <div className="space-y-4">
+                      {costAnalysis.costByCategory.map((cat) => (
                         <div key={cat.category} className="space-y-1.5">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium capitalize">{cat.category}</span>
-                            <span className="font-mono font-bold">₨{cat.totalCost.toLocaleString()}</span>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold capitalize text-foreground">{cat.category}</span>
+                            <span className="font-mono font-bold text-foreground">₨ {Number(cat.totalCost || 0).toLocaleString()}</span>
                           </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                             <span>{cat.workOrderCount} work orders</span>
-                            <span>
-                              Avg: ₨{Math.round(cat.totalCost / cat.workOrderCount).toLocaleString()}
+                            <span className="font-mono">
+                              Avg: ₨ {Math.round((cat.totalCost || 0) / (cat.workOrderCount || 1)).toLocaleString()}
                             </span>
                           </div>
                           <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                             <div
-                              className="h-full bg-primary"
+                              className="h-full bg-primary rounded-full transition-all duration-300"
                               style={{
                                 width: `${Math.min(
                                   100,
-                                  (cat.totalCost / insights.statistics.totalMaintenanceCost) * 100,
+                                  (cat.totalCost / (stats.totalMaintenanceCost || 1)) * 100
                                 )}%`,
                               }}
                             />
@@ -574,41 +712,37 @@ function AIMaintenancePage() {
               </Card>
 
               {/* Cost by Vendor */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Wrench className="size-5 text-primary" />
-                    Cost by Vendor
+              <Card className="border-border/70 shadow-soft rounded-2xl bg-card">
+                <CardHeader className="p-6 pb-4">
+                  <CardTitle className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                    <Wrench className="size-5 text-primary" /> Cost by Vendor
                   </CardTitle>
-                  <CardDescription>Top vendors by maintenance spend</CardDescription>
+                  <CardDescription className="text-xs">Contractor & vendor maintenance expenditure</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  {insights.costAnalysis.costByVendor.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">
-                      No vendor cost data available
+                <CardContent className="p-6 pt-0">
+                  {costAnalysis.costByVendor.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-10 border border-dashed rounded-xl">
+                      No vendor billing records available.
                     </p>
                   ) : (
-                    <div className="space-y-3">
-                      {insights.costAnalysis.costByVendor.slice(0, 5).map((vendor) => (
-                        <div key={vendor.vendorName} className="space-y-1.5">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium">{vendor.vendorName}</span>
-                            <span className="font-mono font-bold">₨{vendor.totalCost.toLocaleString()}</span>
+                    <div className="space-y-4">
+                      {costAnalysis.costByVendor.map((v) => (
+                        <div key={v.vendorName} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-foreground">{v.vendorName}</span>
+                            <span className="font-mono font-bold text-foreground">₨ {Number(v.totalCost || 0).toLocaleString()}</span>
                           </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{vendor.workOrderCount} work orders</span>
-                            <span>
-                              Avg: ₨
-                              {Math.round(vendor.totalCost / vendor.workOrderCount).toLocaleString()}
-                            </span>
+                          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                            <span>{v.workOrderCount} jobs</span>
+                            <span className="font-mono">Avg: ₨ {Math.round((v.totalCost || 0) / (v.workOrderCount || 1)).toLocaleString()}</span>
                           </div>
                           <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                             <div
-                              className="h-full bg-emerald-500"
+                              className="h-full bg-emerald-500 rounded-full transition-all duration-300"
                               style={{
                                 width: `${Math.min(
                                   100,
-                                  (vendor.totalCost / insights.statistics.totalMaintenanceCost) * 100,
+                                  (v.totalCost / (stats.totalMaintenanceCost || 1)) * 100
                                 )}%`,
                               }}
                             />
@@ -620,182 +754,63 @@ function AIMaintenancePage() {
                 </CardContent>
               </Card>
             </div>
-
-            {/* Monthly Cost Trend */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="size-5 text-primary" />
-                  Monthly Cost Trend
-                </CardTitle>
-                <CardDescription>Last 6 months maintenance expenditure</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-end justify-between gap-2 h-48">
-                  {insights.costAnalysis.monthlyCostTrend.map((month) => {
-                    const maxCost = Math.max(
-                      ...insights.costAnalysis.monthlyCostTrend.map((m) => m.cost),
-                    );
-                    const heightPct = maxCost > 0 ? (month.cost / maxCost) * 100 : 0;
-                    return (
-                      <div key={month.month} className="flex-1 flex flex-col items-center gap-2">
-                        <div className="w-full flex flex-col items-center justify-end h-full">
-                          <div className="text-xs font-mono font-semibold mb-1">
-                            {month.cost > 0 ? `₨${(month.cost / 1000).toFixed(0)}K` : "—"}
-                          </div>
-                          <div
-                            className="w-full bg-primary rounded-t transition-all"
-                            style={{ height: `${heightPct}%`, minHeight: month.cost > 0 ? "4px" : "0" }}
-                          />
-                        </div>
-                        <div className="text-[10px] text-muted-foreground font-mono">
-                          {format(new Date(month.month + "-01"), "MMM")}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
-          {/* Recommendations Tab */}
-          <TabsContent value="recommendations" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="size-5 text-primary" />
-                  AI Preventive Recommendations
+          {/* TAB 5: RECOMMENDATIONS */}
+          <TabsContent value="recommendations" className="space-y-4 pt-2">
+            <Card className="border-border/70 shadow-soft rounded-2xl bg-card">
+              <CardHeader className="p-6 pb-4">
+                <CardTitle className="text-base font-serif font-bold text-foreground flex items-center gap-2">
+                  <Sparkles className="size-5 text-primary" /> Preventive Maintenance Recommendations
                 </CardTitle>
-                <CardDescription>
-                  Intelligent suggestions based on maintenance patterns and risk analysis
+                <CardDescription className="text-xs">
+                  Automated maintenance plans generated to reduce breakdown risk and optimize asset lifetime
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                {insights.preventiveRecommendations.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <CheckCircle2 className="size-12 mx-auto mb-3 text-green-500" />
-                    <p className="font-medium">No urgent recommendations</p>
-                    <p className="text-xs mt-1">All assets are performing within expected parameters</p>
+              <CardContent className="p-6 pt-0">
+                {preventiveRecommendations.length === 0 ? (
+                  <div className="text-center py-14 text-muted-foreground border border-dashed rounded-xl">
+                    <CheckCircle2 className="size-10 mx-auto mb-2 text-emerald-500" />
+                    <p className="font-semibold text-sm text-foreground">No recommendations at this time</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Asset schedules are currently aligned with manufacturer recommendations.</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {insights.preventiveRecommendations.map((rec, idx) => (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {preventiveRecommendations.map((rec, idx) => (
                       <div
-                        key={`${rec.assetId}-${idx}`}
-                        className="border rounded-lg p-4 space-y-3 hover:border-primary/40 transition-colors"
+                        key={idx}
+                        className="border border-border/70 rounded-xl p-5 space-y-3 bg-muted/10 hover:border-primary/40 transition-colors"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1 flex-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-semibold">{rec.assetName}</h4>
-                              {getRiskBadge(rec.priority)}
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span className="capitalize">{rec.assetCategory}</span>
-                              {rec.location && (
-                                <>
-                                  <span>·</span>
-                                  <span>{rec.location}</span>
-                                </>
-                              )}
-                            </div>
+                          <div className="space-y-1">
+                            <h4 className="font-serif font-bold text-sm text-foreground">{rec.title}</h4>
+                            <p className="text-xs text-muted-foreground">Asset: <span className="font-medium text-foreground">{rec.assetName}</span></p>
                           </div>
-                          <Badge variant="outline" className="text-[10px] uppercase capitalize">
-                            {rec.recommendationType}
+                          <Badge variant="outline" className="text-[10px] font-mono capitalize">
+                            {rec.priority} Priority
                           </Badge>
                         </div>
 
-                        <div className="bg-primary-soft/20 rounded-lg p-3 text-sm">
-                          <p className="text-foreground/90 leading-relaxed">{rec.reasoning}</p>
-                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{rec.description}</p>
 
-                        {rec.estimatedCost && (
-                          <div className="flex items-center justify-between text-xs border-t pt-3">
-                            <span className="text-muted-foreground">Estimated Preventive Cost</span>
-                            <span className="font-mono font-semibold">
-                              ₨{Math.round(rec.estimatedCost).toLocaleString()}
-                            </span>
+                        <div className="grid grid-cols-2 gap-2 text-xs border-t border-border/60 pt-3 font-mono">
+                          <div>
+                            <p className="text-muted-foreground text-[10px] uppercase font-sans">Recommended Date</p>
+                            <p className="font-semibold text-foreground">{safeFormatDate(rec.recommendedDate, "MMM d, yyyy")}</p>
                           </div>
-                        )}
+                          <div className="text-right">
+                            <p className="text-muted-foreground text-[10px] uppercase font-sans">Estimated Cost</p>
+                            <p className="font-semibold text-emerald-600">₨ {Number(rec.estimatedCost ?? 0).toLocaleString()}</p>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
-
-            {/* Recurring Patterns Card */}
-            {insights.recurringPatterns.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="size-5 text-amber-500" />
-                    Recurring Failure Patterns
-                  </CardTitle>
-                  <CardDescription>
-                    Assets with repeated maintenance events requiring root cause analysis
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {insights.recurringPatterns.map((pattern) => (
-                      <div
-                        key={`${pattern.assetId}-${pattern.failurePattern}`}
-                        className="border rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="space-y-1">
-                            <h4 className="font-semibold">{pattern.assetName}</h4>
-                            <p className="text-xs text-muted-foreground capitalize">
-                              Pattern: {pattern.failurePattern}
-                            </p>
-                          </div>
-                          <Badge variant="destructive" className="text-[10px]">
-                            {pattern.occurrenceCount} occurrences
-                          </Badge>
-                        </div>
-
-                        {pattern.avgDaysBetweenFailures && (
-                          <div className="bg-muted/50 rounded p-2 text-xs">
-                            <span className="text-muted-foreground">Avg Days Between Failures: </span>
-                            <span className="font-mono font-semibold">
-                              {Math.round(pattern.avgDaysBetweenFailures)} days
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded p-3 text-sm">
-                          <p className="font-semibold text-amber-700 mb-1">Recommended Action:</p>
-                          <p className="text-foreground/90">{pattern.recommendedAction}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </TabsContent>
         </Tabs>
-
-        {/* AI Disclaimer */}
-        <Card className="bg-muted/30 border-dashed">
-          <CardContent className="py-4 flex items-start gap-3">
-            <Sparkles className="size-5 text-primary shrink-0 mt-0.5" />
-            <div className="text-xs text-muted-foreground leading-relaxed space-y-1">
-              <p>
-                <strong className="text-foreground">AI-Powered Analysis:</strong> These insights are
-                generated using statistical analysis and pattern detection algorithms applied to your
-                historical maintenance data.
-              </p>
-              <p>
-                Recommendations are suggestions based on identified patterns and should be reviewed by
-                qualified maintenance professionals before implementation. Risk scores are calculated
-                using frequency, cost, and priority metrics.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </AppShell>
   );

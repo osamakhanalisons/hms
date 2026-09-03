@@ -57,6 +57,7 @@ import {
   type WorkOrderItem,
   type MaintenanceScheduleItem,
 } from "@/lib/api/maintenance";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/maintenance")({
   head: () => ({
@@ -111,28 +112,26 @@ function KpiCard({
   loading?: boolean;
 }) {
   const toneClass = {
-    default: "text-primary bg-primary/10",
-    success: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-    destructive: "text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-    warning: "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
-    info: "text-blue-600 bg-blue-50 dark:bg-blue-950/30",
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+    destructive: "text-rose-600 bg-rose-500/10 border-rose-500/20",
+    warning: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    info: "text-sky-600 bg-sky-500/10 border-sky-500/20",
   }[tone];
 
   return (
-    <Card className="border-border/70 shadow-soft">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-            {loading ? (
-              <div className="mt-2 h-7 w-20 animate-pulse rounded-md bg-muted" />
-            ) : (
-              <p className="mt-1 font-serif text-2xl font-bold tracking-tight">{value}</p>
-            )}
-          </div>
-          <div className={`rounded-lg p-2.5 ${toneClass}`}>
-            <Icon className="size-5" />
-          </div>
+    <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow bg-card">
+      <CardContent className="p-4 flex items-start justify-between gap-2">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          {loading ? (
+            <div className="mt-1 h-7 w-20 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <p className="font-serif text-xl font-bold tracking-tight text-foreground">{value}</p>
+          )}
+        </div>
+        <div className={cn("grid size-10 place-items-center rounded-xl border shrink-0", toneClass)}>
+          <Icon className="size-4" />
         </div>
       </CardContent>
     </Card>
@@ -193,31 +192,31 @@ function FrequencyBadge({ frequency }: { frequency: MaintenanceScheduleItem["fre
 function MaintenancePage() {
   const { roles } = useAuth();
   const canManage = roles.some((r) =>
-    ["super_admin", "society_admin", "maintenance_head", "treasurer", "committee_member"].includes(r),
+    ["super_admin", "society_admin", "maintenance_head"].includes(r),
   );
 
+  const [activeTab, setActiveTab] = useState<string>("work-orders");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [assetFilter, setAssetFilter] = useState("all");
   const [vendorFilter, setVendorFilter] = useState("all");
-  const [activeTab, setActiveTab] = useState("work-orders");
 
   // Pagination states
   const [woPage, setWoPage] = useState(1);
   const [schedPage, setSchedPage] = useState(1);
   const woItemsPerPage = 9;
-  const schedItemsPerPage = 10;
+  const schedItemsPerPage = 8;
 
+  // Reset pagination on filter changes
   useEffect(() => {
     setWoPage(1);
   }, [search, statusFilter, priorityFilter, assetFilter, vendorFilter]);
-
   useEffect(() => {
     setSchedPage(1);
   }, [search]);
 
-  // Create Work Order modal state
+  // Create Work Order Dialog state
   const [createWoOpen, setCreateWoOpen] = useState(false);
   const [woAssetId, setWoAssetId] = useState("");
   const [woTitle, setWoTitle] = useState("");
@@ -231,9 +230,9 @@ function MaintenancePage() {
   const [createWoError, setCreateWoError] = useState<string | null>(null);
   const [isCreatingWo, setIsCreatingWo] = useState(false);
 
-  // Status Update modal state
+  // Update Status Dialog state
   const [statusWo, setStatusWo] = useState<WorkOrderItem | null>(null);
-  const [newStatus, setNewStatus] = useState<WorkOrderItem["status"]>("in_progress");
+  const [newStatus, setNewStatus] = useState<WorkOrderItem["status"]>("open");
   const [actualCost, setActualCost] = useState("");
   const [statusNotes, setStatusNotes] = useState("");
   const [statusTechId, setStatusTechId] = useState("");
@@ -241,7 +240,7 @@ function MaintenancePage() {
   const [updateStatusError, setUpdateStatusError] = useState<string | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  // Create Schedule modal state
+  // Create Maintenance Schedule Dialog state
   const [createSchedOpen, setCreateSchedOpen] = useState(false);
   const [schedAssetId, setSchedAssetId] = useState("");
   const [schedTitle, setSchedTitle] = useState("");
@@ -425,46 +424,63 @@ function MaintenancePage() {
     <AppShell
       title="Maintenance & Work Orders"
       subtitle="Track preventive asset schedules and technician work orders"
-      actions={
-        <div className="flex items-center gap-2">
-          {canManage && (
-            <>
-              <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setCreateSchedOpen(true)}>
-                <Calendar className="size-3.5" /> Add Schedule
-              </Button>
-              <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setCreateWoOpen(true)}>
-                <Plus className="size-3.5" /> Dispatch Work Order
-              </Button>
-            </>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-      }
     >
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
-        {/* Header */}
-        <header className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-md bg-surface border border-border/60">
-            <Wrench className="size-5 text-primary" />
-          </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Operations · Facility Management
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-8 sm:py-8">
+        {/* Page Header & Action Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+              <Wrench className="size-5" />
             </div>
-            <h1 className="font-serif text-2xl font-bold tracking-tight sm:text-3xl">
-              Maintenance & SLA Tracking
-            </h1>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground">
+                  Maintenance & SLA Tracking
+                </h1>
+                <Badge variant="secondary" className="font-mono text-xs font-normal">
+                  {workOrders.length} orders · {schedules.length} schedules
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Track preventive asset schedules, vendor contracts, and technician work orders
+              </p>
+            </div>
           </div>
-        </header>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs bg-background"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              <RefreshCw className={cn("size-3.5", isRefetching && "animate-spin")} />
+              <span>Refresh</span>
+            </Button>
+            {canManage && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-9 text-xs bg-background"
+                  onClick={() => setCreateSchedOpen(true)}
+                >
+                  <Calendar className="size-3.5" />
+                  <span>Add Schedule</span>
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+                  onClick={() => setCreateWoOpen(true)}
+                >
+                  <Plus className="size-4" />
+                  <span>Dispatch Work Order</span>
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Error banner */}
         {isError && (

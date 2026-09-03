@@ -8,6 +8,7 @@ import {
   getUserRoles,
   isAdminRole,
   hasAnyRole,
+  getTenantScoping,
 } from "./auth-helper";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ export type PreventiveRecommendation = {
 };
 
 export type AIMaintenanceInsights = {
+  isAllSocieties?: boolean;
   overallHealthScore: number;
   overallHealthStatus: "excellent" | "good" | "fair" | "poor" | "critical";
   summary: string;
@@ -129,13 +131,19 @@ function daysBetween(date1: Date, date2: Date): number {
 
 // ─── GET AI MAINTENANCE INSIGHTS ─────────────────────────────────────────────
 
-export const getAIMaintenanceInsightsFn = createServerFn({ method: "GET" }).handler(
-  async ({ request }: any) => {
+export const getAIMaintenanceInsightsFn = createServerFn({ method: "GET" })
+  .validator(
+    z
+      .object({
+        tenantId: z.string().optional(),
+        refresh: z.boolean().optional(),
+      })
+      .optional(),
+  )
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant session found");
 
     const roles = await getUserRoles(userId);
     const canAccess =
@@ -146,8 +154,85 @@ export const getAIMaintenanceInsightsFn = createServerFn({ method: "GET" }).hand
       throw new Error("Forbidden — Admin or Maintenance Head access required");
     }
 
+    const scoping = await getTenantScoping(request, data?.tenantId);
+    const activeTenantId = scoping.tenantId;
+
+    if (
+      !activeTenantId ||
+      (scoping.isSuperAdmin && (!data?.tenantId || data?.tenantId === "all") && scoping.sqlFilter === "1=1")
+    ) {
+      return {
+        isAllSocieties: true,
+        overallHealthScore: 100,
+        overallHealthStatus: "good" as const,
+        summary: "Please select a specific society from the top menu to view AI Maintenance Insights.",
+        highRiskAssets: [],
+        slaRiskWorkOrders: [],
+        costAnalysis: {
+          totalMaintenanceCost: 0,
+          avgCostPerWorkOrder: 0,
+          highestCostAsset: null,
+          costByCategory: [],
+          costByVendor: [],
+          monthlyCostTrend: [],
+        },
+        recurringPatterns: [],
+        preventiveRecommendations: [],
+        statistics: {
+          totalAssets: 0,
+          activeWorkOrders: 0,
+          overdueWorkOrders: 0,
+          completedWorkOrders: 0,
+          avgCompletionDays: 0,
+          slaComplianceRate: 100,
+          totalMaintenanceCost: 0,
+        },
+        generatedAt: new Date().toISOString(),
+      };
+    }
+
+    const tenantId = activeTenantId;
     const db = getDb();
     const now = new Date();
+
+    // ═══ SNAPSHOT CACHING (Fast sub-10ms page load if snapshot exists and refresh not requested) ═══
+    if (!data?.refresh) {
+      const [cached] = (await db.query(
+        `SELECT result_data, created_at FROM ai_maintenance_analyses
+         WHERE tenant_id = ? AND analysis_type = 'full_insights'
+         ORDER BY created_at DESC LIMIT 1`,
+        [tenantId],
+      )) as any[];
+      if (cached.length > 0) {
+        try {
+          const parsed =
+            typeof cached[0].result_data === "string"
+              ? JSON.parse(cached[0].result_data)
+              : cached[0].result_data;
+
+          // Only accept valid snapshots containing full insights schema
+          if (
+            parsed &&
+            typeof parsed === "object" &&
+            parsed.statistics &&
+            typeof parsed.statistics.totalAssets === "number" &&
+            Array.isArray(parsed.highRiskAssets) &&
+            Array.isArray(parsed.slaRiskWorkOrders) &&
+            parsed.costAnalysis
+          ) {
+            return {
+              ...parsed,
+              generatedAt:
+                parsed.generatedAt ||
+                (cached[0]?.created_at ? new Date(cached[0].created_at).toISOString() : new Date().toISOString()),
+              isAllSocieties: false,
+            };
+          }
+        } catch {
+          // Fall through to live calculation
+        }
+      }
+    }
 
     // ═══ FETCH BASE DATA ═══════════════════════════════════════════════════
 
@@ -674,15 +759,26 @@ export const getAIMaintenanceInsightsFn = createServerFn({ method: "GET" }).hand
       generatedAt: now.toISOString(),
     };
 
-    return insights;
-  },
-);
+    // Store snapshot for fast subsequent page loads
+    try {
+      await db.query(
+        `INSERT INTO ai_maintenance_analyses (id, tenant_id, analysis_type, result_data, created_by)
+         VALUES (?, ?, 'full_insights', ?, ?)`,
+        [crypto.randomUUID(), tenantId, JSON.stringify(insights), userId],
+      );
+    } catch (snapErr) {
+      console.warn("[AI Maintenance] Failed to persist snapshot:", snapErr);
+    }
+
+    return { ...insights, isAllSocieties: false };
+  });
 
 // ─── STORE AI ANALYSIS (OPTIONAL) ────────────────────────────────────────────
 
 export const storeAIAnalysisFn = createServerFn({ method: "POST" })
   .validator(
     z.object({
+      tenantId: z.string().optional(),
       analysisType: z.enum([
         "full_insights",
         "risk_assessment",
@@ -692,16 +788,20 @@ export const storeAIAnalysisFn = createServerFn({ method: "POST" })
       resultData: z.any(),
     }),
   )
-  .handler(async ({ data, request }: any) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) throw new Error("No tenant session found");
 
     const roles = await getUserRoles(userId);
     if (!isAdminRole(roles)) {
       throw new Error("Forbidden — Admin access required");
+    }
+
+    const scoping = await getTenantScoping(request, data?.tenantId);
+    const tenantId = scoping.tenantId;
+    if (!tenantId || tenantId === "all") {
+      throw new Error("Specific society selection required to store analysis.");
     }
 
     const db = getDb();
@@ -722,16 +822,15 @@ export const getAIAnalysisHistoryFn = createServerFn({ method: "GET" })
   .validator(
     z
       .object({
+        tenantId: z.string().optional(),
         limit: z.number().optional(),
       })
       .optional(),
   )
-  .handler(async ({ data, request }: any) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const userId = await getSessionUser(request);
     if (!userId) throw new Error("Unauthorized");
-
-    const tenantId = await getUserTenantId(userId);
-    if (!tenantId) return [];
 
     const roles = await getUserRoles(userId);
     const canAccess =
@@ -741,6 +840,10 @@ export const getAIAnalysisHistoryFn = createServerFn({ method: "GET" })
     if (!canAccess) {
       throw new Error("Forbidden — Admin or Maintenance Head access required");
     }
+
+    const scoping = await getTenantScoping(request, data?.tenantId);
+    const tenantId = scoping.tenantId;
+    if (!tenantId || tenantId === "all") return [];
 
     const db = getDb();
     const limit = data?.limit || 20;

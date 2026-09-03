@@ -55,6 +55,7 @@ import {
   addProjectExpenseFn,
   type ProjectItem,
 } from "@/lib/api/projects";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/projects")({
   head: () => ({
@@ -109,28 +110,28 @@ function KpiCard({
   loading?: boolean;
 }) {
   const toneClass = {
-    default: "text-primary bg-primary/10",
-    success: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-    destructive: "text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-    warning: "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
-    info: "text-blue-600 bg-blue-50 dark:bg-blue-950/30",
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+    destructive: "text-rose-600 bg-rose-500/10 border-rose-500/20",
+    warning: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    info: "text-sky-600 bg-sky-500/10 border-sky-500/20",
   }[tone];
 
   return (
-    <Card className="border-border/70 shadow-soft">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-            {loading ? (
-              <div className="mt-2 h-7 w-28 animate-pulse rounded-md bg-muted" />
-            ) : (
-              <p className="mt-1 font-serif text-2xl font-bold tracking-tight">{value}</p>
-            )}
-          </div>
-          <div className={`rounded-lg p-2.5 ${toneClass}`}>
-            <Icon className="size-5" />
-          </div>
+    <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden">
+      <CardContent className="p-4 sm:p-5 flex items-center justify-between gap-3">
+        <div className="space-y-1 min-w-0 flex-1">
+          <p className="text-xs font-medium text-muted-foreground truncate" title={label}>{label}</p>
+          {loading ? (
+            <div className="mt-1 h-7 w-24 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <p className="font-serif text-lg sm:text-xl lg:text-[1.35rem] font-bold tracking-tight text-foreground truncate" title={value}>
+              {value}
+            </p>
+          )}
+        </div>
+        <div className={cn("grid size-10 sm:size-11 place-items-center rounded-xl border shrink-0", toneClass)}>
+          <Icon className="size-4 sm:size-5" />
         </div>
       </CardContent>
     </Card>
@@ -334,41 +335,52 @@ function ProjectsPage() {
     <AppShell
       title="Projects"
       subtitle="Capex planning, milestones, and expense tracking"
-      actions={
-        <div className="flex items-center gap-2">
-          {canManage && (
-            <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setAddOpen(true)}>
-              <Plus className="size-3.5" /> Create Project
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-      }
     >
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
-        {/* Page header */}
-        <header className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-md bg-surface border border-border/60">
-            <KanbanSquare className="size-5 text-primary" />
-          </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Operations · Capex
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-8 sm:py-8">
+        {/* Page Header & Action Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+              <KanbanSquare className="size-5" />
             </div>
-            <h1 className="font-serif text-2xl font-bold tracking-tight sm:text-3xl">
-              Capital Projects & Milestones
-            </h1>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground">
+                  Capital Projects & Milestones
+                </h1>
+                <Badge variant="secondary" className="font-mono text-xs font-normal">
+                  {projects.length} projects
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Capex planning, milestones, and expense tracking for society projects
+              </p>
+            </div>
           </div>
-        </header>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs bg-background"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              <RefreshCw className={cn("size-3.5", isRefetching && "animate-spin")} />
+              <span>Refresh</span>
+            </Button>
+            {canManage && (
+              <Button
+                size="sm"
+                className="gap-1.5 h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus className="size-4" />
+                <span>Create Project</span>
+              </Button>
+            )}
+          </div>
+        </div>
 
         {/* Error banner */}
         {isError && (
@@ -383,7 +395,7 @@ function ProjectsPage() {
         )}
 
         {/* KPI cards */}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <KpiCard label="Total Projects" value={String(summary?.totalProjects ?? 0)} icon={KanbanSquare} loading={isLoading} />
           <KpiCard label="Active Projects" value={String(summary?.activeProjects ?? 0)} icon={TrendingUp} tone="info" loading={isLoading} />
           <KpiCard label="Allocated Budget" value={formatCurrency(summary?.totalBudget ?? 0)} icon={DollarSign} loading={isLoading} />
@@ -392,15 +404,20 @@ function ProjectsPage() {
         </section>
 
         {/* Search & Filter */}
-        <Card className="border-border/70 shadow-soft p-4">
+        <Card className="border-border/70 shadow-sm p-4 bg-card">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search project name or description..." className="h-9 pl-9 text-xs" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search project name or description..."
+                className="h-9 pl-9 text-xs bg-background"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 w-40 text-xs">
+              <SelectTrigger className="h-9 w-40 text-xs bg-background">
                 <Sliders className="mr-1.5 size-3.5 text-muted-foreground" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -831,9 +848,16 @@ function ProjectsPage() {
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Select Vendor" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px]">
                   {vendors.map((v) => (
-                    <SelectItem key={v.id} value={v.id} className="text-xs">{v.name}</SelectItem>
+                    <SelectItem key={v.id} value={v.id} className="text-xs">
+                      <span className="font-medium">{v.name}</span>
+                      {(v.category || v.address) && (
+                        <span className="text-muted-foreground ml-1.5">
+                          &bull; {v.category ?? ""}{v.address ? ` (${v.address})` : ""}
+                        </span>
+                      )}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

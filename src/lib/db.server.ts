@@ -1,30 +1,34 @@
 import mysql from "mysql2/promise";
 import crypto from "node:crypto";
 
-let pool: mysql.Pool | null = null;
+const globalForDb = globalThis as unknown as {
+  __mysql_pool?: mysql.Pool;
+};
 
-export function getDb() {
-  if (!pool) {
+export function getDb(): mysql.Pool {
+  if (!globalForDb.__mysql_pool) {
     const host = process.env.MYSQL_HOST || "localhost";
     const port = parseInt(process.env.MYSQL_PORT || "3306", 10);
     const user = process.env.MYSQL_USER || "root";
     const password = process.env.MYSQL_PASSWORD || "";
     const database = process.env.MYSQL_DATABASE || "at_bms";
 
-    pool = mysql.createPool({
+    globalForDb.__mysql_pool = mysql.createPool({
       host,
       port,
       user,
       password,
       database,
       waitForConnections: true,
-      connectionLimit: 10,
+      connectionLimit: 15,
+      maxIdle: 5,
+      idleTimeout: 30000,
       queueLimit: 0,
       enableKeepAlive: true,
       keepAliveInitialDelay: 10000,
     });
   }
-  return pool;
+  return globalForDb.__mysql_pool;
 }
 
 export async function initDb() {
@@ -1448,6 +1452,27 @@ export async function initDb() {
   try {
     await db.query(`ALTER TABLE notifications ADD COLUMN type VARCHAR(64) DEFAULT 'info'`);
   } catch (e) {}
+  try {
+    await db.query(`ALTER TABLE notifications ADD COLUMN data JSON NULL`);
+  } catch (e) {}
+
+  // User Notification Settings / Preferences
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS user_notification_settings (
+      id VARCHAR(36) PRIMARY KEY,
+      user_id VARCHAR(36) NOT NULL,
+      email_alerts BOOLEAN NOT NULL DEFAULT TRUE,
+      whatsapp_alerts BOOLEAN NOT NULL DEFAULT FALSE,
+      visitor_notify BOOLEAN NOT NULL DEFAULT TRUE,
+      maintenance_notify BOOLEAN NOT NULL DEFAULT TRUE,
+      bill_reminders BOOLEAN NOT NULL DEFAULT TRUE,
+      in_app_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_user_notif_pref (user_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB;
+  `);
 
 
   // Upgrade maintenance table to include SLA, assigned vendor, and actual vs estimated cost tracking
@@ -1928,6 +1953,139 @@ async function seedModuleRegistry(db: mysql.Pool) {
       INDEX idx_ai_maint_tenant_type (tenant_id, analysis_type, created_at)
     ) ENGINE=InnoDB;
   `);
+
+  // ─── AI COMPLAINTS INTELLIGENCE ─────────────────────────────────────────────
+  try {
+    const aiComplaintColumns = [
+      { name: "ai_category", def: "VARCHAR(64) NULL" },
+      { name: "ai_priority_suggestion", def: "VARCHAR(32) NULL" },
+      { name: "ai_confidence", def: "DECIMAL(5,2) NULL" },
+      { name: "is_duplicate", def: "TINYINT(1) NOT NULL DEFAULT 0" },
+      { name: "duplicate_of_id", def: "VARCHAR(36) NULL" },
+      { name: "similarity_score", def: "DECIMAL(5,2) NULL" },
+    ];
+    for (const col of aiComplaintColumns) {
+      const [colRows] = (await db.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'complaints' AND COLUMN_NAME = ?`,
+        [col.name],
+      )) as any[];
+      if (colRows.length === 0) {
+        await db.query(`ALTER TABLE complaints ADD COLUMN ${col.name} ${col.def}`);
+      }
+    }
+  } catch (err) {
+    console.error("[DB] Error adding AI columns to complaints:", err);
+  }
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS complaint_ai_analyses (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      analysis_type ENUM('insights_summary','duplicate_cluster','escalation_scan') NOT NULL,
+      total_analyzed INT NOT NULL DEFAULT 0,
+      duplicate_count INT NOT NULL DEFAULT 0,
+      escalated_count INT NOT NULL DEFAULT 0,
+      sentiment_breakdown JSON NULL,
+      result_data JSON NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      INDEX idx_ai_comp_tenant (tenant_id, created_at)
+    ) ENGINE=InnoDB;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS ai_complaint_settings (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL UNIQUE,
+      auto_categorize TINYINT(1) NOT NULL DEFAULT 1,
+      auto_priority TINYINT(1) NOT NULL DEFAULT 1,
+      dup_threshold INT NOT NULL DEFAULT 85,
+      escalation_days INT NOT NULL DEFAULT 3,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      INDEX idx_ai_comp_set_tenant (tenant_id)
+    ) ENGINE=InnoDB;
+  `);
+
+  // ─── AI FINANCE INTELLIGENCE ───────────────────────────────────────────────
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS financial_ai_anomalies (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      source_type ENUM('vendor_invoice', 'ledger_entry') NOT NULL,
+      source_id VARCHAR(36) NOT NULL,
+      category VARCHAR(64) NULL,
+      vendor_name VARCHAR(128) NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      expected_range_min DECIMAL(12,2) NOT NULL,
+      expected_range_max DECIMAL(12,2) NOT NULL,
+      anomaly_score DECIMAL(5,2) NOT NULL,
+      deviation_amount DECIMAL(12,2) NOT NULL,
+      explanation TEXT NOT NULL,
+      status ENUM('flagged', 'reviewed', 'dismissed') NOT NULL DEFAULT 'flagged',
+      reviewed_by VARCHAR(36) NULL,
+      reviewed_at TIMESTAMP NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      UNIQUE KEY uniq_source_anomaly (tenant_id, source_type, source_id),
+      INDEX idx_anom_tenant_status (tenant_id, status, created_at)
+    ) ENGINE=InnoDB;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS financial_ai_forecast_snapshots (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL,
+      forecast_month VARCHAR(7) NOT NULL,
+      predicted_income DECIMAL(12,2) NOT NULL,
+      predicted_expense DECIMAL(12,2) NOT NULL,
+      net_cashflow DECIMAL(12,2) NOT NULL,
+      confidence_low DECIMAL(12,2) NOT NULL,
+      confidence_high DECIMAL(12,2) NOT NULL,
+      generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      INDEX idx_fc_tenant_month (tenant_id, forecast_month)
+    ) ENGINE=InnoDB;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS ai_finance_settings (
+      id VARCHAR(36) PRIMARY KEY,
+      tenant_id VARCHAR(36) NOT NULL UNIQUE,
+      detect_anomalies TINYINT(1) NOT NULL DEFAULT 1,
+      sensitivity ENUM('low', 'medium', 'high') NOT NULL DEFAULT 'medium',
+      forecast_horizon_months INT NOT NULL DEFAULT 6,
+      notify_treasurer TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+      INDEX idx_ai_fin_set_tenant (tenant_id)
+    ) ENGINE=InnoDB;
+  `);
+
+  // ─── INTELLIGENCE PERFORMANCE COMPOSITE INDEXES ────────────────────────────
+  try {
+    const perfIndexes = [
+      { table: "complaints", name: "idx_comp_tenant_status", cols: "(tenant_id, status, created_at)" },
+      { table: "complaints", name: "idx_comp_tenant_flags", cols: "(tenant_id, is_duplicate, escalated)" },
+      { table: "ledger_entries", name: "idx_ledger_tenant_date", cols: "(tenant_id, created_at)" },
+      { table: "maintenance_work_orders", name: "idx_mwo_tenant_status", cols: "(tenant_id, status, created_at)" },
+    ];
+    for (const idx of perfIndexes) {
+      const [existingIdx] = (await db.query(
+        `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+        [idx.table, idx.name],
+      )) as any[];
+      if (existingIdx.length === 0) {
+        await db.query(`ALTER TABLE ${idx.table} ADD INDEX ${idx.name} ${idx.cols}`);
+      }
+    }
+  } catch (idxErr) {
+    console.warn("[DB] Non-blocking index creation notice:", idxErr);
+  }
 
   // ─── MULTI-SOCIETY ADMINS ──────────────────────────────────────────────────
   await db.query(`

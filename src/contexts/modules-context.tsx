@@ -29,10 +29,11 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
 
   const refreshModules = async () => {
     try {
-      const data = await getActiveModulesFn();
-      setAllModules(data as ModuleState[]);
+      const res: any = await getActiveModulesFn();
+      const moduleList = Array.isArray(res) ? res : (res?.modules ?? []);
+      setAllModules(moduleList as ModuleState[]);
       const active = new Set<string>(
-        (data as ModuleState[])
+        (moduleList as ModuleState[])
           .filter((m: ModuleState) => m.is_active)
           .map((m: ModuleState) => m.module_key),
       );

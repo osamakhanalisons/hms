@@ -39,7 +39,7 @@ export type AssetsOverview = {
     totalValuation: number;
   };
   assets: AssetItem[];
-  vendorsList: { id: string; name: string }[];
+  vendorsList: { id: string; name: string; category?: string | null; address?: string | null }[];
 };
 
 const toISO = (v: any): string => {
@@ -216,7 +216,7 @@ export const getAssetsOverviewFn = createServerFn({ method: "GET" })
 
     // ── Vendor Dropdown ───────────────────────────────────────────────────────
     const [vendorRows] = (await db.query(
-      `SELECT id, name FROM vendors WHERE ${vendorFilter} ORDER BY name ASC`,
+      `SELECT id, name, category, address FROM vendors WHERE ${vendorFilter} ORDER BY name ASC`,
       vendorParams,
     )) as any[];
 
@@ -229,7 +229,12 @@ export const getAssetsOverviewFn = createServerFn({ method: "GET" })
         totalValuation: Math.round(Number(sumRow?.total_val ?? 0) * 100) / 100,
       },
       assets,
-      vendorsList: (vendorRows as any[]).map((v) => ({ id: v.id, name: v.name })),
+      vendorsList: (vendorRows as any[]).map((v) => ({
+        id: v.id,
+        name: v.name,
+        category: v.category ?? null,
+        address: v.address ?? null,
+      })),
     } satisfies AssetsOverview;
   });
 

@@ -39,6 +39,15 @@ import {
   type PermissionRole,
 } from "@/lib/api/permissions";
 import { SYSTEM_ROLES, TENANT_ASSIGNABLE_ROLES, getRoleLabel, type SystemRoleDef } from "@/lib/roles-constants";
+import { getNotificationPreferencesFn, updateNotificationPreferencesFn } from "@/lib/api/notifications";
+import {
+  getWorkspaceDetailsFn,
+  updateWorkspaceDetailsFn,
+  SUPPORTED_CURRENCIES,
+  SUPPORTED_TIMEZONES,
+} from "@/lib/api/workspace";
+import { getActiveModulesFn, batchSetModulesActiveFn } from "@/lib/api/tenants";
+import { useModules } from "@/contexts/modules-context";
 
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -109,16 +118,17 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-const DEFAULT_ENABLED = new Set(
-  MODULES.filter((m) => m.plan === "Core" || m.plan === "Starter" || m.plan === "Growth").map(
-    (m) => m.key,
-  ),
-);
+function getCookieVal(name: string): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]*)'));
+  return match ? match[2] : "";
+}
 
 function SettingsPage() {
   // ✅ STEP 1: ALL HOOKS AT THE TOP (before any conditional returns)
   const { user, profile, primaryRole, roles, refresh, session, loading } = useAuth();
   const navigate = useNavigate();
+  const { refreshModules } = useModules();
 
   const [activeTab, setActiveTab] = useState<
     "profile" | "workspace" | "modules" | "notifications" | "integrations" | "users" | "permissions"
@@ -127,7 +137,6 @@ function SettingsPage() {
   const isAdmin = roles.includes("super_admin") || roles.includes("society_admin");
 
   // All useState hooks MUST be at top
-  const [enabled, setEnabled] = useState<Set<string>>(new Set(DEFAULT_ENABLED));
   const [q, setQ] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -138,6 +147,15 @@ function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
+
+  // Workspace persistent fields
+  const [selectedTenantId] = useState(() => getCookieVal("selected_tenant_id"));
+  const [wsName, setWsName] = useState("");
+  const [wsAddress, setWsAddress] = useState("");
+  const [wsContactEmail, setWsContactEmail] = useState("");
+  const [wsContactPhone, setWsContactPhone] = useState("");
+  const [wsCurrency, setWsCurrency] = useState("PKR");
+  const [wsTimezone, setWsTimezone] = useState("Asia/Karachi");
 
   // Notification Preferences states
   const [emailAlerts, setEmailAlerts] = useState(true);
@@ -151,6 +169,178 @@ function SettingsPage() {
   const [twilioConnected, setTwilioConnected] = useState(false);
   const [slackConnected, setSlackConnected] = useState(false);
 
+  const queryClient = useQueryClient();
+
+  // Load persistent workspace details from DB
+  const { data: wsResponse, isLoading: loadingWs, refetch: refetchWs } = useQuery({
+    queryKey: ["workspace-details", selectedTenantId],
+    queryFn: () => getWorkspaceDetailsFn({ data: { tenantId: selectedTenantId || undefined } }),
+    enabled: !!session && isAdmin,
+  });
+
+  useEffect(() => {
+    if (wsResponse && !wsResponse.isAllSocieties && wsResponse.workspace) {
+      const w = wsResponse.workspace;
+      setWsName(w.name || "");
+      setWsAddress(w.address || "");
+      setWsContactEmail(w.contactEmail || "");
+      setWsContactPhone(w.contactPhone || "");
+      setWsCurrency(w.currency || "PKR");
+      setWsTimezone(w.timezone || "Asia/Karachi");
+    }
+  }, [wsResponse]);
+
+  const updateWorkspaceMutation = useMutation({
+    mutationFn: updateWorkspaceDetailsFn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspace-details"] });
+      queryClient.invalidateQueries({ queryKey: ["assigned-societies-list"] });
+      queryClient.invalidateQueries({ queryKey: ["all-societies-list"] });
+      refetchWs();
+      toast.success("Workspace details updated successfully");
+    },
+    onError: (err: any) => {
+      toast.error(err instanceof Error ? err.message : "Failed to update workspace details");
+    },
+  });
+
+  const handleSaveWorkspace = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wsResponse || wsResponse.isAllSocieties || !wsResponse.workspace) return;
+    if (!wsName.trim() || wsName.trim().length < 2) {
+      toast.error("Society name must be at least 2 characters");
+      return;
+    }
+    updateWorkspaceMutation.mutate({
+      data: {
+        tenantId: wsResponse.workspace.id,
+        name: wsName.trim(),
+        address: wsAddress.trim() || null,
+        contactEmail: wsContactEmail.trim() || null,
+        contactPhone: wsContactPhone.trim() || null,
+        currency: wsCurrency,
+        timezone: wsTimezone,
+      },
+    });
+  };
+
+  // Load persistent tenant modules from DB
+  const {
+    data: modulesData,
+    isLoading: loadingModules,
+    refetch: refetchTenantModules,
+  } = useQuery({
+    queryKey: ["tenant-modules-settings", selectedTenantId],
+    queryFn: () => getActiveModulesFn({ data: { tenantId: selectedTenantId || undefined } }),
+    enabled: !!session && isAdmin,
+  });
+
+  const [moduleStates, setModuleStates] = useState<Record<string, boolean>>({});
+  const [pendingModuleChanges, setPendingModuleChanges] = useState<Map<string, boolean>>(new Map());
+
+  useEffect(() => {
+    if (modulesData && !modulesData.isAllSocieties && Array.isArray(modulesData.modules)) {
+      const initial: Record<string, boolean> = {};
+      for (const m of modulesData.modules) {
+        initial[m.module_key] = m.is_active;
+      }
+      setModuleStates(initial);
+      setPendingModuleChanges(new Map());
+    }
+  }, [modulesData]);
+
+  const toggleModule = (key: string, isCore: boolean) => {
+    if (isCore) {
+      toast.error("Core modules cannot be disabled as they are essential for system operation.");
+      return;
+    }
+    const current = moduleStates[key] ?? false;
+    const next = !current;
+    setModuleStates((prev) => ({ ...prev, [key]: next }));
+    setPendingModuleChanges((prev) => {
+      const updated = new Map(prev);
+      updated.set(key, next);
+      return updated;
+    });
+  };
+
+  const batchSaveModulesMutation = useMutation({
+    mutationFn: batchSetModulesActiveFn,
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ["tenant-modules-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-details"] });
+      await refetchTenantModules();
+      await refreshModules();
+      setPendingModuleChanges(new Map());
+      toast.success("Module configuration updated successfully");
+    },
+    onError: (err: any) => {
+      toast.error(err instanceof Error ? err.message : "Failed to update module configuration");
+    },
+  });
+
+  const handleSaveModules = () => {
+    if (!modulesData || modulesData.isAllSocieties || !modulesData.tenantId) {
+      toast.error("Please select a specific society before saving module settings.");
+      return;
+    }
+    if (pendingModuleChanges.size === 0) {
+      toast.info("No module changes to save.");
+      return;
+    }
+    const changes = Array.from(pendingModuleChanges.entries()).map(([moduleKey, active]) => ({
+      moduleKey,
+      active,
+    }));
+    batchSaveModulesMutation.mutate({
+      data: {
+        tenantId: modulesData.tenantId,
+        changes,
+      },
+    });
+  };
+
+  // Load persistent notification preferences from DB
+  const { data: notifPrefs, isLoading: loadingNotifPrefs } = useQuery({
+    queryKey: ["user-notification-preferences"],
+    queryFn: () => getNotificationPreferencesFn(),
+    enabled: !!session,
+  });
+
+  useEffect(() => {
+    if (notifPrefs) {
+      setEmailAlerts(notifPrefs.emailAlerts);
+      setWhatsappAlerts(notifPrefs.whatsappAlerts);
+      setVisitorNotify(notifPrefs.visitorNotify);
+      setMaintenanceNotify(notifPrefs.maintenanceNotify);
+      setBillReminders(notifPrefs.billReminders);
+    }
+  }, [notifPrefs]);
+
+  const updateNotifPrefsMutation = useMutation({
+    mutationFn: updateNotificationPreferencesFn,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-notification-preferences"] });
+      toast.success("Notification preferences updated successfully");
+    },
+    onError: (err: any) => {
+      toast.error(err instanceof Error ? err.message : "Failed to save notification preferences");
+    },
+  });
+
+  const handleSaveNotifPrefs = () => {
+    updateNotifPrefsMutation.mutate({
+      data: {
+        emailAlerts,
+        whatsappAlerts,
+        visitorNotify,
+        maintenanceNotify,
+        billReminders,
+        inAppNotifications: true,
+      },
+    });
+  };
+
   // All useEffect and useMemo hooks at top
   useEffect(() => {
     setFullName(profile?.full_name ?? "");
@@ -159,12 +349,16 @@ function SettingsPage() {
   }, [profile]);
 
   const filtered = useMemo(() => {
+    const list = modulesData?.modules || [];
     const term = q.trim().toLowerCase();
-    if (!term) return MODULES;
-    return MODULES.filter(
-      (m) => m.name.toLowerCase().includes(term) || m.description.toLowerCase().includes(term),
+    if (!term) return list;
+    return list.filter(
+      (m: any) =>
+        m.display_name.toLowerCase().includes(term) ||
+        (m.description && m.description.toLowerCase().includes(term)) ||
+        m.module_key.toLowerCase().includes(term),
     );
-  }, [q]);
+  }, [q, modulesData]);
 
   // ✅ STEP 2: Auth redirect logic in useEffect
   useEffect(() => {
@@ -196,20 +390,11 @@ function SettingsPage() {
   // Don't render if not authenticated (useEffect will redirect)
   if (!session) return null;
 
-  // Regular functions (not hooks) can be after conditional returns
-  const toggle = (key: string) =>
-    setEnabled((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-
   const saveProfile = async () => {
     if (!user) return;
     setSaving(true);
     try {
-      await updateProfileFn({ data: { fullName, phone, societyName } });
+      await updateProfileFn({ data: { fullName, phone } });
       toast.success("Profile details updated successfully");
       await refresh();
     } catch (err) {
@@ -247,8 +432,6 @@ function SettingsPage() {
       setChangingPassword(false);
     }
   };
-
-  const totalEnabled = enabled.size;
 
   return (
     <AppShell title="Settings" subtitle="Profile & workspace settings configuration">
@@ -404,140 +587,341 @@ function SettingsPage() {
 
           {activeTab === "workspace" && (
             <div className="space-y-6">
-              <Card className="border-border/70 shadow-soft">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold font-serif">
-                    Workspace Details
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Configure information for this society tenant instance
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="society_name">Society / Apartment Association Name</Label>
-                    <Input
-                      id="society_name"
-                      value={societyName}
-                      onChange={(e) => setSocietyName(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex justify-end pt-2 border-t mt-4">
-                    <Button size="sm" onClick={saveProfile} disabled={saving} className="gap-2">
-                      {saving && <Loader2 className="size-3.5 animate-spin" />} Save Workspace
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              {loadingWs ? (
+                <div className="flex justify-center p-12">
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : wsResponse?.isAllSocieties ? (
+                <Card className="border-amber-500/30 bg-amber-500/5 shadow-soft">
+                  <CardContent className="flex items-start gap-4 p-6">
+                    <div className="rounded-full bg-amber-500/10 p-2.5 text-amber-600 shrink-0">
+                      <Building className="size-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-serif font-bold text-foreground">
+                        All Societies (Platform-wide) Mode
+                      </h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        You currently have &ldquo;All Societies&rdquo; selected in the top navigation bar. To view, configure, or edit workspace details for a specific society, please select that society from the dropdown at the top of the screen.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : wsResponse?.workspace ? (
+                <>
+                  <Card className="border-border/70 shadow-soft">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base font-bold font-serif">
+                            Workspace Details
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Configure canonical information for this society tenant instance
+                          </CardDescription>
+                        </div>
+                        {wsResponse.workspace.code && (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            CODE: {wsResponse.workspace.code}
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleSaveWorkspace} className="space-y-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="ws_name">Society / Apartment Association Name *</Label>
+                            <Input
+                              id="ws_name"
+                              value={wsName}
+                              onChange={(e) => setWsName(e.target.value)}
+                              placeholder="e.g. Askari 11 Lahore"
+                              required
+                            />
+                          </div>
 
-              <section className="grid gap-4 sm:grid-cols-3">
-                <StatCard label="Modules Enabled" value={`${totalEnabled} / ${MODULES.length}`} />
-                <StatCard
-                  label="Current Plan"
-                  value="Enterprise"
-                  hint="SLA, RFC, Quotes & Recurrent passes active"
-                />
-                <StatCard
-                  label="Society"
-                  value={profile?.society_name ?? "—"}
-                  hint={roleLabel(primaryRole)}
-                />
-              </section>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="ws_email">Official Contact Email</Label>
+                            <Input
+                              id="ws_email"
+                              type="email"
+                              value={wsContactEmail}
+                              onChange={(e) => setWsContactEmail(e.target.value)}
+                              placeholder="admin@society.com"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="ws_phone">Official Contact Phone</Label>
+                            <Input
+                              id="ws_phone"
+                              value={wsContactPhone}
+                              onChange={(e) => setWsContactPhone(e.target.value)}
+                              placeholder="+92 300 1234567"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="ws_currency">Default Currency</Label>
+                            <select
+                              id="ws_currency"
+                              value={wsCurrency}
+                              onChange={(e) => setWsCurrency(e.target.value)}
+                              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                              {SUPPORTED_CURRENCIES.map((curr) => (
+                                <option key={curr} value={curr}>
+                                  {curr}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="ws_timezone">Timezone</Label>
+                            <select
+                              id="ws_timezone"
+                              value={wsTimezone}
+                              onChange={(e) => setWsTimezone(e.target.value)}
+                              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            >
+                              {SUPPORTED_TIMEZONES.map((tz) => (
+                                <option key={tz} value={tz}>
+                                  {tz}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-1.5 sm:col-span-2">
+                            <Label htmlFor="ws_address">Physical Address</Label>
+                            <Input
+                              id="ws_address"
+                              value={wsAddress}
+                              onChange={(e) => setWsAddress(e.target.value)}
+                              placeholder="Sector, Street, City, Country"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-3 border-t mt-4">
+                          <Button
+                            type="submit"
+                            size="sm"
+                            disabled={updateWorkspaceMutation.isPending}
+                            className="gap-2"
+                          >
+                            {updateWorkspaceMutation.isPending && (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            )}
+                            Save Workspace
+                          </Button>
+                        </div>
+                      </form>
+                    </CardContent>
+                  </Card>
+
+                  <section className="grid gap-4 sm:grid-cols-3">
+                    <StatCard
+                      label="Modules Enabled"
+                      value={`${wsResponse.workspace.enabledModulesCount} / ${wsResponse.workspace.totalModulesCount}`}
+                      hint="Active canonical modules in this tenant"
+                    />
+                    <StatCard
+                      label="Current Plan"
+                      value={wsResponse.workspace.plan.toUpperCase()}
+                      hint="Read-only subscription tier"
+                    />
+                    <StatCard
+                      label="Society"
+                      value={wsResponse.workspace.name}
+                      hint={wsResponse.workspace.code ? `Code: ${wsResponse.workspace.code}` : `Slug: ${wsResponse.workspace.slug}`}
+                    />
+                  </section>
+                </>
+              ) : null}
             </div>
           )}
 
           {activeTab === "modules" && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between gap-3">
-                <div className="relative w-full max-w-sm">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder="Search modules…"
-                    className="h-10 pl-9"
-                  />
+              {loadingModules ? (
+                <div className="flex h-48 items-center justify-center">
+                  <Loader2 className="size-8 animate-spin text-muted-foreground" />
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => toast.success("Module configuration updated")}
-                >
-                  Save Changes
-                </Button>
-              </div>
+              ) : modulesData?.isAllSocieties ? (
+                <Card className="border-amber-500/30 bg-amber-500/5 shadow-soft">
+                  <CardContent className="flex items-start gap-4 p-6">
+                    <div className="rounded-full bg-amber-500/10 p-2.5 text-amber-600 shrink-0">
+                      <Building className="size-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-serif font-bold text-foreground">
+                        All Societies (Platform-wide) Mode
+                      </h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        You currently have &ldquo;All Societies&rdquo; selected in the top navigation bar. Module activations are configured per-society. Please select a specific society from the dropdown at the top of the screen before managing modules.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="relative w-full max-w-sm">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        placeholder="Search modules…"
+                        className="h-10 pl-9"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {pendingModuleChanges.size > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {pendingModuleChanges.size} unsaved {pendingModuleChanges.size === 1 ? "change" : "changes"}
+                        </Badge>
+                      )}
+                      <Button
+                        variant="default"
+                        size="sm"
+                        disabled={pendingModuleChanges.size === 0 || batchSaveModulesMutation.isPending}
+                        onClick={handleSaveModules}
+                        className="gap-2"
+                      >
+                        {batchSaveModulesMutation.isPending && (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        )}
+                        Save Changes
+                      </Button>
+                    </div>
+                  </div>
 
-              <div className="space-y-8">
-                {CATEGORY_ORDER.map((cat) => {
-                  const items = filtered.filter((m) => m.category === cat);
-                  if (items.length === 0) return null;
-                  return (
-                    <section key={cat}>
-                      <div className="mb-3 flex items-center gap-3">
-                        <span className="hairline flex-1" />
-                        <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          {cat}
-                        </h2>
-                        <span className="hairline flex-1" />
-                      </div>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        {items.map((m) => {
-                          const on = enabled.has(m.key);
-                          const forms = getFormsForModule(m.key);
-                          const locked = m.plan === "Enterprise";
-                          return (
-                            <Card key={m.key} className="border-border/70">
-                              <CardContent className="flex items-start gap-3 p-4">
-                                <div
-                                  className={[
-                                    "grid size-10 shrink-0 place-items-center rounded-md",
-                                    on
-                                      ? "bg-primary text-primary-foreground"
-                                      : "bg-surface text-muted-foreground",
-                                  ].join(" ")}
-                                >
-                                  <m.icon className="size-4" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className="truncate font-serif text-sm font-bold">
-                                      {m.name}
+                  <div className="space-y-8">
+                    {CATEGORY_ORDER.map((cat) => {
+                      const items = filtered.filter((m: any) => m.category === cat);
+                      if (items.length === 0) return null;
+
+                      const PLAN_RANKS: Record<string, number> = {
+                        core: 0,
+                        starter: 1,
+                        growth: 2,
+                        professional: 3,
+                        enterprise: 4,
+                      };
+                      const currentPlanRank =
+                        PLAN_RANKS[modulesData?.tenantPlan ?? "starter"] ?? 1;
+
+                      return (
+                        <section key={cat}>
+                          <div className="mb-3 flex items-center gap-3">
+                            <span className="hairline flex-1" />
+                            <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                              {cat}
+                            </h2>
+                            <span className="hairline flex-1" />
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {items.map((m: any) => {
+                              const on = moduleStates[m.module_key] ?? m.is_active;
+                              const forms = getFormsForModule(m.module_key);
+                              const isCore = m.is_core;
+                              const requiredPlanRank = PLAN_RANKS[m.min_plan] ?? 1;
+                              const isPlanLocked = requiredPlanRank > currentPlanRank;
+
+                              const catalogDef = MODULES.find(
+                                (x) => x.key === m.module_key,
+                              );
+                              const IconComponent = catalogDef?.icon || Sparkles;
+
+                              return (
+                                <Card key={m.module_key} className="border-border/70">
+                                  <CardContent className="flex items-start gap-3 p-4">
+                                    <div
+                                      className={[
+                                        "grid size-10 shrink-0 place-items-center rounded-md",
+                                        on
+                                          ? "bg-primary text-primary-foreground"
+                                          : "bg-surface text-muted-foreground",
+                                      ].join(" ")}
+                                    >
+                                      <IconComponent className="size-4" />
                                     </div>
-                                    <Badge variant="outline" className="shrink-0 text-[9px]">
-                                      {m.plan}
-                                    </Badge>
-                                    {m.category === "Intelligence" && (
-                                      <Sparkles className="size-3 text-primary" />
-                                    )}
-                                  </div>
-                                  <div className="text-[11px] text-muted-foreground">
-                                    {m.description}
-                                  </div>
-                                  <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
-                                    <Link to="/forms" className="hover:text-foreground">
-                                      {forms.length} {forms.length === 1 ? "form" : "forms"}
-                                    </Link>
-                                    {on && (
-                                      <span className="inline-flex items-center gap-1 text-success">
-                                        <Check className="size-3" /> Active
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                {locked ? (
-                                  <Lock className="size-4 shrink-0 text-muted-foreground" />
-                                ) : (
-                                  <Switch checked={on} onCheckedChange={() => toggle(m.key)} />
-                                )}
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <div className="truncate font-serif text-sm font-bold">
+                                          {m.display_name}
+                                        </div>
+                                        <Badge
+                                          variant={isCore ? "default" : "outline"}
+                                          className="shrink-0 text-[9px] uppercase"
+                                        >
+                                          {isCore ? "Core" : m.min_plan}
+                                        </Badge>
+                                        {m.category === "Intelligence" && (
+                                          <Sparkles className="size-3 text-primary" />
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] text-muted-foreground line-clamp-2">
+                                        {m.description}
+                                      </div>
+                                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+                                        <Link
+                                          to="/forms"
+                                          className="hover:text-foreground underline underline-offset-2"
+                                        >
+                                          {forms.length} {forms.length === 1 ? "form" : "forms"}
+                                        </Link>
+                                        {on && (
+                                          <span className="inline-flex items-center gap-1 text-success font-medium">
+                                            <Check className="size-3" /> Active
+                                          </span>
+                                        )}
+                                        {m.dependencies && m.dependencies.length > 0 && (
+                                          <span className="text-muted-foreground/80">
+                                            • Requires: {m.dependencies.join(", ")}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center self-center shrink-0">
+                                      {isCore ? (
+                                        <div
+                                          className="flex items-center gap-1 text-xs text-muted-foreground"
+                                          title="Core module - Essential for system operation"
+                                        >
+                                          <Lock className="size-3.5" />
+                                          <Switch checked={true} disabled className="opacity-50" />
+                                        </div>
+                                      ) : isPlanLocked ? (
+                                        <div
+                                          className="flex items-center gap-1 text-xs text-muted-foreground"
+                                          title={`Requires ${m.min_plan.toUpperCase()} plan`}
+                                        >
+                                          <Lock className="size-4 text-muted-foreground" />
+                                        </div>
+                                      ) : (
+                                        <Switch
+                                          checked={on}
+                                          onCheckedChange={() =>
+                                            toggleModule(m.module_key, m.is_core)
+                                          }
+                                        />
+                                      )}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -604,10 +988,13 @@ function SettingsPage() {
                 <div className="flex justify-end pt-4 border-t mt-4">
                   <Button
                     size="sm"
-                    onClick={() => {
-                      toast.success("Notification preferences updated successfully");
-                    }}
+                    disabled={updateNotifPrefsMutation.isPending || loadingNotifPrefs}
+                    onClick={handleSaveNotifPrefs}
+                    className="gap-2"
                   >
+                    {updateNotifPrefsMutation.isPending && (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    )}
                     Save Preferences
                   </Button>
                 </div>

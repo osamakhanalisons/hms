@@ -444,7 +444,7 @@ export async function handleMobileRequest(request: Request): Promise<Response> {
     try {
       const { notificationId } = await request.json();
 
-      await db.query("UPDATE notifications SET read_status = 'read' WHERE id = ? AND user_id = ?", [
+      await db.query("UPDATE notifications SET read_status = 1 WHERE id = ? AND user_id = ?", [
         notificationId,
         userId,
       ]);

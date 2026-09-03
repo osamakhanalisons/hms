@@ -163,13 +163,13 @@ function Dashboard() {
     <AppShell
       title={profile?.society_name ?? "HousingOS"}
       subtitle={roleLabel(primaryRole)}
-      actions={
+      /* actions={
         <Button asChild size="sm" className="ml-2 gap-1.5">
           <Link to="/forms">
             <Plus className="size-4" /> New record
           </Link>
         </Button>
-      }
+      } */
     >
       <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
         {/* Hero strip */}

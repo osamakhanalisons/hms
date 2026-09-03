@@ -153,7 +153,7 @@ export const getPlatformOverviewFn = createServerFn({ method: "GET" })
     )) as any[];
     const pendingWorkOrders = Number(wRow?.cnt ?? 0);
 
-    // ── 8. Recent audit logs (last 15 entries) ─────────────────────────────────
+    // ── 8. Recent audit logs (up to 100 entries for pagination) ───────────────
     const { sqlFilter: alFilter, sqlParams: alParams } = await getTenantScoping(
       request,
       data?.tenantId,
@@ -166,7 +166,7 @@ export const getPlatformOverviewFn = createServerFn({ method: "GET" })
        LEFT JOIN users u ON u.id = al.user_id
        WHERE ${alFilter}
        ORDER BY al.created_at DESC
-       LIMIT 15`,
+       LIMIT 100`,
       alParams,
     )) as any[];
 
