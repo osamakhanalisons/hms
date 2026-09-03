@@ -78,7 +78,7 @@ export const getResidentsFn = createServerFn({ method: "GET" })
       // Admin: return residents matching scoped filter
       let query = `
         SELECT r.*, p.full_name, p.email, p.phone, p.cnic, p.user_id,
-               u.unit_number, s.name AS society_name, bl.name AS block_name, b.name AS building_name
+               u.unit_number, IF(s.city IS NOT NULL AND s.city != '', CONCAT(s.name, ' (', s.city, ')'), s.name) AS society_name, bl.name AS block_name, b.name AS building_name
         FROM residents r
         JOIN persons p ON p.id = r.person_id
         JOIN units u ON u.id = r.unit_id
@@ -127,7 +127,7 @@ export const getResidentsFn = createServerFn({ method: "GET" })
       // Resident/tenant: return only their own record (lookup by user_id — no tenantId required)
       const [rows] = (await db.query(
         `SELECT r.*, p.full_name, p.email, p.phone, p.cnic, p.user_id,
-                u.unit_number, s.name AS society_name, bl.name AS block_name, b.name AS building_name
+                u.unit_number, IF(s.city IS NOT NULL AND s.city != '', CONCAT(s.name, ' (', s.city, ')'), s.name) AS society_name, bl.name AS block_name, b.name AS building_name
          FROM residents r
          JOIN persons p ON p.id = r.person_id
          JOIN units u ON u.id = r.unit_id

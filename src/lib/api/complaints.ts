@@ -39,7 +39,7 @@ export const getComplaintsFn = createServerFn({ method: "GET" })
 
     let query = `
       SELECT c.*, u.unit_number, p.full_name AS submitter_name, staff.full_name AS assignee_name,
-             CONCAT_WS(' › ', s.name, bl.name, b.name, CONCAT('Unit ', u.unit_number)) AS full_path
+             CONCAT_WS(' › ', IF(s.city IS NOT NULL AND s.city != '', CONCAT(s.name, ' (', s.city, ')'), s.name), bl.name, b.name, CONCAT('Unit ', u.unit_number)) AS full_path
       FROM complaints c
       LEFT JOIN units u ON u.id = c.unit_id
       LEFT JOIN societies s ON s.id = u.society_id
