@@ -10,6 +10,10 @@ lerna-debug.log*
 .env.*
 db_export.sql
 at_bms_backup.sql
+db_export.zip
+at_bms_backup.zip
+docs.md
+docs.txt
 
 node_modules
 dist
