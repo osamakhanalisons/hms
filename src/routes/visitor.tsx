@@ -69,6 +69,7 @@ import {
   type StaffVerificationResult,
 } from "@/lib/api/visitor";
 import { Users, UserPlus, UserX, Check, Copy } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/visitor")({
   head: () => ({
@@ -123,26 +124,26 @@ function KpiCard({
   loading?: boolean;
 }) {
   const toneClass = {
-    default: "text-primary bg-primary/10",
-    success: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-    destructive: "text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-    warning: "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
-    info: "text-blue-600 bg-blue-50 dark:bg-blue-950/30",
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40",
+    destructive: "text-rose-600 bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/40",
+    warning: "text-amber-600 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/40",
+    info: "text-blue-600 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/40",
   }[tone];
 
   return (
     <Card className="border-border/70 shadow-soft">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3 min-w-0">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground truncate">{label}</p>
             {loading ? (
               <div className="mt-2 h-7 w-20 animate-pulse rounded-md bg-muted" />
             ) : (
-              <p className="mt-1 font-serif text-2xl font-bold tracking-tight">{value}</p>
+              <p className="mt-1 font-serif text-xl sm:text-2xl font-bold tracking-tight truncate">{value}</p>
             )}
           </div>
-          <div className={`rounded-lg p-2.5 ${toneClass}`}>
+          <div className={cn("grid size-10 place-items-center rounded-xl border shrink-0", toneClass)}>
             <Icon className="size-5" />
           </div>
         </div>
@@ -162,6 +163,16 @@ function PassStatusBadge({ status }: { status: VisitorPassItem["status"] }) {
   return <Badge variant="outline" className={`text-[10px] ${map[status]}`}>{labels[status]}</Badge>;
 }
 
+function getLocalDateTimeString(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 function VisitorPage() {
   const { roles } = useAuth();
   const isSecurity = roles.some((r) =>
@@ -173,11 +184,21 @@ function VisitorPage() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [activeTab, setActiveTab] = useState("passes");
 
+  // ── Pagination States ─────────────────────────────────────────────
+  const PASS_PER_PAGE = 9;
+  const STAFF_PER_PAGE = 9;
+  const LOG_PER_PAGE = 15;
+  const BL_PER_PAGE = 15;
+  const [passPage, setPassPage] = useState(1);
+  const [staffPage, setStaffPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const [blPage, setBlPage] = useState(1);
+
   // Pre-register modal state
   const [addPassOpen, setAddPassOpen] = useState(false);
   const [vName, setVName] = useState("");
   const [vPhone, setVPhone] = useState("");
-  const [vExpectedAt, setVExpectedAt] = useState("");
+  const [vExpectedAt, setVExpectedAt] = useState(getLocalDateTimeString());
   const [vType, setVType] = useState<VisitorPassItem["visitorType"]>("one_time");
   const [vPlate, setVPlate] = useState("");
   const [vUnitId, setVUnitId] = useState("");
@@ -240,6 +261,19 @@ function VisitorPage() {
   const [staffVerifyResult, setStaffVerifyResult] = useState<StaffVerificationResult | null>(null);
   const [isStaffVerifying, setIsStaffVerifying] = useState(false);
   const [staffRecordResult, setStaffRecordResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const openAddPass = () => {
+    setCreatedPassCode(null);
+    setVName("");
+    setVPhone("");
+    setVExpectedAt(getLocalDateTimeString());
+    setVType("one_time");
+    setVPlate("");
+    setVExpiresAt("");
+    setVNotes("");
+    setVError(null);
+    setAddPassOpen(true);
+  };
 
   const openAddStaff = () => {
     setEditingStaffId(null);
@@ -397,9 +431,9 @@ function VisitorPage() {
   };
 
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
-    queryKey: ["visitor-overview", search, statusFilter, typeFilter],
+    queryKey: ["visitor-overview", search, statusFilter, typeFilter, passPage],
     queryFn: () =>
-      getVisitorOverviewFn({ data: { search, status: statusFilter, type: typeFilter } }),
+      getVisitorOverviewFn({ data: { search, status: statusFilter, type: typeFilter, page: passPage, pageSize: PASS_PER_PAGE } }),
     staleTime: 15_000,
   });
 
@@ -424,7 +458,7 @@ function VisitorPage() {
         },
       });
       setCreatedPassCode(res.passCode);
-      setVName(""); setVPhone(""); setVExpectedAt(""); setVType("one_time"); setVPlate(""); setVNotes("");
+      setVName(""); setVPhone(""); setVExpectedAt(getLocalDateTimeString()); setVType("one_time"); setVPlate(""); setVNotes("");
       refetch();
     } catch (err: any) {
       setVError(err.message || "Failed to create visitor pass");
@@ -510,22 +544,12 @@ function VisitorPage() {
   const blacklist = data?.blacklist ?? [];
   const unitsList = data?.unitsList ?? [];
 
-  // ── Pagination ──────────────────────────────────────────────────
-  const PASS_PER_PAGE = 9;
-  const STAFF_PER_PAGE = 9;
-  const LOG_PER_PAGE = 15;
-  const BL_PER_PAGE = 15;
-  const [passPage, setPassPage] = useState(1);
-  const [staffPage, setStaffPage] = useState(1);
-  const [logPage, setLogPage] = useState(1);
-  const [blPage, setBlPage] = useState(1);
-
-  const passTotalPages  = Math.max(1, Math.ceil(passes.length   / PASS_PER_PAGE));
+  const totalFilteredCount = data?.totalFilteredPasses ?? summary?.totalPasses ?? 0;
+  const passTotalPages  = Math.max(1, Math.ceil(totalFilteredCount / PASS_PER_PAGE));
   const staffTotalPages = Math.max(1, Math.ceil(staffList.length / STAFF_PER_PAGE));
   const logTotalPages   = Math.max(1, Math.ceil(logs.length     / LOG_PER_PAGE));
   const blTotalPages    = Math.max(1, Math.ceil(blacklist.length / BL_PER_PAGE));
 
-  const paginatedPasses    = passes.slice   ((passPage  - 1) * PASS_PER_PAGE,  passPage  * PASS_PER_PAGE);
   const paginatedStaff     = staffList.slice((staffPage - 1) * STAFF_PER_PAGE, staffPage * STAFF_PER_PAGE);
   const paginatedLogs      = logs.slice     ((logPage   - 1) * LOG_PER_PAGE,   logPage   * LOG_PER_PAGE);
   const paginatedBlacklist = blacklist.slice((blPage    - 1) * BL_PER_PAGE,    blPage    * BL_PER_PAGE);
@@ -545,13 +569,13 @@ function VisitorPage() {
     if (total <= 1) return null;
     return (
       <div className="flex items-center justify-center gap-1 py-3 border-t border-border/50">
-        <button onClick={() => set(Math.max(1, page - 1))} disabled={page === 1} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">← Prev</button>
+        <button onClick={() => set(Math.max(1, page - 1))} disabled={page === 1} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors cursor-pointer">← Prev</button>
         {getPageNums(page, total).map((pg, i) =>
           pg === "…" ? <span key={`e${i}`} className="px-1 text-[10px] text-muted-foreground select-none">…</span> : (
-            <button key={pg} onClick={() => set(pg as number)} className={`rounded border px-2.5 py-1 text-[10px] font-medium transition-colors ${ page === pg ? "border-primary bg-primary text-primary-foreground" : "border-border/70 hover:bg-muted" }`}>{pg}</button>
+            <button key={pg} onClick={() => set(pg as number)} className={`rounded border px-2.5 py-1 text-[10px] font-medium transition-colors cursor-pointer ${ page === pg ? "border-primary bg-primary text-primary-foreground" : "border-border/70 hover:bg-muted" }`}>{pg}</button>
           )
         )}
-        <button onClick={() => set(Math.min(total, page + 1))} disabled={page === total} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors">Next →</button>
+        <button onClick={() => set(Math.min(total, page + 1))} disabled={page === total} className="rounded border border-border/70 px-2.5 py-1 text-[10px] font-medium hover:bg-muted disabled:opacity-40 transition-colors cursor-pointer">Next →</button>
       </div>
     );
   }
@@ -560,44 +584,62 @@ function VisitorPage() {
     <AppShell
       title="Visitor Management & Gate Passes"
       subtitle="Pre-register guests, verify 6-digit gate passes and monitor entry/exit logs"
-      actions={
-        <div className="flex items-center gap-2">
-          <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => { setCreatedPassCode(null); setAddPassOpen(true); }}>
-            <Plus className="size-3.5" /> Pre-Register Guest
-          </Button>
-          {isSecurity && (
-            <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setAddBlOpen(true)}>
-              <Ban className="size-3.5 text-rose-600" /> Blacklist Person
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-      }
     >
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
-        {/* Header */}
-        <header className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-md bg-surface border border-border/60">
-            <UserCheck className="size-5 text-primary" />
-          </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Security · Access Control
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-8 sm:py-8">
+        {/* Header & Action Toolbar */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-xs shrink-0">
+              <UserCheck className="size-6" />
             </div>
-            <h1 className="font-serif text-2xl font-bold tracking-tight sm:text-3xl">
-              Visitor Gate Pass System
-            </h1>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight">
+                  Visitor Gate Pass System
+                </h1>
+                <Badge variant="secondary" className="text-xs font-mono">
+                  {summary?.totalPasses ?? 0} Total
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pre-register guests, verify 6-digit gate passes, domestic staff, and entry/exit audit logs
+              </p>
+            </div>
           </div>
-        </header>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs border-border/80 hover:bg-muted cursor-pointer"
+              onClick={() => {
+                refetch();
+                refetchStaff();
+              }}
+              disabled={isRefetching || isStaffLoading}
+            >
+              <RefreshCw className={cn("size-3.5 text-muted-foreground", (isRefetching || isStaffLoading) && "animate-spin")} />
+              Refresh
+            </Button>
+            {isSecurity && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-950/30 cursor-pointer"
+                onClick={() => setAddBlOpen(true)}
+              >
+                <Ban className="size-3.5" /> Blacklist Person
+              </Button>
+            )}
+            <Button
+              size="sm"
+              className="h-9 gap-1.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer"
+              onClick={openAddPass}
+            >
+              <Plus className="size-4" /> Pre-Register Guest
+            </Button>
+          </div>
+        </div>
 
         {/* Error banner */}
         {isError && (
@@ -651,11 +693,20 @@ function VisitorPage() {
                     placeholder="Search visitor, phone, OTP, vehicle..."
                     className="h-9 pl-9 text-xs"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPassPage(1);
+                    }}
                   />
                 </div>
 
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v) => {
+                    setStatusFilter(v);
+                    setPassPage(1);
+                  }}
+                >
                   <SelectTrigger className="h-9 w-36 text-xs">
                     <Filter className="mr-1.5 size-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Status" />
@@ -669,7 +720,13 @@ function VisitorPage() {
                   </SelectContent>
                 </Select>
 
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <Select
+                  value={typeFilter}
+                  onValueChange={(v) => {
+                    setTypeFilter(v);
+                    setPassPage(1);
+                  }}
+                >
                   <SelectTrigger className="h-9 w-36 text-xs">
                     <Sliders className="mr-1.5 size-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Type" />
@@ -686,7 +743,7 @@ function VisitorPage() {
             {/* Visitor Passes Grid */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">{passes.length} passes total</span>
+                <span className="text-xs font-medium text-muted-foreground">{totalFilteredCount} passes total</span>
                 <span className="text-xs text-muted-foreground">page {passPage} of {passTotalPages}</span>
               </div>
             {isLoading ? (
@@ -703,7 +760,7 @@ function VisitorPage() {
               </Card>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {paginatedPasses.map((pass) => (
+                {passes.map((pass) => (
                   <Card key={pass.id} className="border-border/70 shadow-soft hover:border-border transition-colors">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between gap-2">
@@ -1212,84 +1269,194 @@ function VisitorPage() {
 
       {/* Pre-Register Visitor Modal */}
       <Dialog open={addPassOpen} onOpenChange={setAddPassOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-serif text-lg">Pre-Register Guest / Visitor</DialogTitle>
-            <DialogDescription className="text-xs">Issue a 6-digit gate OTP pass for guests or contractors.</DialogDescription>
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                <UserPlus className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="font-serif text-lg font-bold">Pre-Register Guest / Visitor</DialogTitle>
+                <DialogDescription className="text-xs">Issue a verified 6-digit gate OTP pass for guests or delivery personnel.</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
           {createdPassCode ? (
-            <div className="py-6 text-center space-y-3">
-              <div className="size-12 mx-auto rounded-full bg-emerald-500/10 grid place-items-center text-emerald-600">
-                <CheckCircle2 className="size-6" />
+            <div className="py-6 text-center space-y-4">
+              <div className="size-14 mx-auto rounded-2xl bg-emerald-500/10 grid place-items-center text-emerald-600 border border-emerald-500/20 shadow-xs">
+                <CheckCircle2 className="size-8" />
               </div>
-              <h3 className="font-serif font-bold text-lg">Visitor Pass Created!</h3>
-              <p className="text-xs text-muted-foreground">Share this 6-digit OTP code with your guest for gate entry:</p>
-              <div className="py-3 px-6 rounded-lg bg-primary/10 border border-primary/20 inline-block font-mono text-3xl font-bold tracking-widest text-primary">
+              <div>
+                <h3 className="font-serif font-bold text-xl">Visitor Pass Generated!</h3>
+                <p className="text-xs text-muted-foreground mt-1">Share this 6-digit OTP code with your visitor for rapid gate check-in:</p>
+              </div>
+              <div className="py-3 px-8 rounded-2xl bg-primary/10 border border-primary/20 inline-block font-mono text-3xl font-extrabold tracking-widest text-primary shadow-xs">
                 {createdPassCode}
               </div>
               <div>
-                <Button size="sm" className="w-full text-xs" onClick={() => { setCreatedPassCode(null); setAddPassOpen(false); }}>
-                  Done
+                <Button size="sm" className="w-full text-xs h-9" onClick={() => { setCreatedPassCode(null); setAddPassOpen(false); }}>
+                  Done / Close
                 </Button>
               </div>
             </div>
           ) : (
-            <form onSubmit={handleCreatePass} className="space-y-4">
+            <form onSubmit={handleCreatePass} className="space-y-4 pt-1">
               {vError && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{vError}</div>}
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Visitor Full Name *</Label>
-                <Input placeholder="Guest or contractor name" className="h-9 text-xs" value={vName} onChange={(e) => setVName(e.target.value)} />
+                <Label className="text-xs font-medium">Visitor Full Name *</Label>
+                <Input
+                  placeholder="e.g. Tariq Mehmood, TCS Courier, Electrician"
+                  className="h-9 text-xs"
+                  value={vName}
+                  onChange={(e) => setVName(e.target.value)}
+                  autoFocus
+                />
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Phone Number</Label>
-                  <Input placeholder="+92 300 0000000" className="h-9 text-xs" value={vPhone} onChange={(e) => setVPhone(e.target.value)} />
+                  <Label className="text-xs font-medium">Phone Number</Label>
+                  <Input
+                    placeholder="+92 300 0000000"
+                    className="h-9 text-xs font-mono"
+                    value={vPhone}
+                    onChange={(e) => setVPhone(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Vehicle Plate</Label>
-                  <Input placeholder="e.g. LE-9922" className="h-9 text-xs font-mono uppercase" value={vPlate} onChange={(e) => setVPlate(e.target.value)} />
+                  <Label className="text-xs font-medium">Vehicle Registration Plate (Optional)</Label>
+                  <Input
+                    placeholder="e.g. LE-9922, ICT-1890"
+                    className="h-9 text-xs font-mono uppercase"
+                    value={vPlate}
+                    onChange={(e) => setVPlate(e.target.value)}
+                  />
                 </div>
+              </div>
+
+              {/* Expected Arrival with Quick Presets */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium">Expected Arrival Date & Time *</Label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setVExpectedAt(getLocalDateTimeString(new Date()))}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted font-medium text-muted-foreground transition-colors cursor-pointer"
+                    >
+                      Now
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setHours(d.getHours() + 2);
+                        setVExpectedAt(getLocalDateTimeString(d));
+                      }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted font-medium text-muted-foreground transition-colors cursor-pointer"
+                    >
+                      +2 Hours
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setHours(20, 0, 0, 0);
+                        setVExpectedAt(getLocalDateTimeString(d));
+                      }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted font-medium text-muted-foreground transition-colors cursor-pointer"
+                    >
+                      Tonight (8 PM)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 1);
+                        d.setHours(10, 0, 0, 0);
+                        setVExpectedAt(getLocalDateTimeString(d));
+                      }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-muted/80 hover:bg-muted font-medium text-muted-foreground transition-colors cursor-pointer"
+                    >
+                      Tomorrow (10 AM)
+                    </button>
+                  </div>
+                </div>
+                <Input
+                  type="datetime-local"
+                  className="h-9 text-xs"
+                  value={vExpectedAt}
+                  onChange={(e) => setVExpectedAt(e.target.value)}
+                />
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Expected Arrival *</Label>
-                  <Input type="datetime-local" className="h-9 text-xs" value={vExpectedAt} onChange={(e) => setVExpectedAt(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Visitor Type</Label>
+                  <Label className="text-xs font-medium">Pass Type</Label>
                   <Select value={vType} onValueChange={(v) => setVType(v as VisitorPassItem["visitorType"])}>
                     <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="one_time" className="text-xs">One-Time Guest</SelectItem>
-                      <SelectItem value="recurring" className="text-xs">Recurring Delivery/Staff</SelectItem>
+                      <SelectItem value="one_time" className="text-xs">One-Time Entry Pass</SelectItem>
+                      <SelectItem value="recurring" className="text-xs">Recurring / Multi-Day Contractor</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {unitsList.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Destination Unit</Label>
+                    <Select value={vUnitId} onValueChange={setVUnitId}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Destination Unit" /></SelectTrigger>
+                      <SelectContent className="max-h-[260px]">
+                        {unitsList.map((u: { id: string; unitNumber: string; residentName: string | null; fullPath: string | null }) => (
+                          <SelectItem key={u.id} value={u.id} className="text-xs">
+                            <span className="font-medium">{u.fullPath || `Unit ${u.unitNumber}`}</span>
+                            {u.residentName && <span className="text-muted-foreground ml-1.5">({u.residentName})</span>}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
-              {unitsList.length > 0 && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Destination Unit (Optional)</Label>
-                  <Select value={vUnitId} onValueChange={setVUnitId}>
-                    <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Unit" /></SelectTrigger>
-                    <SelectContent>
-                      {unitsList.map((u: { id: string; unitNumber: string; residentName: string | null; fullPath: string | null }) => (
-                        <SelectItem key={u.id} value={u.id} className="text-xs">
-                          {u.fullPath || `Unit ${u.unitNumber}`} {u.residentName ? `(${u.residentName})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* Purpose / Notes with Quick Tag Presets */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium">Purpose / Remarks (Optional)</Label>
+                  <span className="text-[10px] text-muted-foreground">Click tag to insert</span>
                 </div>
-              )}
+                <div className="flex flex-wrap gap-1 pb-1">
+                  {["Guest / Family Visit", "Food / Parcel Delivery", "Maintenance / Service", "Cab / Ride Pick & Drop", "Official Meeting"].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setVNotes(tag)}
+                      className={cn(
+                        "text-[10px] px-2 py-0.5 rounded-md border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer",
+                        vNotes === tag && "bg-primary/10 border-primary/30 text-primary font-medium"
+                      )}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  placeholder="e.g. Delivery, Guest visit, Air Conditioning checkup..."
+                  className="h-9 text-xs"
+                  value={vNotes}
+                  onChange={(e) => setVNotes(e.target.value)}
+                />
+              </div>
 
-              <DialogFooter>
-                <Button type="button" variant="outline" size="sm" onClick={() => setAddPassOpen(false)} disabled={isVSubmitting}>Cancel</Button>
-                <Button type="submit" size="sm" disabled={isVSubmitting}>{isVSubmitting ? "Generating..." : "Generate Pass OTP"}</Button>
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setAddPassOpen(false)} disabled={isVSubmitting}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={isVSubmitting} className="bg-primary text-primary-foreground">
+                  {isVSubmitting ? "Generating..." : "Generate Pass OTP"}
+                </Button>
               </DialogFooter>
             </form>
           )}
@@ -1300,21 +1467,24 @@ function VisitorPage() {
       <Dialog open={!!qrPass} onOpenChange={(o) => !o && setQrPass(null)}>
         <DialogContent className="max-w-sm text-center">
           <DialogHeader>
-            <DialogTitle className="font-serif text-lg">Visitor Gate Pass</DialogTitle>
+            <div className="mx-auto grid size-11 place-items-center rounded-2xl bg-primary/10 text-primary border border-primary/20 mb-1">
+              <QrCode className="size-6" />
+            </div>
+            <DialogTitle className="font-serif text-lg font-bold">Visitor Gate Pass</DialogTitle>
             <DialogDescription className="text-xs">Present this OTP at the gate terminal for verification.</DialogDescription>
           </DialogHeader>
           {qrPass && (
-            <div className="py-4 space-y-4">
-              <div className="mx-auto size-32 border-4 border-foreground/10 rounded-xl grid place-items-center bg-white p-2">
-                <QrCode className="size-24 text-foreground" />
+            <div className="py-3 space-y-3">
+              <div className="mx-auto size-32 border border-border/80 rounded-2xl grid place-items-center bg-white p-2 shadow-xs">
+                <QrCode className="size-24 text-slate-900" />
               </div>
 
               <div>
-                <div className="text-[11px] text-muted-foreground uppercase tracking-widest">Gate Pass Code</div>
-                <div className="font-mono text-3xl font-bold tracking-widest text-primary mt-1">{qrPass.passCode}</div>
+                <div className="text-[11px] text-muted-foreground uppercase tracking-widest font-medium">Gate Pass Code</div>
+                <div className="font-mono text-3xl font-bold tracking-widest text-primary mt-0.5">{qrPass.passCode}</div>
               </div>
 
-              <div className="rounded-lg bg-muted/40 p-3 text-xs space-y-1 text-left">
+              <div className="rounded-xl bg-muted/40 p-3 text-xs space-y-1 text-left border border-border/60">
                 <div>Visitor: <strong className="text-foreground">{qrPass.visitorName}</strong></div>
                 {qrPass.vehiclePlate && <div>Vehicle: <strong className="font-mono">{qrPass.vehiclePlate}</strong></div>}
                 {qrPass.unitNumber && <div>Unit: <strong className="text-foreground">{qrPass.unitNumber}</strong></div>}
@@ -1332,67 +1502,82 @@ function VisitorPage() {
       <Dialog open={addBlOpen} onOpenChange={setAddBlOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif text-lg text-rose-600">Blacklist Visitor or Vehicle</DialogTitle>
-            <DialogDescription className="text-xs">Bar a person or vehicle plate from entering society gates.</DialogDescription>
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 place-items-center rounded-xl bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-900/50 shrink-0">
+                <Ban className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="font-serif text-lg font-bold text-rose-600 dark:text-rose-400">Blacklist Visitor or Vehicle</DialogTitle>
+                <DialogDescription className="text-xs">Bar a person or vehicle plate from entering society gates.</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <form onSubmit={handleAddBlacklist} className="space-y-4">
+          <form onSubmit={handleAddBlacklist} className="space-y-4 pt-1">
             {blError && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{blError}</div>}
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Name *</Label>
+              <Label className="text-xs font-medium">Name *</Label>
               <Input placeholder="Full name of restricted person" className="h-9 text-xs" value={blName} onChange={(e) => setBlName(e.target.value)} />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Phone Number</Label>
+                <Label className="text-xs font-medium">Phone Number</Label>
                 <Input placeholder="+92 300 0000000" className="h-9 text-xs" value={blPhone} onChange={(e) => setBlPhone(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Vehicle Plate</Label>
+                <Label className="text-xs font-medium">Vehicle Plate</Label>
                 <Input placeholder="e.g. LZA-4471" className="h-9 text-xs font-mono uppercase" value={blPlate} onChange={(e) => setBlPlate(e.target.value)} />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Reason for Blacklisting *</Label>
+              <Label className="text-xs font-medium">Reason for Blacklisting *</Label>
               <Textarea placeholder="e.g. Unauthorized entry, security violation, unpaid damages..." className="text-xs min-h-[70px]" value={blReason} onChange={(e) => setBlReason(e.target.value)} />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="pt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setAddBlOpen(false)} disabled={isBlSubmitting}>Cancel</Button>
               <Button type="submit" variant="destructive" size="sm" disabled={isBlSubmitting}>{isBlSubmitting ? "Blacklisting..." : "Blacklist Person"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
       {/* Register / Edit Domestic Staff Modal */}
       <Dialog open={addStaffOpen} onOpenChange={setAddStaffOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-serif text-lg">
-              {editingStaffId ? "Edit Domestic Staff" : "Register Domestic Staff"}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Register recurring cooks, maids, or drivers with long-term gate authorization.
-            </DialogDescription>
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                <Users className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="font-serif text-lg font-bold">
+                  {editingStaffId ? "Edit Domestic Staff" : "Register Domestic Staff"}
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Register recurring cooks, maids, or drivers with long-term gate authorization.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <form onSubmit={handleSaveStaff} className="space-y-4">
+          <form onSubmit={handleSaveStaff} className="space-y-4 pt-1">
             {sError && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{sError}</div>}
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Full Name *</Label>
+              <Label className="text-xs font-medium">Full Name *</Label>
               <Input placeholder="Staff member name" className="h-9 text-xs" value={sName} onChange={(e) => setSName(e.target.value)} />
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Phone Number</Label>
+                <Label className="text-xs font-medium">Phone Number</Label>
                 <Input placeholder="+92 300 0000000" className="h-9 text-xs" value={sPhone} onChange={(e) => setSPhone(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Staff Type *</Label>
+                <Label className="text-xs font-medium">Staff Type *</Label>
                 <Select value={sStaffType} onValueChange={(v) => setSStaffType(v as any)}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>

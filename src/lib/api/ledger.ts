@@ -4,6 +4,7 @@ import * as crypto from "node:crypto";
 import { getDb } from "../db.server";
 import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, getTenantScoping } from "./auth-helper";
 import { requirePermission } from "./permissions";
+import { createNotification, createBulkNotifications, NOTIFICATION_TYPES } from "../services/notification-service";
 
 export const getLedgerFn = createServerFn({ method: "GET" })
   .validator(z.object({ unitId: z.string(), tenantId: z.string().optional() }))
@@ -145,6 +146,39 @@ export const generateBulkChargesFn = createServerFn({ method: "POST" })
       }
 
       await connection.commit();
+
+      // Dispatch bill notifications to affected residents in bulk
+      try {
+        const unitIds = units.map((u: any) => u.id);
+        const [resRows] = (await db.query(
+          `SELECT p.user_id, u.unit_number
+           FROM residents r
+           JOIN persons p ON p.id = r.person_id
+           JOIN units u ON u.id = r.unit_id
+           WHERE r.unit_id IN (?) AND r.is_current = TRUE AND r.tenant_id = ?`,
+          [unitIds, tenantId],
+        )) as any[];
+
+        if (resRows.length > 0) {
+          const notifs = resRows
+            .filter((r: any) => Boolean(r.user_id))
+            .map((r: any) => ({
+              userId: r.user_id,
+              tenantId,
+              type: NOTIFICATION_TYPES.BILL_GENERATED,
+              title: "New Bill Available",
+              message: `Your ${data.billingPeriod} maintenance bill of PKR ${data.amount.toLocaleString()} is now available.`,
+              data: { billingPeriod: data.billingPeriod, amount: data.amount, unitNumber: r.unit_number },
+            }));
+
+          createBulkNotifications(notifs).catch((err) =>
+            console.error("[LedgerNotification] Error in bulk notifications:", err),
+          );
+        }
+      } catch (notifErr) {
+        console.error("[LedgerNotification] Error preparing bulk bill notifications:", notifErr);
+      }
+
       return { count: units.length };
     } catch (err) {
       await connection.rollback();
@@ -215,6 +249,32 @@ export const createManualChargeFn = createServerFn({ method: "POST" })
       );
 
       await connection.commit();
+
+      // Notify resident of manual charge
+      try {
+        const [resRows] = (await db.query(
+          `SELECT p.user_id, u.unit_number
+           FROM residents r
+           JOIN persons p ON p.id = r.person_id
+           JOIN units u ON u.id = r.unit_id
+           WHERE r.unit_id = ? AND r.is_current = TRUE AND r.tenant_id = ?`,
+          [data.unitId, tenantId],
+        )) as any[];
+
+        if (resRows.length > 0 && resRows[0].user_id) {
+          createNotification({
+            userId: resRows[0].user_id,
+            tenantId,
+            type: NOTIFICATION_TYPES.BILL_GENERATED,
+            title: "New Charge Posted",
+            message: `A new charge of PKR ${data.amount.toLocaleString()} has been posted to your ledger (${data.description}).`,
+            data: { unitId: data.unitId, amount: data.amount, description: data.description },
+          }).catch((err) => console.error("[LedgerNotification] Error in manual charge notification:", err));
+        }
+      } catch (notifErr) {
+        console.error("[LedgerNotification] Error dispatching manual charge notification:", notifErr);
+      }
+
       return { id: ledgerId };
     } catch (err) {
       await connection.rollback();

@@ -22,6 +22,12 @@ import {
   DoorOpen,
   ChevronsUpDown,
   Check,
+  MapPin,
+  Mail,
+  Phone,
+  Home,
+  ShieldCheck,
+  User,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -336,35 +342,6 @@ function SocietiesAdmin() {
     <AppShell
       title="Societies"
       subtitle="Manage all societies on the platform"
-      actions={
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setSelectedAdminId("");
-              setAssignedTenantIds([]);
-              setAssignmentOpen(true);
-            }}
-            className="gap-1 h-9"
-          >
-            <Users className="size-4" />
-            Manage Assignments
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setForm(emptyForm);
-              setFormError(null);
-              setCreateOpen(true);
-            }}
-            className="gap-1 h-9 bg-primary text-primary-foreground hover:bg-primary/95"
-          >
-            <Plus className="size-4" />
-            Create Society
-          </Button>
-        </div>
-      }
     >
       {/* Success toast */}
       {successMsg && (
@@ -445,17 +422,51 @@ function SocietiesAdmin() {
           );
         })()}
 
-        {/* Section title & reload */}
-        <div className="flex items-center justify-between border-b pb-2">
-          <h2 className="font-serif text-lg font-bold">All Societies</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => refetch()}
-            aria-label="Refresh"
-          >
-            <RefreshCw className="size-4" />
-          </Button>
+        {/* Section title & actions toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-3">
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-serif text-lg font-bold tracking-tight">All Societies</h2>
+            <Badge variant="secondary" className="font-mono text-xs font-medium px-2 py-0.5">
+              {societies.length}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => refetch()}
+              aria-label="Refresh societies"
+              className="h-9 w-9 shrink-0"
+              title="Refresh list"
+            >
+              <RefreshCw className={cn("size-4", isLoading && "animate-spin")} />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSelectedAdminId("");
+                setAssignedTenantIds([]);
+                setAssignmentOpen(true);
+              }}
+              className="gap-1.5 h-9"
+            >
+              <Users className="size-4" />
+              Manage Assignments
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setForm(emptyForm);
+                setFormError(null);
+                setCreateOpen(true);
+              }}
+              className="gap-1.5 h-9 bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+            >
+              <Plus className="size-4" />
+              Create Society
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -818,68 +829,238 @@ function SocietiesAdmin() {
 
       {/* ── Society Detail Dialog ──────────────────────────────────────── */}
       <Dialog open={!!detailSocietyId} onOpenChange={(o) => !o && setDetailSocietyId(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-serif flex items-center gap-2">
-              <Building2 className="size-5" />
-              Society Details
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden border-border/80 shadow-2xl">
+          {/* Header */}
+          <div className="p-6 pb-4 border-b bg-muted/20">
+            <DialogHeader className="space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="grid size-12 place-items-center rounded-xl bg-primary/10 text-primary font-bold text-lg ring-1 ring-primary/20 shrink-0">
+                    {detailData?.name ? detailData.name.charAt(0).toUpperCase() : <Building2 className="size-6" />}
+                  </div>
+                  <div>
+                    <DialogTitle className="font-serif text-xl font-bold leading-tight text-foreground">
+                      {detailData ? detailData.name : "Society Details"}
+                    </DialogTitle>
+                    {detailData && (
+                      <div className="flex items-center gap-2 mt-1 flex-wrap text-xs text-muted-foreground">
+                        <code className="rounded bg-muted px-2 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+                          {detailData.code ?? "NO-CODE"}
+                        </code>
+                        <span>·</span>
+                        <span className="font-mono text-[11px] truncate max-w-[220px]">{detailData.slug}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {detailData && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge
+                      variant="outline"
+                      className="capitalize font-medium text-xs bg-background"
+                    >
+                      {detailData.plan || "Growth"} Plan
+                    </Badge>
+                    <Badge
+                      variant={detailData.is_active ? "default" : "secondary"}
+                      className={
+                        detailData.is_active
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200/60"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {detailData.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            </DialogHeader>
+          </div>
 
           {detailLoading ? (
-            <div className="flex h-32 items-center justify-center">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            <div className="flex h-64 items-center justify-center">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
             </div>
           ) : detailData ? (
-            <div className="space-y-4 text-sm">
-              <DetailRow label="Name" value={detailData.name} />
-              <DetailRow label="Code" value={detailData.code ?? "—"} mono />
-              <DetailRow label="Slug" value={detailData.slug} mono />
-              <DetailRow label="Address" value={detailData.address ?? "—"} />
-              <DetailRow label="Contact Email" value={detailData.contact_email ?? "—"} />
-              <DetailRow label="Contact Phone" value={detailData.contact_phone ?? "—"} />
-              <DetailRow
-                label="Status"
-                value={
-                  <Badge
-                    variant={detailData.is_active ? "default" : "secondary"}
-                    className={
-                      detailData.is_active
-                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                        : ""
-                    }
-                  >
-                    {detailData.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                }
-              />
-              <DetailRow label="Plan" value={detailData.plan} />
-              <DetailRow label="Total Units" value={String(detailData.unit_count)} />
-              <DetailRow label="Total Residents" value={String(detailData.resident_count)} />
-              <DetailRow label="Complaints Filed" value={String(detailData.complaint_count ?? 0)} />
-              <DetailRow label="Active Polls" value={String(detailData.poll_count ?? 0)} />
-              <DetailRow label="Scheduled Events" value={String(detailData.event_count ?? 0)} />
-              <DetailRow label="Visitor Passes Issued" value={String(detailData.visitor_count ?? 0)} />
-              <DetailRow label="Amenity Bookings" value={String(detailData.booking_count ?? 0)} />
-              <DetailRow label="Maintenance Jobs" value={String(detailData.maintenance_count ?? 0)} />
-              {detailData.admin && (
-                <>
-                  <div className="border-t pt-3 font-semibold text-muted-foreground text-xs uppercase tracking-widest">
-                    Society Admin
+            <div className="p-6 overflow-y-auto space-y-5">
+              {/* Section 1: Contact & Location Info */}
+              <div className="rounded-xl border bg-card/60 p-4 space-y-3">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Contact & Location
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2.5 text-muted-foreground">
+                    <MapPin className="size-4 text-primary shrink-0" />
+                    <span className="text-foreground font-medium text-xs truncate" title={detailData.address || "Not provided"}>
+                      {detailData.address || "No address provided"}
+                    </span>
                   </div>
-                  <DetailRow label="Name" value={detailData.admin.full_name ?? "—"} />
-                  <DetailRow label="Email" value={detailData.admin.email} />
-                  <DetailRow label="Phone" value={detailData.admin.phone ?? "—"} />
-                </>
-              )}
+                  <div className="flex items-center gap-2.5 text-muted-foreground">
+                    <Phone className="size-4 text-primary shrink-0" />
+                    <span className="text-foreground font-medium text-xs font-mono">
+                      {detailData.contact_phone ? (
+                        <a href={`tel:${detailData.contact_phone}`} className="hover:underline text-primary">
+                          {detailData.contact_phone}
+                        </a>
+                      ) : (
+                        "No phone provided"
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-muted-foreground col-span-1 sm:col-span-2">
+                    <Mail className="size-4 text-primary shrink-0" />
+                    <span className="text-foreground font-medium text-xs truncate" title={detailData.contact_email || "Not provided"}>
+                      {detailData.contact_email ? (
+                        <a href={`mailto:${detailData.contact_email}`} className="hover:underline text-primary">
+                          {detailData.contact_email}
+                        </a>
+                      ) : (
+                        "No email provided"
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Platform Statistics & Metrics */}
+              <div className="space-y-2.5">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Society Statistics & Activity
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="rounded-lg border bg-muted/20 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-[11px]">Total Units</span>
+                      <Home className="size-3.5 text-sky-500" />
+                    </div>
+                    <span className="text-xl font-bold font-serif text-foreground">{detailData.unit_count ?? 0}</span>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-[11px]">Residents</span>
+                      <Users className="size-3.5 text-emerald-500" />
+                    </div>
+                    <span className="text-xl font-bold font-serif text-foreground">{detailData.resident_count ?? 0}</span>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-[11px]">Complaints</span>
+                      <AlertTriangle className="size-3.5 text-amber-500" />
+                    </div>
+                    <span className="text-xl font-bold font-serif text-foreground">{detailData.complaint_count ?? 0}</span>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-[11px]">Maint. Jobs</span>
+                      <Wrench className="size-3.5 text-purple-500" />
+                    </div>
+                    <span className="text-xl font-bold font-serif text-foreground">{detailData.maintenance_count ?? 0}</span>
+                  </div>
+
+                  <div className="rounded-lg border bg-muted/20 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-[11px]">Active Polls</span>
+                      <Vote className="size-3.5 text-indigo-500" />
+                    </div>
+                    <span className="text-xl font-bold font-serif text-foreground">{detailData.poll_count ?? 0}</span>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-[11px]">Events</span>
+                      <CalendarDays className="size-3.5 text-rose-500" />
+                    </div>
+                    <span className="text-xl font-bold font-serif text-foreground">{detailData.event_count ?? 0}</span>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-[11px]">Visitors</span>
+                      <DoorOpen className="size-3.5 text-teal-500" />
+                    </div>
+                    <span className="text-xl font-bold font-serif text-foreground">{detailData.visitor_count ?? 0}</span>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3 flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-muted-foreground mb-1">
+                      <span className="text-[11px]">Bookings</span>
+                      <Dumbbell className="size-3.5 text-violet-500" />
+                    </div>
+                    <span className="text-xl font-bold font-serif text-foreground">{detailData.booking_count ?? 0}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Society Admin Card */}
+              <div className="rounded-xl border bg-card/60 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Assigned Society Admin
+                  </div>
+                  {detailData.admin && (
+                    <Badge variant="outline" className="text-[10px] gap-1 py-0 bg-primary/5 text-primary border-primary/20">
+                      <ShieldCheck className="size-3" />
+                      Primary Admin
+                    </Badge>
+                  )}
+                </div>
+
+                {detailData.admin ? (
+                  <div className="flex items-start gap-3.5 pt-1">
+                    <div className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
+                      {detailData.admin.full_name
+                        ? detailData.admin.full_name.charAt(0).toUpperCase()
+                        : detailData.admin.email.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="font-semibold text-sm leading-tight text-foreground">
+                        {detailData.admin.full_name || "Admin User"}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground pt-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Mail className="size-3.5 text-muted-foreground shrink-0" />
+                          <span className="truncate text-foreground font-mono text-[11px]">{detailData.admin.email}</span>
+                        </div>
+                        {detailData.admin.phone && (
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="size-3.5 text-muted-foreground shrink-0" />
+                            <span className="text-foreground font-mono text-[11px]">{detailData.admin.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground italic py-1">
+                    <User className="size-4 opacity-50" />
+                    No society admin assigned to this society yet.
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailSocietyId(null)}>
-              Close
-            </Button>
-          </DialogFooter>
+          {/* Footer */}
+          <div className="p-4 border-t bg-muted/20 flex items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground">
+              {detailData?.created_at ? `Created ${safeFormatDate(detailData.created_at)}` : ""}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDetailSocietyId(null)}>
+                Close
+              </Button>
+              {detailData && (
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+                  onClick={() => {
+                    handleOpenSociety(detailData.id);
+                  }}
+                >
+                  <Building2 className="size-3.5" />
+                  Open Society
+                </Button>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       {/* ── Manage Assignments Dialog ───────────────────────────────────── */}

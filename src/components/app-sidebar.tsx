@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Building2, ChevronDown, Search, FileText } from "lucide-react";
+import { Building2, ChevronDown, Search, X } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 
 import {
@@ -21,7 +21,7 @@ import { CATEGORY_ORDER, MODULES, PRIMARY_NAV } from "@/lib/modules";
 import { getFormsForModule } from "@/lib/forms-registry";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/hooks/use-permissions";
-import { canAccessModule, roleLabel } from "@/lib/role-access";
+import { roleLabel } from "@/lib/role-access";
 import { cn } from "@/lib/utils";
 
 import { useModules } from "@/contexts/modules-context";
@@ -44,7 +44,7 @@ export function AppSidebar() {
   const isSuperAdmin = roles.includes("super_admin");
 
   // Admin-only primary nav items
-  const ADMIN_ONLY_NAV = ["/analytics", "/audit-log", "/settings", "/forms", "/societies"];
+  const ADMIN_ONLY_NAV = ["/analytics", "/audit-log", "/societies"];
 
   const visiblePrimaryNav = useMemo(
     () =>
@@ -86,8 +86,6 @@ export function AppSidebar() {
   }, [filtered]);
 
   // Auto-expand category containing active route.
-  // Depends only on pathname/fullPath — NOT byCategory — so it never
-  // triggers a render cycle even if byCategory reference changes.
   useEffect(() => {
     for (const m of MODULES) {
       const href = m.route ?? `/modules/${m.key}`;
@@ -104,88 +102,96 @@ export function AppSidebar() {
   }, [pathname, fullPath]);
 
   return (
-    <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="border-b">
-        <div className="flex items-center gap-2 px-2 py-2">
-          <div className="grid size-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground font-bold shadow-sm">
+    <Sidebar collapsible="icon" className="border-r border-border/80 bg-sidebar">
+      {/* Sidebar Header with App Brand */}
+      <SidebarHeader className="border-b border-border/70 p-3 space-y-3">
+        <div className="flex items-center gap-2.5 px-1 py-1">
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground font-bold shadow-xs">
             <Building2 className="size-5" />
           </div>
           {!collapsed && (
-            <div className="min-w-0">
-              <div className="font-serif text-base font-bold leading-tight tracking-tight">HousingOS</div>
-              <div className="truncate text-[11px] font-medium tracking-wider text-muted-foreground">
-                {profile?.society_name ?? "Askari Housing"} · {roleLabel(primaryRole)}
+            <div className="min-w-0 flex-1">
+              <div className="font-serif text-base font-bold leading-tight tracking-tight text-foreground flex items-center gap-1.5">
+                HousingOS
+              </div>
+              <div className="truncate text-[11px] font-medium text-muted-foreground mt-0.5">
+                {profile?.society_name ?? "Askari Housing"} · <span className="text-primary font-semibold">{roleLabel(primaryRole)}</span>
               </div>
             </div>
           )}
         </div>
+
         {!collapsed && (
-          <div className="px-2 pb-2 space-y-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search modules…"
-                className="h-8 pl-8 text-xs bg-muted/40"
-              />
-            </div>
-            {/* <a
-              href="/user-guide.html"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-between gap-1.5 px-2.5 py-1.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 text-[11px] font-semibold transition-colors border border-amber-500/20"
-            >
-              <span className="flex items-center gap-1.5">
-                <FileText className="size-3.5 text-amber-600 dark:text-amber-400" />
-                User Operating Guide
-              </span>
-              <span className="text-[10px] uppercase tracking-wider font-mono">HTML</span>
-            </a> */}
+          <div className="relative px-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search modules…"
+              className="h-8 pl-8 pr-7 text-xs bg-muted/40 border-border/70 rounded-lg focus-visible:ring-1 focus-visible:ring-primary"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X className="size-3" />
+              </button>
+            )}
           </div>
         )}
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+      {/* Main Sidebar Menu Items */}
+      <SidebarContent className="px-2 py-3 space-y-4">
+        {/* Workspace Primary Nav */}
+        <SidebarGroup className="p-0">
+          <SidebarGroupLabel className="px-2 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
             Workspace
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {visiblePrimaryNav.map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.to}
-                    className={cn(
-                      "transition-colors",
-                      pathname === item.to && "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none"
-                    )}
-                  >
-                    <Link to={item.to} className="flex items-center gap-2.5">
-                      <item.icon className="size-4 shrink-0" />
-                      {!collapsed && <span>{item.label}</span>}
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+            <SidebarMenu className="space-y-0.5">
+              {visiblePrimaryNav.map((item) => {
+                const isActive = pathname === item.to;
+                return (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.label}
+                      className={cn(
+                        "h-8.5 px-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer",
+                        isActive
+                          ? "bg-primary/10 text-primary font-bold border-l-[3px] border-primary rounded-l-none shadow-2xs"
+                          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                      )}
+                    >
+                      <Link to={item.to} className="flex items-center gap-2.5">
+                        <item.icon className={cn("size-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
+                        {!collapsed && <span>{item.label}</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Categories & Submodules */}
         {CATEGORY_ORDER.map((cat) => {
           const items = byCategory.get(cat);
           if (!items || items.length === 0) return null;
           const open = openCats[cat] ?? true;
           return (
-            <SidebarGroup key={cat} className="py-1">
+            <SidebarGroup key={cat} className="p-0">
               <button
                 type="button"
                 onClick={() => setOpenCats((s) => ({ ...s, [cat]: !s[cat] }))}
-                className="flex w-full items-center justify-between px-2 py-1 hover:bg-muted/40 rounded transition-colors"
+                className="flex w-full items-center justify-between px-2 py-1 hover:bg-muted/50 rounded-lg transition-colors cursor-pointer group"
               >
-                <SidebarGroupLabel className="pointer-events-none flex-1 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                <SidebarGroupLabel className="pointer-events-none p-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 group-hover:text-foreground">
                   {cat}
                 </SidebarGroupLabel>
                 {!collapsed && (
@@ -198,11 +204,13 @@ export function AppSidebar() {
                 )}
               </button>
               {open && (
-                <SidebarGroupContent>
-                  <SidebarMenu>
+                <SidebarGroupContent className="pt-1">
+                  <SidebarMenu className="space-y-0.5">
                     {items.map((m) => {
                       const forms = getFormsForModule(m.key);
+                      const formCount = forms.length;
                       const href = m.route ?? `/modules/${m.key}`;
+                      const isAiModule = m.key.startsWith("ai_");
                       const active = href.includes("?")
                         ? fullPath === href || (href === "/security?tab=gates" && pathname === "/security" && !location.searchStr)
                         : (pathname === href || (href !== "/" && pathname.startsWith(href))) ||
@@ -215,8 +223,10 @@ export function AppSidebar() {
                             isActive={active}
                             tooltip={m.name}
                             className={cn(
-                              "transition-colors",
-                              active && "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none"
+                              "h-8.5 px-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer group",
+                              active
+                                ? "bg-primary/10 text-primary font-bold border-l-[3px] border-primary rounded-l-none shadow-2xs"
+                                : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                             )}
                           >
                             <Link to={href} className="flex items-center gap-2.5">
@@ -224,14 +234,25 @@ export function AppSidebar() {
                               {!collapsed && (
                                 <>
                                   <span className="flex-1 truncate">{m.name}</span>
-                                  {forms.length > 0 && (
+                                  {isAiModule ? (
                                     <Badge
-                                      variant="secondary"
-                                      className="h-4 px-1.5 text-[9px] font-medium"
+                                      variant="outline"
+                                      className="ml-auto h-4 px-1.5 text-[8px] font-bold font-mono uppercase bg-primary/10 text-primary border-primary/25 rounded-md"
                                     >
-                                      {forms.length}
+                                      AI
                                     </Badge>
-                                  )}
+                                  ) : formCount > 0 ? (
+                                    <span
+                                      className={cn(
+                                        "ml-auto inline-flex items-center justify-center h-4 min-w-4 px-1.5 text-[9px] font-mono font-medium rounded-full transition-colors shrink-0",
+                                        active
+                                          ? "bg-primary/20 text-primary font-bold"
+                                          : "bg-muted text-muted-foreground group-hover:bg-muted-foreground/15"
+                                      )}
+                                    >
+                                      {formCount}
+                                    </span>
+                                  ) : null}
                                 </>
                               )}
                             </Link>
@@ -247,11 +268,12 @@ export function AppSidebar() {
         })}
       </SidebarContent>
 
+      {/* Sidebar Footer with User Profile */}
       {!collapsed && (
-        <SidebarFooter className="border-t bg-muted/20">
-          <div className="px-2 py-2">
-            <div className="flex items-center gap-2.5">
-              <div className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20">
+        <SidebarFooter className="border-t border-border/70 p-3 bg-muted/20">
+          <div className="flex items-center gap-2.5 px-1">
+            <div className="relative shrink-0">
+              <div className="grid size-8 place-items-center rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20 shadow-2xs">
                 {(profile?.full_name ?? "?")
                   .split(" ")
                   .map((s) => s[0])
@@ -259,9 +281,14 @@ export function AppSidebar() {
                   .join("")
                   .toUpperCase()}
               </div>
-              <div className="min-w-0 text-xs">
-                <div className="truncate font-semibold text-foreground">{profile?.full_name ?? "Account"}</div>
-                <div className="truncate text-muted-foreground text-[11px]">{roleLabel(primaryRole)}</div>
+              <span className="absolute bottom-0 right-0 size-2 rounded-full bg-emerald-500 ring-2 ring-background" />
+            </div>
+            <div className="min-w-0 flex-1 text-xs">
+              <div className="truncate font-semibold text-foreground leading-tight">
+                {profile?.full_name ?? "Account User"}
+              </div>
+              <div className="truncate text-muted-foreground text-[11px] mt-0.5">
+                {roleLabel(primaryRole)}
               </div>
             </div>
           </div>

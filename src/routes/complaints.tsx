@@ -36,7 +36,19 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { AlertCircle, ClipboardList, Plus, UserCheck } from "lucide-react";
+import {
+  AlertCircle,
+  ClipboardList,
+  Plus,
+  UserCheck,
+  RefreshCw,
+  Search,
+  Filter,
+  CheckCircle2,
+  Clock,
+  Wrench,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/complaints")({
   head: () => ({
@@ -64,6 +76,51 @@ const COLUMNS: KanbanColumn[] = [
   { id: "closed", title: "Closed", tone: "neutral" },
 ];
 
+function KpiCard({
+  label,
+  value,
+  subtitle,
+  icon: Icon,
+  tone = "default",
+  loading = false,
+}: {
+  label: string;
+  value: string | number;
+  subtitle?: string;
+  icon: React.ElementType;
+  tone?: "default" | "success" | "destructive" | "warning" | "info";
+  loading?: boolean;
+}) {
+  const toneClasses = {
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+    destructive: "text-rose-600 bg-rose-500/10 border-rose-500/20",
+    warning: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    info: "text-sky-600 bg-sky-500/10 border-sky-500/20",
+  }[tone];
+
+  return (
+    <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow bg-card">
+      <CardContent className="p-5 flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          {loading ? (
+            <div className="mt-1 h-7 w-28 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <>
+              <p className="font-serif text-2xl font-bold tracking-tight text-foreground">{value}</p>
+              {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+            </>
+          )}
+        </div>
+        <div className={cn("grid size-11 place-items-center rounded-xl border shrink-0", toneClasses)}>
+          <Icon className="size-5" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ComplaintsPage() {
   const { user, roles } = useAuth();
   const isAdmin =
@@ -74,6 +131,11 @@ function ComplaintsPage() {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+
+  // Filters state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
 
   const isAssignedStaff = selectedTicket && selectedTicket.assigned_to === user?.id;
 
@@ -88,7 +150,12 @@ function ComplaintsPage() {
   const [assigneeId, setAssigneeId] = useState("");
   const [notes, setNotes] = useState("");
 
-  const { data: complaints = [], isLoading } = useQuery({
+  const {
+    data: complaints = [],
+    isLoading,
+    isRefetching,
+    refetch,
+  } = useQuery({
     queryKey: ["complaints"],
     queryFn: async () => getComplaintsFn(),
   });
@@ -177,20 +244,51 @@ function ComplaintsPage() {
     });
   };
 
-  const kanbanItems: KanbanItem[] = complaints.map((c: any) => ({
-    id: c.id,
-    title: c.title,
-    description: c.description,
-    meta: `${c.full_path || "Global"} · ${format(new Date(c.created_at), "dd MMM")}`,
-    badge: c.priority,
-    badgeTone:
-      c.priority === "critical" ? "destructive" : c.priority === "high" ? "default" : "outline",
-  }));
+  // Filter complaints
+  const filteredComplaints = useMemo(() => {
+    return complaints.filter((c: any) => {
+      if (categoryFilter !== "all" && c.category !== categoryFilter) return false;
+      if (priorityFilter !== "all" && c.priority !== priorityFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = c.title?.toLowerCase().includes(q);
+        const matchesDesc = c.description?.toLowerCase().includes(q);
+        const matchesUnit = (c.full_path || "").toLowerCase().includes(q);
+        const matchesSubmitter = (c.submitter_name || "").toLowerCase().includes(q);
+        if (!matchesTitle && !matchesDesc && !matchesUnit && !matchesSubmitter) return false;
+      }
+      return true;
+    });
+  }, [complaints, categoryFilter, priorityFilter, searchQuery]);
 
-  const itemColumnMap = complaints.reduce((acc: any, c: any) => {
-    acc[c.id] = c.status;
-    return acc;
-  }, {});
+  // KPI Metrics
+  const totalCount = complaints.length;
+  const openCount = complaints.filter((c: any) => c.status === "open").length;
+  const inProgressCount = complaints.filter(
+    (c: any) => c.status === "in_progress" || c.status === "assigned",
+  ).length;
+  const resolvedCount = complaints.filter(
+    (c: any) => c.status === "resolved" || c.status === "closed",
+  ).length;
+
+  const kanbanItems: KanbanItem[] = useMemo(() => {
+    return filteredComplaints.map((c: any) => ({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      meta: `${c.full_path || "Global"} · ${format(new Date(c.created_at), "dd MMM")}`,
+      badge: c.priority,
+      badgeTone:
+        c.priority === "critical" ? "destructive" : c.priority === "high" ? "default" : "outline",
+    }));
+  }, [filteredComplaints]);
+
+  const itemColumnMap = useMemo(() => {
+    return filteredComplaints.reduce((acc: any, c: any) => {
+      acc[c.id] = c.status;
+      return acc;
+    }, {});
+  }, [filteredComplaints]);
 
   const handleItemClick = (item: KanbanItem) => {
     const rawTicket = complaints.find((c: any) => c.id === item.id);
@@ -203,27 +301,202 @@ function ComplaintsPage() {
     <AppShell
       title="Complaint Management"
       subtitle="Track resident tickets, assign technicians, and monitor SLA breach windows"
-      actions={
-        <PermissionGate moduleKey="complaints" action="create" fallback={null}>
-          <Button onClick={() => setSubmitOpen(true)} className="gap-1.5 size-sm">
-            <Plus className="size-4" /> Raise Complaint
-          </Button>
-        </PermissionGate>
-      }
     >
-      <div className="mx-auto w-full max-w-[95rem] px-4 py-6 sm:px-8 sm:py-10">
-        {isLoading ? (
-          <div className="flex justify-center py-20">
-            <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="mx-auto w-full max-w-[95rem] space-y-6 px-4 py-6 sm:px-8 sm:py-8">
+        {/* Page Header & Action Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+              <ClipboardList className="size-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground">
+                  Complaint Management
+                </h1>
+                <Badge variant="secondary" className="font-mono text-xs font-normal">
+                  {complaints.length} tickets
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Track resident tickets, assign technicians, and monitor SLA breach windows
+              </p>
+            </div>
           </div>
-        ) : (
-          <KanbanBoard
-            columns={COLUMNS}
-            items={kanbanItems}
-            itemColumnMap={itemColumnMap}
-            onItemClick={handleItemClick}
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs bg-background"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              <RefreshCw className={cn("size-3.5", isRefetching && "animate-spin")} />
+              <span>Refresh</span>
+            </Button>
+            <PermissionGate moduleKey="complaints" action="create" fallback={null}>
+              <Button
+                size="sm"
+                onClick={() => setSubmitOpen(true)}
+                className="gap-1.5 h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+              >
+                <Plus className="size-4" />
+                <span>Raise Complaint</span>
+              </Button>
+            </PermissionGate>
+          </div>
+        </div>
+
+        {/* KPI Cards */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <KpiCard
+            label="Total Complaints"
+            value={totalCount}
+            subtitle="All logged tickets"
+            icon={ClipboardList}
+            tone="info"
+            loading={isLoading}
           />
-        )}
+          <KpiCard
+            label="Open / Pending"
+            value={openCount}
+            subtitle="Awaiting triage & assignment"
+            icon={AlertCircle}
+            tone="destructive"
+            loading={isLoading}
+          />
+          <KpiCard
+            label="In Progress / Assigned"
+            value={inProgressCount}
+            subtitle="Work actively underway"
+            icon={Clock}
+            tone="warning"
+            loading={isLoading}
+          />
+          <KpiCard
+            label="Resolved / Closed"
+            value={resolvedCount}
+            subtitle="Completed & verified"
+            icon={CheckCircle2}
+            tone="success"
+            loading={isLoading}
+          />
+        </section>
+
+        {/* Filters & Search */}
+        <Card className="border-border/70 shadow-sm p-4 bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Search */}
+              <div className="relative w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search tickets, units, residents..."
+                  className="h-9 pl-9 text-xs bg-background"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              {/* Priority Filter */}
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                <SelectTrigger className="h-9 w-40 text-xs bg-background">
+                  <Filter className="mr-1.5 size-3.5 text-muted-foreground" />
+                  <SelectValue placeholder="All Priorities" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">
+                    All Priorities
+                  </SelectItem>
+                  <SelectItem value="critical" className="text-xs">
+                    Critical
+                  </SelectItem>
+                  <SelectItem value="high" className="text-xs">
+                    High
+                  </SelectItem>
+                  <SelectItem value="medium" className="text-xs">
+                    Medium
+                  </SelectItem>
+                  <SelectItem value="low" className="text-xs">
+                    Low
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Category Filter */}
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="h-9 w-44 text-xs bg-background">
+                  <Wrench className="mr-1.5 size-3.5 text-muted-foreground" />
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">
+                    All Categories
+                  </SelectItem>
+                  <SelectItem value="electrical" className="text-xs">
+                    Electrical
+                  </SelectItem>
+                  <SelectItem value="plumbing" className="text-xs">
+                    Plumbing
+                  </SelectItem>
+                  <SelectItem value="security" className="text-xs">
+                    Security
+                  </SelectItem>
+                  <SelectItem value="cleaning" className="text-xs">
+                    Cleaning
+                  </SelectItem>
+                  <SelectItem value="lift" className="text-xs">
+                    Elevator / Lift
+                  </SelectItem>
+                  <SelectItem value="water" className="text-xs">
+                    Water Supply
+                  </SelectItem>
+                  <SelectItem value="civil" className="text-xs">
+                    Civil / Structural
+                  </SelectItem>
+                  <SelectItem value="hvac" className="text-xs">
+                    HVAC
+                  </SelectItem>
+                  <SelectItem value="other" className="text-xs">
+                    Other
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {(searchQuery || categoryFilter !== "all" || priorityFilter !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setSearchQuery("");
+                  setCategoryFilter("all");
+                  setPriorityFilter("all");
+                }}
+              >
+                Reset Filters
+              </Button>
+            )}
+          </div>
+        </Card>
+
+        {/* Kanban Board */}
+        <div>
+          {isLoading ? (
+            <div className="flex justify-center py-20">
+              <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+            </div>
+          ) : (
+            <KanbanBoard
+              columns={COLUMNS}
+              items={kanbanItems}
+              itemColumnMap={itemColumnMap}
+              onItemClick={handleItemClick}
+            />
+          )}
+        </div>
       </div>
 
       {/* Submit Ticket Dialog */}

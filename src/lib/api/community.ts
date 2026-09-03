@@ -99,6 +99,7 @@ export interface ForumThread {
   body: string;
   photo_url?: string;
   allow_comments: boolean;
+  reply_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -120,12 +121,13 @@ export const getThreadsFn = createServerFn({ method: "GET" })
     const db = getDb();
     try {
       const res = await db.query(
-        `SELECT t.*, p.full_name as author_name 
+        `SELECT t.*, p.full_name as author_name,
+                (SELECT COUNT(*) FROM forum_replies r WHERE r.thread_id = t.id) as reply_count
            FROM forum_threads t
            LEFT JOIN profiles p ON t.author_id = p.id
            WHERE ${sqlFilter}
            ORDER BY t.created_at DESC
-           LIMIT 50`,
+           LIMIT 60`,
         sqlParams,
       );
       const [rows] = res as unknown as [ForumThread[], unknown];

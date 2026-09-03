@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Boxes,
   Plus,
@@ -47,6 +47,7 @@ import {
   recordStockMovementFn,
   type InventoryItem,
 } from "@/lib/api/inventory";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/inventory")({
   head: () => ({
@@ -87,6 +88,18 @@ function InventoryRoute() {
   );
 }
 
+function getPageNumbers(current: number, total: number): (number | "…")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | "…")[] = [1];
+  if (current > 3) pages.push("…");
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (current < total - 2) pages.push("…");
+  pages.push(total);
+  return pages;
+}
+
 function KpiCard({
   label,
   value,
@@ -101,27 +114,28 @@ function KpiCard({
   loading?: boolean;
 }) {
   const toneClass = {
-    default: "text-primary bg-primary/10",
-    success: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-    destructive: "text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-    warning: "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
-    info: "text-blue-600 bg-blue-50 dark:bg-blue-950/30",
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+    destructive: "text-rose-600 bg-rose-500/10 border-rose-500/20",
+    warning: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    info: "text-sky-600 bg-sky-500/10 border-sky-500/20",
   }[tone];
+
   return (
-    <Card className="border-border/70 shadow-soft">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-            {loading ? (
-              <div className="mt-2 h-7 w-28 animate-pulse rounded-md bg-muted" />
-            ) : (
-              <p className="mt-1 font-serif text-2xl font-bold tracking-tight">{value}</p>
-            )}
-          </div>
-          <div className={`rounded-lg p-2.5 ${toneClass}`}>
-            <Icon className="size-5" />
-          </div>
+    <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden">
+      <CardContent className="p-4 sm:p-5 flex items-center justify-between gap-3">
+        <div className="space-y-1 min-w-0 flex-1">
+          <p className="text-xs font-medium text-muted-foreground truncate" title={label}>{label}</p>
+          {loading ? (
+            <div className="mt-1 h-7 w-24 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <p className="font-serif text-lg sm:text-xl lg:text-[1.35rem] font-bold tracking-tight text-foreground truncate" title={value}>
+              {value}
+            </p>
+          )}
+        </div>
+        <div className={cn("grid size-10 sm:size-11 place-items-center rounded-xl border shrink-0", toneClass)}>
+          <Icon className="size-4 sm:size-5" />
         </div>
       </CardContent>
     </Card>
@@ -139,6 +153,14 @@ function InventoryPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 8;
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, categoryFilter]);
 
   // Add Item modal state
   const [addOpen, setAddOpen] = useState(false);
@@ -210,7 +232,7 @@ function InventoryPage() {
     if (!movItem) return;
     setMovError(null);
     const qty = Number(movQty);
-    if (isNaN(qty) || qty <= 0) return setMovError("Quantity must be greater than zero");
+    if (isNaN(qty) || qty <= 0) return setMovError("Quantity must be greater than 0");
 
     setIsMovSubmitting(true);
     try {
@@ -235,47 +257,65 @@ function InventoryPage() {
 
   const summary = data?.summary;
   const items = data?.items ?? [];
-  const movements = data?.recentMovements ?? [];
+  const movements = data?.movements ?? [];
+
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil(items.length / itemsPerPage));
+  const paginatedItems = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return items.slice(start, start + itemsPerPage);
+  }, [items, page, itemsPerPage]);
 
   return (
     <AppShell
       title="Inventory"
       subtitle="Spare parts, materials, and stock management"
-      actions={
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setAddOpen(true)}>
-              <Plus className="size-3.5" /> Add Item
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-      }
     >
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
-        {/* Page header */}
-        <header className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-md bg-surface border border-border/60">
-            <Boxes className="size-5 text-primary" />
-          </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Operations · Stock
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-8 sm:py-8">
+        {/* Page Header & Action Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+              <Boxes className="size-5" />
             </div>
-            <h1 className="font-serif text-2xl font-bold tracking-tight sm:text-3xl">
-              Spare Parts & Inventory
-            </h1>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground">
+                  Spare Parts & Inventory
+                </h1>
+                <Badge variant="secondary" className="font-mono text-xs font-normal">
+                  {items.length} items
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Spare parts, materials, and stock management for society operations
+              </p>
+            </div>
           </div>
-        </header>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs bg-background"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              <RefreshCw className={cn("size-3.5", isRefetching && "animate-spin")} />
+              <span>Refresh</span>
+            </Button>
+            {isAdmin && (
+              <Button
+                size="sm"
+                className="gap-1.5 h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus className="size-4" />
+                <span>Add Item</span>
+              </Button>
+            )}
+          </div>
+        </div>
 
         {/* Error banner */}
         {isError && (
@@ -290,7 +330,7 @@ function InventoryPage() {
         )}
 
         {/* KPI cards */}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <KpiCard label="Total Items" value={String(summary?.totalItems ?? 0)} icon={Package} loading={isLoading} />
           <KpiCard label="Total Units in Stock" value={String(summary?.totalUnits ?? 0)} icon={Boxes} tone="info" loading={isLoading} />
           <KpiCard label="Low Stock Items" value={String(summary?.lowStockCount ?? 0)} icon={AlertTriangle} tone={(summary?.lowStockCount ?? 0) > 0 ? "warning" : "default"} loading={isLoading} />
@@ -299,15 +339,20 @@ function InventoryPage() {
         </section>
 
         {/* Filters */}
-        <Card className="border-border/70 shadow-soft p-4">
+        <Card className="border-border/70 shadow-sm p-4 bg-card">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search name, SKU, location..." className="h-9 pl-9 text-xs" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search name, SKU, location..."
+                className="h-9 pl-9 text-xs bg-background"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
 
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-9 w-40 text-xs">
+              <SelectTrigger className="h-9 w-40 text-xs bg-background">
                 <Filter className="mr-1.5 size-3.5 text-muted-foreground" />
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
@@ -320,7 +365,7 @@ function InventoryPage() {
             </Select>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 w-40 text-xs">
+              <SelectTrigger className="h-9 w-40 text-xs bg-background">
                 <Sliders className="mr-1.5 size-3.5 text-muted-foreground" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -335,10 +380,17 @@ function InventoryPage() {
         </Card>
 
         {/* Items Table */}
-        <Card className="border-border/70 shadow-soft">
-          <CardHeader className="pb-3">
-            <CardTitle className="font-serif text-base font-bold">Stock Items</CardTitle>
-            <CardDescription className="text-[11px]">Current stock levels, costs and reorder thresholds</CardDescription>
+        <Card className="border-border/70 shadow-sm bg-card overflow-hidden">
+          <CardHeader className="p-5 pb-3 border-b bg-muted/15">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="font-serif text-base font-bold">Stock Items</CardTitle>
+                <CardDescription className="text-xs">Current stock levels, costs and reorder thresholds</CardDescription>
+              </div>
+              <Badge variant="secondary" className="font-mono text-xs">
+                {items.length} Total
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
@@ -350,69 +402,123 @@ function InventoryPage() {
             ) : !items.length ? (
               <div className="flex flex-col items-center justify-center py-14 text-muted-foreground">
                 <Package className="size-8 opacity-40 mb-2" />
-                <p className="text-sm">No inventory items found</p>
+                <p className="text-sm font-medium">No inventory items found</p>
                 {isAdmin && (
-                  <p className="text-[11px] opacity-60">Click "Add Item" to create your first inventory item</p>
+                  <p className="text-xs text-muted-foreground">Click "Add Item" to create your first inventory item</p>
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-muted/40 uppercase tracking-wider text-muted-foreground">
-                    <tr>
-                      <th className="px-4 py-3">Item / SKU</th>
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3 text-right">Qty</th>
-                      <th className="px-4 py-3 text-right">Reorder At</th>
-                      <th className="px-4 py-3 text-right">Unit Cost</th>
-                      <th className="px-4 py-3 text-right">Stock Value</th>
-                      <th className="px-4 py-3">Location</th>
-                      <th className="px-4 py-3">Status</th>
-                      {isAdmin && <th className="px-4 py-3 text-right">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {items.map((item) => (
-                      <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-[10px] font-mono text-muted-foreground">{item.sku}</div>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{item.category}</td>
-                        <td className="px-4 py-3 text-right font-bold">
-                          {item.quantity} {item.unitOfMeasure}
-                        </td>
-                        <td className="px-4 py-3 text-right text-muted-foreground">{item.reorderLevel}</td>
-                        <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(item.unitCost)}</td>
-                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.stockValue)}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{item.location ?? "—"}</td>
-                        <td className="px-4 py-3">
-                          {item.status === "in_stock" && (
-                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-transparent">In Stock</Badge>
-                          )}
-                          {item.status === "low_stock" && (
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-transparent">Low Stock</Badge>
-                          )}
-                          {item.status === "out_of_stock" && (
-                            <Badge variant="outline" className="bg-rose-500/10 text-rose-600 border-transparent">Out of Stock</Badge>
-                          )}
-                        </td>
-                        {isAdmin && (
-                          <td className="px-4 py-3 text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-[11px] gap-1"
-                              onClick={() => { setMovItem(item); setMovType("in"); }}
-                            >
-                              <Sliders className="size-3" /> Stock Move
-                            </Button>
-                          </td>
-                        )}
+              <div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-muted/40 uppercase tracking-wider text-muted-foreground font-semibold">
+                      <tr>
+                        <th className="px-4 py-3">Item / SKU</th>
+                        <th className="px-4 py-3">Category</th>
+                        <th className="px-4 py-3 text-right">Qty</th>
+                        <th className="px-4 py-3 text-right">Reorder At</th>
+                        <th className="px-4 py-3 text-right">Unit Cost</th>
+                        <th className="px-4 py-3 text-right">Stock Value</th>
+                        <th className="px-4 py-3">Location</th>
+                        <th className="px-4 py-3">Status</th>
+                        {isAdmin && <th className="px-4 py-3 text-right">Actions</th>}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {paginatedItems.map((item) => (
+                        <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="font-medium">{item.name}</div>
+                            <div className="text-[10px] font-mono text-muted-foreground">{item.sku}</div>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{item.category}</td>
+                          <td className="px-4 py-3 text-right font-bold">
+                            {item.quantity} {item.unitOfMeasure}
+                          </td>
+                          <td className="px-4 py-3 text-right text-muted-foreground">{item.reorderLevel}</td>
+                          <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(item.unitCost)}</td>
+                          <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.stockValue)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{item.location ?? "—"}</td>
+                          <td className="px-4 py-3">
+                            {item.status === "in_stock" && (
+                              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-transparent">In Stock</Badge>
+                            )}
+                            {item.status === "low_stock" && (
+                              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-transparent">Low Stock</Badge>
+                            )}
+                            {item.status === "out_of_stock" && (
+                              <Badge variant="outline" className="bg-rose-500/10 text-rose-600 border-transparent">Out of Stock</Badge>
+                            )}
+                          </td>
+                          {isAdmin && (
+                            <td className="px-4 py-3 text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-[11px] gap-1 bg-background shadow-xs hover:bg-muted"
+                                onClick={() => { setMovItem(item); setMovType("in"); }}
+                              >
+                                <Sliders className="size-3" /> Stock Move
+                              </Button>
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination Footer */}
+                {totalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t p-4 bg-muted/10">
+                    <span className="text-xs text-muted-foreground">
+                      Showing {(page - 1) * itemsPerPage + 1} &ndash;{" "}
+                      {Math.min(page * itemsPerPage, items.length)} of {items.length} items
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="h-8 px-2.5 text-xs bg-background"
+                      >
+                        &larr; Prev
+                      </Button>
+                      {getPageNumbers(page, totalPages).map((pg, idx) =>
+                        pg === "…" ? (
+                          <span key={`dots-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                            …
+                          </span>
+                        ) : (
+                          <Button
+                            key={`page-${pg}`}
+                            variant={page === pg ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setPage(pg as number)}
+                            className={cn(
+                              "h-8 w-8 p-0 text-xs",
+                              page === pg
+                                ? "bg-primary text-primary-foreground font-semibold"
+                                : "bg-background hover:bg-muted"
+                            )}
+                          >
+                            {pg}
+                          </Button>
+                        )
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="h-8 px-2.5 text-xs bg-background"
+                      >
+                        Next &rarr;
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

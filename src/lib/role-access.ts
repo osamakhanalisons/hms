@@ -4,9 +4,9 @@ import type { AppRole } from "@/hooks/use-auth";
 const ROLE_MODULES: Record<AppRole, string[] | "*"> = {
   super_admin: "*",
   society_admin: "*",
-  finance_head: ["ledger", "payments", "budget", "reports", "notifications", "documents"],
-  maintenance_head: ["maintenance", "complaints", "vendors", "assets", "notifications", "documents"],
-  security_head: ["gate", "visitor", "parking", "notifications", "documents"],
+  finance_head: ["ledger", "payments", "budget", "reports", "notifications", "documents", "settings"],
+  maintenance_head: ["maintenance", "complaints", "vendors", "assets", "notifications", "documents", "settings"],
+  security_head: ["gate", "visitor", "parking", "notifications", "documents", "settings"],
   resident: [
     "residents",
     "notifications",
@@ -23,6 +23,7 @@ const ROLE_MODULES: Record<AppRole, string[] | "*"> = {
     "events",
     "amenities",
     "utility_meters",
+    "settings",
   ],
   tenant: [
     "notifications",
@@ -36,9 +37,10 @@ const ROLE_MODULES: Record<AppRole, string[] | "*"> = {
     "events",
     "amenities",
     "utility_meters",
+    "settings",
   ],
-  guard: ["gate", "visitor", "parking"],
-  technician: ["maintenance"],
+  guard: ["gate", "visitor", "parking", "settings"],
+  technician: ["maintenance", "settings"],
 };
 
 export function canAccessModule(role: AppRole | null, moduleKey: string): boolean {

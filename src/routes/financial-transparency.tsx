@@ -34,6 +34,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { ModuleGate } from "@/components/module-gate";
 import { getFinancialTransparencyFn } from "@/lib/api/financial-transparency";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/financial-transparency")({
   head: () => ({
@@ -98,31 +99,29 @@ function KpiCard({
   loading?: boolean;
 }) {
   const toneClasses = {
-    default: "text-primary bg-primary/10",
-    success: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-    destructive: "text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-    warning: "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
-    info: "text-blue-600 bg-blue-50 dark:bg-blue-950/30",
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+    destructive: "text-rose-600 bg-rose-500/10 border-rose-500/20",
+    warning: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    info: "text-sky-600 bg-sky-500/10 border-sky-500/20",
   }[tone];
 
   return (
-    <Card className="border-border/70 shadow-soft">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-            {loading ? (
-              <div className="mt-2 h-7 w-28 animate-pulse rounded-md bg-muted" />
-            ) : (
-              <>
-                <p className="mt-1 font-serif text-2xl font-bold tracking-tight">{value}</p>
-                {subtitle && <p className="mt-1 text-[11px] text-muted-foreground">{subtitle}</p>}
-              </>
-            )}
-          </div>
-          <div className={`rounded-lg p-2.5 ${toneClasses}`}>
-            <Icon className="size-5" />
-          </div>
+    <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow bg-card">
+      <CardContent className="p-5 flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          {loading ? (
+            <div className="mt-1 h-7 w-28 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <>
+              <p className="font-serif text-2xl font-bold tracking-tight text-foreground">{value}</p>
+              {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+            </>
+          )}
+        </div>
+        <div className={cn("grid size-11 place-items-center rounded-xl border shrink-0", toneClasses)}>
+          <Icon className="size-5" />
         </div>
       </CardContent>
     </Card>
@@ -164,57 +163,61 @@ function FinancialTransparencyPage() {
     <AppShell
       title="Financial Transparency"
       subtitle="Public income, expense statements, and budget variance"
-      actions={
-        <div className="flex items-center gap-2">
-          <Select
-            value={String(selectedYear)}
-            onValueChange={(val) => setSelectedYear(Number(val))}
-          >
-            <SelectTrigger className="h-8 w-32 text-xs">
-              <Calendar className="mr-1.5 size-3.5 text-muted-foreground" />
-              <SelectValue placeholder="Select Year" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableYears.map((yr) => (
-                <SelectItem key={yr} value={String(yr)} className="text-xs">
-                  Year {yr}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw
-              className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-        </div>
-      }
     >
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
-        {/* Header Title */}
-        <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-8 sm:py-8">
+        {/* Page Header & Action Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
           <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-md bg-surface border border-border/60">
-              <Eye className="size-5 text-primary" />
+            <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+              <Eye className="size-5" />
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                Finance · Transparency
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground">
+                  Income & Expense Statement
+                </h1>
+                <Badge variant="secondary" className="font-mono text-xs font-semibold px-2 py-0.5">
+                  FY {selectedYear}
+                </Badge>
               </div>
-              <h1 className="font-serif text-2xl font-bold tracking-tight sm:text-3xl">
-                Income & Expense Statement ({selectedYear})
-              </h1>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Public financial transparency statement, income, expenses, and budget variance
+              </p>
             </div>
           </div>
-        </header>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Select
+              value={String(selectedYear)}
+              onValueChange={(val) => setSelectedYear(Number(val))}
+            >
+              <SelectTrigger className="h-9 w-32 text-xs bg-background">
+                <Calendar className="mr-1.5 size-3.5 text-muted-foreground" />
+                <SelectValue placeholder="Select Year" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableYears.map((yr) => (
+                  <SelectItem key={yr} value={String(yr)} className="text-xs">
+                    Year {yr}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs bg-background"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              <RefreshCw
+                className={cn("size-3.5", isRefetching && "animate-spin")}
+              />
+              <span>Refresh</span>
+            </Button>
+          </div>
+        </div>
 
         {/* Error Banner */}
         {isError && (
@@ -230,7 +233,7 @@ function FinancialTransparencyPage() {
         )}
 
         {/* KPI Grid */}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
             label="Total Collected (Income)"
             value={formatCurrency(data?.totalIncome ?? 0)}
@@ -268,17 +271,17 @@ function FinancialTransparencyPage() {
         {/* Expense Breakdown & Monthly Collections Grid */}
         <section className="grid gap-6 lg:grid-cols-2">
           {/* Monthly Collections Trend */}
-          <Card className="border-border/70 shadow-soft">
-            <CardHeader className="pb-3">
+          <Card className="border-border/70 shadow-sm bg-card">
+            <CardHeader className="p-5 pb-3 border-b bg-muted/15">
               <CardTitle className="flex items-center gap-2 font-serif text-base font-bold">
-                <FileSpreadsheet className="size-4 text-muted-foreground" />
+                <FileSpreadsheet className="size-4 text-primary" />
                 Monthly Breakdown ({selectedYear})
               </CardTitle>
-              <CardDescription className="text-[11px]">
+              <CardDescription className="text-xs">
                 Collections vs Total Charges by month
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-4">
+            <CardContent className="p-5">
               {isLoading ? (
                 <div className="space-y-3">
                   {Array.from({ length: 6 }).map((_, i) => (
@@ -291,26 +294,30 @@ function FinancialTransparencyPage() {
                   <p className="text-sm">No monthly data available for {selectedYear}</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {data.monthlyTrend.map((m) => {
                     const maxVal = Math.max(
                       ...data.monthlyTrend.map((t) => Math.max(t.income, t.billed, 1)),
                     );
                     const incomePct = Math.min(100, Math.round((m.income / maxVal) * 100));
-                    const billedPct = Math.min(100, Math.round((m.billed / maxVal) * 100));
 
                     return (
-                      <div key={m.monthKey} className="space-y-1">
-                        <div className="flex justify-between text-xs font-medium">
-                          <span>{m.label}</span>
-                          <span className="text-muted-foreground">
-                            Collected: {formatCurrency(m.income)} / Billed:{" "}
-                            {formatCurrency(m.billed)}
-                          </span>
+                      <div key={m.monthKey} className="space-y-1.5 p-2 rounded-lg hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center justify-between text-xs font-medium">
+                          <span className="font-semibold text-foreground">{m.label}</span>
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className="text-emerald-600 font-semibold">
+                              Collected: {formatCurrency(m.income)}
+                            </span>
+                            <span className="text-muted-foreground">/</span>
+                            <span className="text-muted-foreground">
+                              Billed: {formatCurrency(m.billed)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted flex">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted/70">
                           <div
-                            className="h-full bg-emerald-500 transition-all duration-300"
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-300"
                             style={{ width: `${incomePct}%` }}
                             title={`Collected: ${formatCurrency(m.income)}`}
                           />
@@ -324,17 +331,17 @@ function FinancialTransparencyPage() {
           </Card>
 
           {/* Expense Breakdown */}
-          <Card className="border-border/70 shadow-soft">
-            <CardHeader className="pb-3">
+          <Card className="border-border/70 shadow-sm bg-card">
+            <CardHeader className="p-5 pb-3 border-b bg-muted/15">
               <CardTitle className="flex items-center gap-2 font-serif text-base font-bold">
-                <PieChart className="size-4 text-muted-foreground" />
+                <PieChart className="size-4 text-primary" />
                 Category Expense Variance
               </CardTitle>
-              <CardDescription className="text-[11px]">
+              <CardDescription className="text-xs">
                 Budgeted planned amount vs actual spending by category
               </CardDescription>
             </CardHeader>
-            <CardContent className="p-4">
+            <CardContent className="p-5">
               {isLoading ? (
                 <div className="space-y-3">
                   {Array.from({ length: 6 }).map((_, i) => (
@@ -347,29 +354,45 @@ function FinancialTransparencyPage() {
                   <p className="text-sm">No expense categories budgeted for {selectedYear}</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {data.expenseBreakdown.map((exp) => {
                     const isOverBudget = exp.actual > exp.planned && exp.planned > 0;
+                    const percentUsed = exp.planned > 0 ? Math.round((exp.actual / exp.planned) * 100) : (exp.actual > 0 ? 100 : 0);
                     return (
-                      <div key={exp.category} className="space-y-1">
+                      <div key={exp.category} className="space-y-1.5 p-2 rounded-lg hover:bg-muted/30 transition-colors">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-medium capitalize">{exp.category}</span>
                           <div className="flex items-center gap-2">
+                            <span className="font-semibold capitalize text-foreground">{exp.category}</span>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] px-1.5 py-0",
+                                isOverBudget
+                                  ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200/50"
+                                  : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200/50"
+                              )}
+                            >
+                              {percentUsed}%
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px]">
                             <span className="text-muted-foreground">
                               Planned: {formatCurrency(exp.planned)}
                             </span>
+                            <span className="text-muted-foreground">·</span>
                             <span
-                              className={`font-bold ${isOverBudget ? "text-rose-600" : "text-emerald-600"}`}
+                              className={`font-semibold ${isOverBudget ? "text-rose-600" : "text-emerald-600"}`}
                             >
                               Actual: {formatCurrency(exp.actual)}
                             </span>
                           </div>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted/70">
                           <div
-                            className={`h-full transition-all duration-300 ${
+                            className={cn(
+                              "h-full rounded-full transition-all duration-300",
                               isOverBudget ? "bg-rose-500" : "bg-emerald-500"
-                            }`}
+                            )}
                             style={{
                               width: `${Math.min(
                                 100,

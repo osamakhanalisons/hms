@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { getDb } from "../db.server";
 import { getSessionUser, getUserTenantId, getUserRoles, isAdminRole, hasAnyRole, getTenantScoping } from "./auth-helper";
 import { requirePermission } from "./permissions";
+import { createNotification, NOTIFICATION_TYPES } from "../services/notification-service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,9 @@ export type VisitorOverview = {
     todayCheckedOut: number;
     blacklistedCount: number;
   };
+  totalFilteredPasses: number;
+  page: number;
+  pageSize: number;
   visitorPasses: VisitorPassItem[];
   entryExitLogs: EntryExitLogItem[];
   blacklist: BlacklistItem[];
@@ -87,6 +91,8 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
         status: z.string().optional(),
         type: z.string().optional(),
         tenantId: z.string().optional(),
+        page: z.number().optional().default(1),
+        pageSize: z.number().optional().default(9),
       })
       .optional(),
   )
@@ -107,6 +113,9 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
     if (!isSecurityOrAdmin && residentIds.length === 0) {
       return {
         summary: { totalPasses: 0, activePasses: 0, todayCheckedIn: 0, todayCheckedOut: 0, blacklistedCount: 0 },
+        totalFilteredPasses: 0,
+        page: 1,
+        pageSize: 9,
         visitorPasses: [],
         entryExitLogs: [],
         blacklist: [],
@@ -159,7 +168,37 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
       blCount = Number(blSum?.bl_count ?? 0);
     }
 
-    // Visitor Passes Query
+    // Filtered count query for pagination
+    let countQuery = `
+      SELECT COUNT(*) AS total_count
+      FROM visitor_passes vp
+      LEFT JOIN residents r ON r.id = vp.resident_id
+      LEFT JOIN persons p ON p.id = r.person_id
+      LEFT JOIN units u ON u.id = r.unit_id
+      WHERE ${vpFilter}
+    `;
+    const countParams = [...vpParamsBase];
+    if (!isSecurityOrAdmin) {
+      countQuery += " AND vp.resident_id IN (?)";
+      countParams.push(residentIds);
+    }
+    if (data?.search && data.search.trim()) {
+      const q = `%${data.search.trim()}%`;
+      countQuery += ` AND (vp.visitor_name LIKE ? OR vp.visitor_phone LIKE ? OR vp.pass_code LIKE ? OR vp.vehicle_plate LIKE ? OR p.full_name LIKE ? OR u.unit_number LIKE ?)`;
+      countParams.push(q, q, q, q, q, q);
+    }
+    if (data?.status && data.status !== "all") {
+      countQuery += ` AND vp.status = ?`;
+      countParams.push(data.status);
+    }
+    if (data?.type && data.type !== "all") {
+      countQuery += ` AND vp.visitor_type = ?`;
+      countParams.push(data.type);
+    }
+    const [[countRow]] = (await db.query(countQuery, countParams)) as any[];
+    const totalFiltered = Number(countRow?.total_count ?? 0);
+
+    // Visitor Passes Query with limit & offset
     let vpQuery = `
       SELECT vp.*,
              p.full_name AS resident_name,
@@ -190,7 +229,13 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
       vpQuery += ` AND vp.visitor_type = ?`;
       vpParams.push(data.type);
     }
-    vpQuery += ` ORDER BY vp.expected_at DESC`;
+
+    const page = Math.max(1, Number(data?.page ?? 1));
+    const pageSize = Math.min(50, Math.max(1, Number(data?.pageSize ?? 9)));
+    const offset = (page - 1) * pageSize;
+
+    vpQuery += ` ORDER BY vp.expected_at DESC LIMIT ? OFFSET ?`;
+    vpParams.push(pageSize, offset);
 
     const [vpRows] = (await db.query(vpQuery, vpParams)) as any[];
     const visitorPasses: VisitorPassItem[] = vpRows.map((r: any) => ({
@@ -226,7 +271,7 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
       logsQuery += " AND eel.unit_id IN (SELECT unit_id FROM residents WHERE id IN (?))";
       logsParams.push(residentIds);
     }
-    logsQuery += " ORDER BY eel.timestamp DESC LIMIT 150";
+    logsQuery += " ORDER BY eel.timestamp DESC LIMIT 50";
 
     const [logRows] = (await db.query(logsQuery, logsParams)) as any[];
 
@@ -252,7 +297,8 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
          FROM visitor_blacklist bl
          LEFT JOIN profiles p ON p.id = bl.added_by
          WHERE ${blFilter}
-         ORDER BY bl.created_at DESC`,
+         ORDER BY bl.created_at DESC
+         LIMIT 50`,
         blParamsBase,
       )) as any[];
     }
@@ -268,7 +314,7 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
       createdAt: toISO(r.created_at),
     }));
 
-    // Units List for Pre-registration
+    // Units List for Pre-registration (limited to top 100 for fast select performance)
     let unitsQuery = `
       SELECT u.id, u.unit_number, p.full_name AS resident_name,
              CONCAT_WS(' › ', s.name, bl.name, b.name, CONCAT('Unit ', u.unit_number)) AS full_path
@@ -285,7 +331,7 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
       unitsQuery += " AND u.id IN (SELECT unit_id FROM residents WHERE id IN (?))";
       unitsParams.push(residentIds);
     }
-    unitsQuery += " ORDER BY s.name, bl.name, b.name, u.unit_number ASC";
+    unitsQuery += " ORDER BY s.name, bl.name, b.name, u.unit_number ASC LIMIT 100";
 
     const [unitRows] = (await db.query(unitsQuery, unitsParams)) as any[];
 
@@ -297,6 +343,9 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
         todayCheckedOut: Number(logSum?.out_today ?? 0),
         blacklistedCount: blCount,
       },
+      totalFilteredPasses: totalFiltered,
+      page,
+      pageSize,
       visitorPasses,
       entryExitLogs,
       blacklist,
@@ -494,6 +543,38 @@ export const recordGatePassVerificationFn = createServerFn({ method: "POST" })
     // If check-in on one-time pass, mark as used
     if (data.direction === "in" && pass.visitor_type !== "recurring") {
       await db.query("UPDATE visitor_passes SET status = 'used' WHERE id = ?", [pass.id]);
+    }
+
+    // Trigger visitor arrival notification to resident if check-in
+    if (data.direction === "in" && pass.resident_id) {
+      try {
+        const [resRows] = (await db.query(
+          `SELECT p.user_id, u.unit_number
+           FROM residents r
+           JOIN persons p ON p.id = r.person_id
+           LEFT JOIN units u ON u.id = r.unit_id
+           WHERE r.id = ? AND r.tenant_id = ?`,
+          [pass.resident_id, tenantId],
+        )) as any[];
+
+        if (resRows.length > 0 && resRows[0].user_id) {
+          await createNotification({
+            userId: resRows[0].user_id,
+            tenantId,
+            type: NOTIFICATION_TYPES.VISITOR_ARRIVAL,
+            title: "Visitor Arrival",
+            message: `Your visitor ${pass.visitor_name} has arrived at the gate.${resRows[0].unit_number ? ` (Unit ${resRows[0].unit_number})` : ""}`,
+            data: {
+              visitorPassId: pass.id,
+              visitorName: pass.visitor_name,
+              vehiclePlate: plate || null,
+              passCode: pass.pass_code,
+            },
+          });
+        }
+      } catch (notifErr) {
+        console.error("[VisitorNotification] Failed to send arrival alert:", notifErr);
+      }
     }
 
     return { success: true, visitorName: pass.visitor_name, direction: data.direction };
@@ -1030,9 +1111,10 @@ export const recordStaffMovementFn = createServerFn({ method: "POST" })
 
     // Verify staff exists and belongs to active tenant
     const [staffRows] = await db.query(
-      `SELECT ds.name, ds.vehicle_plate, r.unit_id 
+      `SELECT ds.name, ds.staff_type, ds.vehicle_plate, r.unit_id, p.user_id 
        FROM domestic_staff ds
        JOIN residents r ON r.id = ds.resident_id
+       JOIN persons p ON p.id = r.person_id
        WHERE ds.id = ? AND ds.tenant_id = ?`,
       [data.staffId, tenantId]
     ) as any[];
@@ -1060,6 +1142,33 @@ export const recordStaffMovementFn = createServerFn({ method: "POST" })
         data.notes || null,
       ]
     );
+
+    // Notify resident of domestic staff movement
+    if (s.user_id) {
+      try {
+        if (data.direction === "in") {
+          await createNotification({
+            userId: s.user_id,
+            tenantId,
+            type: NOTIFICATION_TYPES.DOMESTIC_STAFF_CHECKIN,
+            title: "Domestic Staff Check-In",
+            message: `${s.name} (${s.staff_type}) checked in at the gate.`,
+            data: { staffId: data.staffId, staffName: s.name, direction: "in" },
+          });
+        } else {
+          await createNotification({
+            userId: s.user_id,
+            tenantId,
+            type: NOTIFICATION_TYPES.DOMESTIC_STAFF_CHECKOUT,
+            title: "Domestic Staff Check-Out",
+            message: `${s.name} has checked out.`,
+            data: { staffId: data.staffId, staffName: s.name, direction: "out" },
+          });
+        }
+      } catch (notifErr) {
+        console.error("[StaffNotification] Failed to send movement alert:", notifErr);
+      }
+    }
 
     return { success: true };
   });

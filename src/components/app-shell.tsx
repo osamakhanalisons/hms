@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell, HelpCircle, LogOut, Loader2, Building2 } from "lucide-react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listAllSocietiesFn, getAssignedSocietiesFn } from "@/lib/api/societies";
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -35,6 +35,7 @@ function getCookieVal(name: string): string {
 export function AppShell({ title, subtitle, actions, children }: AppShellProps) {
   const { loading, session, user, profile, primaryRole, roles, signOut } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const isSuperAdmin = roles?.includes("super_admin") ?? false;
   const isSocietyAdmin = roles?.includes("society_admin") ?? false;
@@ -74,19 +75,25 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
   };
 
   const { data: notifications = [], refetch } = useQuery({
-    queryKey: ["header-notifications"],
+    queryKey: ["header-notifications", selectedTenantId],
     queryFn: async () => getNotificationsFn(),
     enabled: !!session,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
   const markReadMutation = useMutation({
     mutationFn: markAsReadFn,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["header-notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications-page"] });
       refetch();
     },
   });
 
-  const unreadCount = notifications.filter((n: any) => n.readStatus === "unread").length;
+  const unreadCount = notifications.filter(
+    (n: any) => n.readStatus === "unread" || n.isRead === 0 || n.isRead === false,
+  ).length;
 
   useEffect(() => {
     if (!loading && !session) navigate({ to: "/auth" });
@@ -176,7 +183,9 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                   >
                     <Bell className="size-4" />
                     {unreadCount > 0 && (
-                      <span className="absolute right-1.5 top-1.5 flex size-2 rounded-full bg-destructive" />
+                      <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                      </span>
                     )}
                   </Button>
                 </DropdownMenuTrigger>
@@ -185,7 +194,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                     <span>Notifications</span>
                     {unreadCount > 0 && (
                       <button
-                        onClick={() => markReadMutation.mutate({})}
+                        onClick={() => markReadMutation.mutate({ data: {} })}
                         className="text-[10px] text-primary hover:underline font-normal"
                       >
                         Mark all read
@@ -204,7 +213,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                           key={n.id}
                           className="flex flex-col items-start gap-1 p-3 cursor-pointer"
                           onClick={() => {
-                            markReadMutation.mutate({ notificationId: n.id });
+                            markReadMutation.mutate({ data: { notificationId: n.id } });
                             navigate({ to: "/notifications" });
                           }}
                         >

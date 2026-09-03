@@ -1,13 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Search, ArrowRight } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+// import { Link } from "@tanstack/react-router";
+// import { useMemo, useState } from "react";
+// import { Search, ArrowRight } from "lucide-react";
 
 import { AppShell } from "@/components/app-shell";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { CATEGORY_ORDER, type ModuleCategory } from "@/lib/modules";
-import { getModuleWithForms, totalFormCount } from "@/lib/forms-registry";
+// import { Input } from "@/components/ui/input";
+// import { Badge } from "@/components/ui/badge";
+// import { Card, CardContent } from "@/components/ui/card";
+// import { CATEGORY_ORDER, type ModuleCategory } from "@/lib/modules";
+// import { getModuleWithForms, totalFormCount } from "@/lib/forms-registry";
 
 export const Route = createFileRoute("/forms/")({
   head: () => ({
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/forms/")({
 });
 
 function FormsCatalog() {
+  /*
   const all = useMemo(() => getModuleWithForms(), []);
   const [q, setQ] = useState("");
 
@@ -50,12 +52,17 @@ function FormsCatalog() {
     Intelligence: [],
   };
   for (const g of filtered) grouped[g.module.category].push(g);
+  */
 
   return (
     <AppShell
       title="Forms catalog"
-      subtitle={`${totalFormCount()} forms across ${all.length} modules`}
+      subtitle="This page is currently disabled"
     >
+      <div className="flex h-96 flex-col items-center justify-center gap-2 text-center text-muted-foreground p-6">
+        <p className="text-sm font-medium">Forms Catalog page is currently disabled.</p>
+      </div>
+      {/*
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
         <header className="mb-8 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:flex sm:items-end sm:justify-between">
           <div className="min-w-0">
@@ -158,6 +165,7 @@ function FormsCatalog() {
           })}
         </div>
       </div>
+      */}
     </AppShell>
   );
 }

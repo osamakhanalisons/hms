@@ -318,12 +318,13 @@ export const getMaintenanceOverviewFn = createServerFn({ method: "GET" })
       vendorParams,
     )) as any[];
 
-    // Fetch technicians / staff profiles
+    // Fetch technicians / staff profiles (only users with technician or maintenance_head role)
     const [techRows] = (await db.query(
-      `SELECT p.id, COALESCE(p.full_name, u.email) AS name
+      `SELECT DISTINCT p.id, COALESCE(p.full_name, u.email) AS name
        FROM profiles p
        JOIN users u ON u.id = p.id
-       WHERE ${techFilter}
+       JOIN user_roles ur ON ur.user_id = p.id
+       WHERE ${techFilter} AND ur.role IN ('technician', 'maintenance_head')
        ORDER BY name ASC`,
       techParams,
     )) as any[];

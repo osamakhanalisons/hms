@@ -44,6 +44,8 @@ import { Route as AssetsRouteImport } from './routes/assets'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AmenitiesRouteImport } from './routes/amenities'
 import { Route as AiMaintenanceRouteImport } from './routes/ai-maintenance'
+import { Route as AiFinanceRouteImport } from './routes/ai-finance'
+import { Route as AiComplaintsRouteImport } from './routes/ai-complaints'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FormsIndexRouteImport } from './routes/forms.index'
 import { Route as ModulesModuleRouteImport } from './routes/modules.$module'
@@ -224,6 +226,16 @@ const AiMaintenanceRoute = AiMaintenanceRouteImport.update({
   path: '/ai-maintenance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AiFinanceRoute = AiFinanceRouteImport.update({
+  id: '/ai-finance',
+  path: '/ai-finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiComplaintsRoute = AiComplaintsRouteImport.update({
+  id: '/ai-complaints',
+  path: '/ai-complaints',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -247,6 +259,8 @@ const FormsModuleFormRoute = FormsModuleFormRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-complaints': typeof AiComplaintsRoute
+  '/ai-finance': typeof AiFinanceRoute
   '/ai-maintenance': typeof AiMaintenanceRoute
   '/amenities': typeof AmenitiesRoute
   '/analytics': typeof AnalyticsRoute
@@ -288,6 +302,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-complaints': typeof AiComplaintsRoute
+  '/ai-finance': typeof AiFinanceRoute
   '/ai-maintenance': typeof AiMaintenanceRoute
   '/amenities': typeof AmenitiesRoute
   '/analytics': typeof AnalyticsRoute
@@ -329,6 +345,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-complaints': typeof AiComplaintsRoute
+  '/ai-finance': typeof AiFinanceRoute
   '/ai-maintenance': typeof AiMaintenanceRoute
   '/amenities': typeof AmenitiesRoute
   '/analytics': typeof AnalyticsRoute
@@ -372,6 +390,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ai-complaints'
+    | '/ai-finance'
     | '/ai-maintenance'
     | '/amenities'
     | '/analytics'
@@ -413,6 +433,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ai-complaints'
+    | '/ai-finance'
     | '/ai-maintenance'
     | '/amenities'
     | '/analytics'
@@ -453,6 +475,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/ai-complaints'
+    | '/ai-finance'
     | '/ai-maintenance'
     | '/amenities'
     | '/analytics'
@@ -495,6 +519,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiComplaintsRoute: typeof AiComplaintsRoute
+  AiFinanceRoute: typeof AiFinanceRoute
   AiMaintenanceRoute: typeof AiMaintenanceRoute
   AmenitiesRoute: typeof AmenitiesRoute
   AnalyticsRoute: typeof AnalyticsRoute
@@ -780,6 +806,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiMaintenanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai-finance': {
+      id: '/ai-finance'
+      path: '/ai-finance'
+      fullPath: '/ai-finance'
+      preLoaderRoute: typeof AiFinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-complaints': {
+      id: '/ai-complaints'
+      path: '/ai-complaints'
+      fullPath: '/ai-complaints'
+      preLoaderRoute: typeof AiComplaintsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -825,6 +865,8 @@ const FormsRouteWithChildren = FormsRoute._addFileChildren(FormsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiComplaintsRoute: AiComplaintsRoute,
+  AiFinanceRoute: AiFinanceRoute,
   AiMaintenanceRoute: AiMaintenanceRoute,
   AmenitiesRoute: AmenitiesRoute,
   AnalyticsRoute: AnalyticsRoute,

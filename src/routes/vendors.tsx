@@ -67,6 +67,7 @@ import {
   type QuotationItem,
   type PurchaseOrderItem,
 } from "@/lib/api/vendors";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/vendors")({
   head: () => ({
@@ -123,28 +124,28 @@ function KpiCard({
   loading?: boolean;
 }) {
   const toneClass = {
-    default: "text-primary bg-primary/10",
-    success: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-    destructive: "text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-    warning: "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
-    info: "text-blue-600 bg-blue-50 dark:bg-blue-950/30",
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+    destructive: "text-rose-600 bg-rose-500/10 border-rose-500/20",
+    warning: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    info: "text-sky-600 bg-sky-500/10 border-sky-500/20",
   }[tone];
 
   return (
-    <Card className="border-border/70 shadow-soft">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-            {loading ? (
-              <div className="mt-2 h-7 w-20 animate-pulse rounded-md bg-muted" />
-            ) : (
-              <p className="mt-1 font-serif text-2xl font-bold tracking-tight">{value}</p>
-            )}
-          </div>
-          <div className={`rounded-lg p-2.5 ${toneClass}`}>
-            <Icon className="size-5" />
-          </div>
+    <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden">
+      <CardContent className="p-4 sm:p-5 flex items-center justify-between gap-3">
+        <div className="space-y-1 min-w-0 flex-1">
+          <p className="text-xs font-medium text-muted-foreground truncate" title={label}>{label}</p>
+          {loading ? (
+            <div className="mt-1 h-7 w-20 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <p className="font-serif text-lg sm:text-xl lg:text-[1.35rem] font-bold tracking-tight text-foreground truncate" title={value}>
+              {value}
+            </p>
+          )}
+        </div>
+        <div className={cn("grid size-10 sm:size-11 place-items-center rounded-xl border shrink-0", toneClass)}>
+          <Icon className="size-4 sm:size-5" />
         </div>
       </CardContent>
     </Card>
@@ -542,57 +543,63 @@ function VendorsPage() {
     <AppShell
       title="Vendor Registry & RFQs"
       subtitle="Manage approved vendors, RFQ tenders and procurement purchase orders"
-      actions={
-        <div className="flex items-center gap-2">
-          {canManage && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 h-8 text-xs"
-                onClick={() => setAddRfqOpen(true)}
-              >
-                <FileText className="size-3.5" /> Create RFQ
-              </Button>
-              <Button
-                size="sm"
-                className="gap-1.5 h-8 text-xs"
-                onClick={() => setAddVendorOpen(true)}
-              >
-                <Plus className="size-3.5" /> Add Vendor
-              </Button>
-            </>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw
-              className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-        </div>
-      }
     >
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
-        {/* Header */}
-        <header className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-md bg-surface border border-border/60">
-            <Truck className="size-5 text-primary" />
-          </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Procurement · Vendor Management
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-8 sm:py-8">
+        {/* Page Header & Action Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+              <Truck className="size-5" />
             </div>
-            <h1 className="font-serif text-2xl font-bold tracking-tight sm:text-3xl">
-              Society Vendor & RFQ Center
-            </h1>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground">
+                  Society Vendor & RFQ Center
+                </h1>
+                <Badge variant="secondary" className="font-mono text-xs font-normal">
+                  {vendors.length} vendors &middot; {rfqs.length} RFQs
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Manage approved vendors, RFQ tenders and procurement purchase orders
+              </p>
+            </div>
           </div>
-        </header>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs bg-background"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              <RefreshCw className={cn("size-3.5", isRefetching && "animate-spin")} />
+              <span>Refresh</span>
+            </Button>
+            {canManage && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-9 text-xs bg-background shadow-xs hover:bg-muted"
+                  onClick={() => setAddRfqOpen(true)}
+                >
+                  <FileText className="size-3.5" />
+                  <span>Create RFQ</span>
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+                  onClick={() => setAddVendorOpen(true)}
+                >
+                  <Plus className="size-4" />
+                  <span>Add Vendor</span>
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Error banner */}
         {isError && (
@@ -607,7 +614,7 @@ function VendorsPage() {
         )}
 
         {/* KPI Cards */}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <KpiCard
             label="Total Vendors"
             value={String(summary?.totalVendors ?? 0)}
@@ -646,38 +653,54 @@ function VendorsPage() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-surface border border-border/60">
-            <TabsTrigger value="directory" className="text-xs gap-1.5">
-              <Truck className="size-3.5" /> Vendor Directory ({vendors.length})
+          <TabsList className="bg-muted/30 p-1 border border-border/70 rounded-xl h-auto flex flex-wrap gap-1">
+            <TabsTrigger value="directory" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg px-3 py-2">
+              <Truck className="size-3.5" />
+              <span>Vendor Directory</span>
+              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
+                {vendors.length}
+              </Badge>
             </TabsTrigger>
-            <TabsTrigger value="rfqs" className="text-xs gap-1.5">
-              <FileText className="size-3.5" /> RFQ Tenders ({rfqs.length})
+            <TabsTrigger value="rfqs" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg px-3 py-2">
+              <FileText className="size-3.5" />
+              <span>RFQ Tenders</span>
+              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
+                {rfqs.length}
+              </Badge>
             </TabsTrigger>
-            <TabsTrigger value="bids" className="text-xs gap-1.5">
-              <Send className="size-3.5" /> Submissions / Quotes ({quotations.length})
+            <TabsTrigger value="bids" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg px-3 py-2">
+              <Send className="size-3.5" />
+              <span>Submissions / Quotes</span>
+              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
+                {quotations.length}
+              </Badge>
             </TabsTrigger>
-            <TabsTrigger value="pos" className="text-xs gap-1.5">
-              <FileCheck className="size-3.5" /> Purchase Orders ({purchaseOrders.length})
+            <TabsTrigger value="pos" className="text-xs gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg px-3 py-2">
+              <FileCheck className="size-3.5" />
+              <span>Purchase Orders</span>
+              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
+                {purchaseOrders.length}
+              </Badge>
             </TabsTrigger>
           </TabsList>
 
           {/* VENDOR DIRECTORY TAB */}
           <TabsContent value="directory" className="space-y-6">
             {/* Filter Bar */}
-            <Card className="border-border/70 shadow-soft p-4">
+            <Card className="border-border/70 shadow-sm p-4 bg-card">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative w-64">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Search vendor, contact, phone..."
-                    className="h-9 pl-9 text-xs"
+                    className="h-9 pl-9 text-xs bg-background"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
                 </div>
 
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="h-9 w-44 text-xs">
+                  <SelectTrigger className="h-9 w-44 text-xs bg-background">
                     <Filter className="mr-1.5 size-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
@@ -694,7 +717,7 @@ function VendorsPage() {
                 </Select>
 
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-9 w-36 text-xs">
+                  <SelectTrigger className="h-9 w-36 text-xs bg-background">
                     <Sliders className="mr-1.5 size-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
@@ -717,15 +740,15 @@ function VendorsPage() {
             {isLoading ? (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-44 animate-pulse rounded-lg bg-muted" />
+                  <div key={i} className="h-48 animate-pulse rounded-xl bg-muted" />
                 ))}
               </div>
             ) : !vendors.length ? (
-              <Card className="border-border/70 border-dashed p-12 text-center text-muted-foreground">
+              <Card className="border-border/70 border-dashed p-14 text-center text-muted-foreground bg-card">
                 <Truck className="size-10 mx-auto opacity-30 mb-2" />
-                <p className="text-sm font-medium">No vendors found</p>
+                <p className="text-sm font-medium text-foreground">No vendors found</p>
                 {canManage && (
-                  <p className="text-[11px] opacity-60 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Click "Add Vendor" to register a new service provider.
                   </p>
                 )}
@@ -736,78 +759,80 @@ function VendorsPage() {
                   {paginatedVendors.map((v) => (
                     <Card
                       key={v.id}
-                      className="border-border/70 shadow-soft hover:border-border transition-colors"
+                      className="border-border/70 shadow-sm hover:shadow-md transition-all bg-card flex flex-col justify-between overflow-hidden"
                     >
-                      <CardHeader className="pb-3">
+                      <CardHeader className="p-4 pb-3 border-b bg-muted/10">
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="grid size-8 shrink-0 place-items-center rounded bg-primary/10">
-                              <Truck className="size-4 text-primary" />
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary border border-primary/20">
+                              <Truck className="size-4" />
                             </div>
-                            <CardTitle className="font-serif text-sm font-bold truncate">
-                              {v.name}
-                            </CardTitle>
+                            <div className="min-w-0">
+                              <CardTitle className="font-serif text-sm font-bold truncate text-foreground">
+                                {v.name}
+                              </CardTitle>
+                              <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0 mt-0.5 capitalize">
+                                {CATEGORIES.find((c) => c.value === v.category)?.label ?? v.category}
+                              </Badge>
+                            </div>
                           </div>
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] ${
-                              v.status === "active"
-                                ? "bg-emerald-500/10 text-emerald-600 border-transparent"
-                                : "bg-slate-500/10 text-slate-500 border-transparent"
-                            }`}
-                          >
-                            {v.status === "active" ? "Active" : "Inactive"}
-                          </Badge>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] px-2 py-0.5 ${
+                                v.status === "active"
+                                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                  : "bg-muted text-muted-foreground border-transparent"
+                              }`}
+                            >
+                              {v.status === "active" ? "Active" : "Inactive"}
+                            </Badge>
+                            <div className="flex items-center gap-1 text-amber-500 text-[11px] font-semibold">
+                              <Star className="size-3 fill-amber-500" />
+                              <span>{v.rating.toFixed(1)}</span>
+                            </div>
+                          </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-3 text-xs pt-0">
-                        <div className="flex items-center justify-between">
-                          <Badge variant="secondary" className="text-[10px] capitalize">
-                            {CATEGORIES.find((c) => c.value === v.category)?.label ?? v.category}
-                          </Badge>
-                          <div className="flex items-center gap-1 text-amber-500 text-[11px] font-bold">
-                            <Star className="size-3 fill-amber-500" />
-                            <span>{v.rating.toFixed(1)}</span>
-                          </div>
-                        </div>
-
-                        {/* Contact Info */}
-                        <div className="space-y-1 text-[11px] text-muted-foreground border-t border-border/40 pt-2">
+                      <CardContent className="p-4 space-y-3 text-xs flex-1 flex flex-col justify-between">
+                        {/* Contact & Location Info */}
+                        <div className="space-y-1.5 text-xs text-muted-foreground">
                           {v.contactPerson && (
-                            <div className="flex items-center gap-1.5 text-foreground font-medium">
-                              <UserCheck className="size-3 text-primary shrink-0" />
+                            <div className="flex items-center gap-2 text-foreground font-medium">
+                              <UserCheck className="size-3.5 text-primary shrink-0" />
                               <span className="truncate">{v.contactPerson}</span>
                             </div>
                           )}
                           {v.phone && (
-                            <div className="flex items-center gap-1.5">
-                              <Phone className="size-3 shrink-0" />
+                            <div className="flex items-center gap-2">
+                              <Phone className="size-3.5 shrink-0 text-muted-foreground" />
                               <span>{v.phone}</span>
                             </div>
                           )}
                           {v.email && (
-                            <div className="flex items-center gap-1.5">
-                              <Mail className="size-3 shrink-0" />
+                            <div className="flex items-center gap-2">
+                              <Mail className="size-3.5 shrink-0 text-muted-foreground" />
                               <span className="truncate">{v.email}</span>
                             </div>
                           )}
                           {v.address && (
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="size-3 shrink-0" />
-                              <span className="truncate">{v.address}</span>
+                            <div className="flex items-start gap-2 pt-0.5">
+                              <MapPin className="size-3.5 shrink-0 text-muted-foreground mt-0.5" />
+                              <span className="text-xs text-muted-foreground line-clamp-2">{v.address}</span>
                             </div>
                           )}
                         </div>
 
                         {canManage && (
-                          <div className="pt-1">
+                          <div className="pt-2 border-t border-border/50">
                             <Button
                               variant="outline"
                               size="sm"
-                              className="w-full h-7 text-[11px] gap-1"
+                              className="w-full h-8 text-xs gap-1.5 bg-background shadow-xs hover:bg-muted"
                               onClick={() => openEditModal(v)}
                             >
-                              <FileEdit className="size-3" /> Edit Profile
+                              <FileEdit className="size-3.5" />
+                              <span>Edit Profile</span>
                             </Button>
                           </div>
                         )}
@@ -817,60 +842,51 @@ function VendorsPage() {
                 </div>
 
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-border/40 pt-4 mt-6">
-                    <p className="text-xs text-muted-foreground">
-                      Showing{" "}
-                      <span className="font-medium text-foreground">
-                        {(currentPage - 1) * itemsPerPage + 1}
-                      </span>{" "}
-                      to{" "}
-                      <span className="font-medium text-foreground">
-                        {Math.min(currentPage * itemsPerPage, vendors.length)}
-                      </span>{" "}
-                      of <span className="font-medium text-foreground">{vendors.length}</span>{" "}
-                      vendors
-                    </p>
-                    <div className="flex items-center gap-1">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t p-4 bg-muted/10 rounded-xl">
+                    <span className="text-xs text-muted-foreground">
+                      Showing {(currentPage - 1) * itemsPerPage + 1} &ndash;{" "}
+                      {Math.min(currentPage * itemsPerPage, vendors.length)} of {vendors.length} vendors
+                    </span>
+                    <div className="flex items-center gap-1.5">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="h-8 text-xs"
+                        className="h-8 px-2.5 text-xs bg-background"
                       >
-                        Previous
+                        &larr; Prev
                       </Button>
-                      {getPageNumbers(currentPage, totalPages).map((pageNum, idx) => {
-                        if (pageNum === "...") {
-                          return (
-                            <span
-                              key={`ell-${idx}`}
-                              className="text-muted-foreground px-1.5 text-xs select-none"
-                            >
-                              ...
-                            </span>
-                          );
-                        }
-                        return (
+                      {getPageNumbers(currentPage, totalPages).map((pageNum, idx) =>
+                        pageNum === "..." ? (
+                          <span key={`ell-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                            …
+                          </span>
+                        ) : (
                           <Button
-                            key={pageNum}
+                            key={`pg-${pageNum}`}
                             variant={currentPage === pageNum ? "default" : "outline"}
                             size="sm"
                             onClick={() => setCurrentPage(pageNum as number)}
-                            className="h-8 w-8 text-xs p-0"
+                            className={cn(
+                              "h-8 w-8 p-0 text-xs",
+                              currentPage === pageNum
+                                ? "bg-primary text-primary-foreground font-semibold"
+                                : "bg-background hover:bg-muted"
+                            )}
                           >
                             {pageNum}
                           </Button>
-                        );
-                      })}
+                        )
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
-                        className="h-8 text-xs"
+                        className="h-8 px-2.5 text-xs bg-background"
                       >
-                        Next
+                        Next &rarr;
                       </Button>
                     </div>
                   </div>
@@ -881,9 +897,9 @@ function VendorsPage() {
 
           {/* RFQ TENDERS TAB */}
           <TabsContent value="rfqs" className="space-y-6">
-            <Card className="border-border/70 shadow-soft">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+            <Card className="border-border/70 shadow-sm bg-card overflow-hidden">
+              <CardHeader className="p-5 pb-3 border-b bg-muted/15">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <CardTitle className="font-serif text-base font-bold">
                       Requests for Quotation (RFQs)
@@ -895,7 +911,7 @@ function VendorsPage() {
                   {canManage && (
                     <Button
                       size="sm"
-                      className="gap-1 text-xs h-8"
+                      className="gap-1.5 text-xs h-8 bg-primary text-primary-foreground hover:bg-primary/95"
                       onClick={() => setAddRfqOpen(true)}
                     >
                       <Plus className="size-3.5" /> Create RFQ
@@ -907,13 +923,13 @@ function VendorsPage() {
                 {isLoading ? (
                   <div className="p-6 space-y-3">
                     {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="h-16 animate-pulse bg-muted rounded" />
+                      <div key={i} className="h-16 animate-pulse bg-muted rounded-lg" />
                     ))}
                   </div>
                 ) : !rfqs.length ? (
                   <div className="p-12 text-center text-muted-foreground">
                     <FileText className="size-10 mx-auto opacity-30 mb-2" />
-                    <p className="text-sm font-medium">No RFQs created yet</p>
+                    <p className="text-sm font-medium text-foreground">No RFQs created yet</p>
                   </div>
                 ) : (
                   <>
@@ -923,9 +939,9 @@ function VendorsPage() {
                           key={rfq.id}
                           className="p-4 flex flex-wrap items-center justify-between gap-3 hover:bg-muted/20 transition-colors"
                         >
-                          <div className="space-y-1 min-w-0 max-w-lg">
-                            <div className="flex items-center gap-2">
-                              <span className="font-serif font-bold text-sm">{rfq.title}</span>
+                          <div className="space-y-1.5 min-w-0 max-w-lg">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-serif font-bold text-sm text-foreground">{rfq.title}</span>
                               <RfqStatusBadge status={rfq.status} />
                               <Badge variant="secondary" className="text-[10px]">
                                 {rfq.submissionsCount} Quote{rfq.submissionsCount === 1 ? "" : "s"}
@@ -935,9 +951,9 @@ function VendorsPage() {
                               {rfq.description}
                             </p>
                             {rfq.awardedVendorName && (
-                              <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
-                                <Award className="size-3 shrink-0" /> Awarded to:{" "}
-                                {rfq.awardedVendorName}
+                              <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
+                                <Award className="size-3.5 shrink-0" /> Awarded to:{" "}
+                                <span className="font-bold">{rfq.awardedVendorName}</span>
                               </div>
                             )}
                           </div>
@@ -960,10 +976,10 @@ function VendorsPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-7 text-[11px] gap-1"
+                              className="h-8 text-xs gap-1.5 bg-background shadow-xs hover:bg-muted"
                               onClick={() => setViewRfq(rfq)}
                             >
-                              <Eye className="size-3" /> View Submissions
+                              <Eye className="size-3.5" /> View Submissions
                             </Button>
                           </div>
                         </div>
@@ -971,59 +987,51 @@ function VendorsPage() {
                     </div>
 
                     {rfqTotalPages > 1 && (
-                      <div className="flex items-center justify-between border-t border-border/40 pt-4 mt-6">
-                        <p className="text-xs text-muted-foreground">
-                          Showing{" "}
-                          <span className="font-medium text-foreground">
-                            {(rfqPage - 1) * rfqItemsPerPage + 1}
-                          </span>{" "}
-                          to{" "}
-                          <span className="font-medium text-foreground">
-                            {Math.min(rfqPage * rfqItemsPerPage, rfqs.length)}
-                          </span>{" "}
-                          of <span className="font-medium text-foreground">{rfqs.length}</span> RFQs
-                        </p>
-                        <div className="flex items-center gap-1">
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t p-4 bg-muted/10">
+                        <span className="text-xs text-muted-foreground">
+                          Showing {(rfqPage - 1) * rfqItemsPerPage + 1} &ndash;{" "}
+                          {Math.min(rfqPage * rfqItemsPerPage, rfqs.length)} of {rfqs.length} RFQs
+                        </span>
+                        <div className="flex items-center gap-1.5">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setRfqPage((p) => Math.max(1, p - 1))}
                             disabled={rfqPage === 1}
-                            className="h-8 text-xs"
+                            className="h-8 px-2.5 text-xs bg-background"
                           >
-                            Previous
+                            &larr; Prev
                           </Button>
-                          {getPageNumbers(rfqPage, rfqTotalPages).map((pageNum, idx) => {
-                            if (pageNum === "...") {
-                              return (
-                                <span
-                                  key={`ell-${idx}`}
-                                  className="text-muted-foreground px-1.5 text-xs select-none"
-                                >
-                                  ...
-                                </span>
-                              );
-                            }
-                            return (
+                          {getPageNumbers(rfqPage, rfqTotalPages).map((pageNum, idx) =>
+                            pageNum === "..." ? (
+                              <span key={`ell-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                                …
+                              </span>
+                            ) : (
                               <Button
-                                key={pageNum}
+                                key={`rfq-pg-${pageNum}`}
                                 variant={rfqPage === pageNum ? "default" : "outline"}
                                 size="sm"
                                 onClick={() => setRfqPage(pageNum as number)}
-                                className="h-8 w-8 text-xs p-0"
+                                className={cn(
+                                  "h-8 w-8 p-0 text-xs",
+                                  rfqPage === pageNum
+                                    ? "bg-primary text-primary-foreground font-semibold"
+                                    : "bg-background hover:bg-muted"
+                                )}
                               >
                                 {pageNum}
                               </Button>
-                            );
-                          })}
+                            )
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setRfqPage((p) => Math.min(rfqTotalPages, p + 1))}
                             disabled={rfqPage === rfqTotalPages}
-                            className="h-8 text-xs"
+                            className="h-8 px-2.5 text-xs bg-background"
                           >
-                            Next
+                            Next &rarr;
                           </Button>
                         </div>
                       </div>
@@ -1036,9 +1044,9 @@ function VendorsPage() {
 
           {/* QUOTATIONS TAB */}
           <TabsContent value="bids" className="space-y-6">
-            <Card className="border-border/70 shadow-soft">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+            <Card className="border-border/70 shadow-sm bg-card overflow-hidden">
+              <CardHeader className="p-5 pb-3 border-b bg-muted/15">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <CardTitle className="font-serif text-base font-bold">
                       Received Vendor Quotations
@@ -1050,7 +1058,7 @@ function VendorsPage() {
                   {canManage && (
                     <Button
                       size="sm"
-                      className="gap-1 text-xs h-8"
+                      className="gap-1.5 text-xs h-8 bg-primary text-primary-foreground hover:bg-primary/95"
                       onClick={() => setAddQuoteOpen(true)}
                     >
                       <Plus className="size-3.5" /> Submit Quote
@@ -1062,13 +1070,13 @@ function VendorsPage() {
                 {isLoading ? (
                   <div className="p-6 space-y-3">
                     {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="h-16 animate-pulse bg-muted rounded" />
+                      <div key={i} className="h-16 animate-pulse bg-muted rounded-lg" />
                     ))}
                   </div>
                 ) : !quotations.length ? (
                   <div className="p-12 text-center text-muted-foreground">
                     <Send className="size-10 mx-auto opacity-30 mb-2" />
-                    <p className="text-sm font-medium">No quotations submitted yet</p>
+                    <p className="text-sm font-medium text-foreground">No quotations submitted yet</p>
                   </div>
                 ) : (
                   <>
@@ -1078,13 +1086,13 @@ function VendorsPage() {
                           key={q.id}
                           className="p-4 flex flex-wrap items-center justify-between gap-3 hover:bg-muted/20 transition-colors"
                         >
-                          <div className="space-y-1 min-w-0 max-w-lg">
-                            <div className="flex items-center gap-2">
-                              <span className="font-serif font-bold text-sm">{q.vendorName}</span>
+                          <div className="space-y-1.5 min-w-0 max-w-lg">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-serif font-bold text-sm text-foreground">{q.vendorName}</span>
                               <QuoteStatusBadge status={q.status} />
                               {q.quotationNumber && (
-                                <span className="font-mono text-[10px] text-muted-foreground">
-                                  {q.quotationNumber}
+                                <span className="font-mono text-xs text-muted-foreground">
+                                  #{q.quotationNumber}
                                 </span>
                               )}
                             </div>
@@ -1095,12 +1103,12 @@ function VendorsPage() {
                               </div>
                             )}
                             {q.deliveryTimeline && (
-                              <div className="text-[11px] text-muted-foreground">
-                                Timeline: {q.deliveryTimeline}
+                              <div className="text-xs text-muted-foreground">
+                                Timeline: <span className="font-medium">{q.deliveryTimeline}</span>
                               </div>
                             )}
                             {q.notes && (
-                              <p className="text-[11px] text-muted-foreground italic">{q.notes}</p>
+                              <p className="text-xs text-muted-foreground italic">{q.notes}</p>
                             )}
                           </div>
 
@@ -1118,61 +1126,52 @@ function VendorsPage() {
                     </div>
 
                     {quoteTotalPages > 1 && (
-                      <div className="flex items-center justify-between border-t border-border/40 pt-4 mt-6">
-                        <p className="text-xs text-muted-foreground">
-                          Showing{" "}
-                          <span className="font-medium text-foreground">
-                            {(quotePage - 1) * quoteItemsPerPage + 1}
-                          </span>{" "}
-                          to{" "}
-                          <span className="font-medium text-foreground">
-                            {Math.min(quotePage * quoteItemsPerPage, quotations.length)}
-                          </span>{" "}
-                          of{" "}
-                          <span className="font-medium text-foreground">{quotations.length}</span>{" "}
-                          quotations
-                        </p>
-                        <div className="flex items-center gap-1">
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t p-4 bg-muted/10">
+                        <span className="text-xs text-muted-foreground">
+                          Showing {(quotePage - 1) * quoteItemsPerPage + 1} &ndash;{" "}
+                          {Math.min(quotePage * quoteItemsPerPage, quotations.length)} of{" "}
+                          {quotations.length} quotations
+                        </span>
+                        <div className="flex items-center gap-1.5">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setQuotePage((p) => Math.max(1, p - 1))}
                             disabled={quotePage === 1}
-                            className="h-8 text-xs"
+                            className="h-8 px-2.5 text-xs bg-background"
                           >
-                            Previous
+                            &larr; Prev
                           </Button>
-                          {getPageNumbers(quotePage, quoteTotalPages).map((pageNum, idx) => {
-                            if (pageNum === "...") {
-                              return (
-                                <span
-                                  key={`ell-${idx}`}
-                                  className="text-muted-foreground px-1.5 text-xs select-none"
-                                >
-                                  ...
-                                </span>
-                              );
-                            }
-                            return (
+                          {getPageNumbers(quotePage, quoteTotalPages).map((pageNum, idx) =>
+                            pageNum === "..." ? (
+                              <span key={`ell-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                                …
+                              </span>
+                            ) : (
                               <Button
-                                key={pageNum}
+                                key={`quote-pg-${pageNum}`}
                                 variant={quotePage === pageNum ? "default" : "outline"}
                                 size="sm"
                                 onClick={() => setQuotePage(pageNum as number)}
-                                className="h-8 w-8 text-xs p-0"
+                                className={cn(
+                                  "h-8 w-8 p-0 text-xs",
+                                  quotePage === pageNum
+                                    ? "bg-primary text-primary-foreground font-semibold"
+                                    : "bg-background hover:bg-muted"
+                                )}
                               >
                                 {pageNum}
                               </Button>
-                            );
-                          })}
+                            )
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setQuotePage((p) => Math.min(quoteTotalPages, p + 1))}
                             disabled={quotePage === quoteTotalPages}
-                            className="h-8 text-xs"
+                            className="h-8 px-2.5 text-xs bg-background"
                           >
-                            Next
+                            Next &rarr;
                           </Button>
                         </div>
                       </div>
@@ -1185,9 +1184,9 @@ function VendorsPage() {
 
           {/* PURCHASE ORDERS TAB */}
           <TabsContent value="pos" className="space-y-6">
-            <Card className="border-border/70 shadow-soft">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
+            <Card className="border-border/70 shadow-sm bg-card overflow-hidden">
+              <CardHeader className="p-5 pb-3 border-b bg-muted/15">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <CardTitle className="font-serif text-base font-bold">
                       Purchase Orders (POs)
@@ -1199,7 +1198,7 @@ function VendorsPage() {
                   {canManage && (
                     <Button
                       size="sm"
-                      className="gap-1 text-xs h-8"
+                      className="gap-1.5 text-xs h-8 bg-primary text-primary-foreground hover:bg-primary/95"
                       onClick={() => setAddPoOpen(true)}
                     >
                       <Plus className="size-3.5" /> Issue PO
@@ -1211,13 +1210,13 @@ function VendorsPage() {
                 {isLoading ? (
                   <div className="p-6 space-y-3">
                     {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="h-16 animate-pulse bg-muted rounded" />
+                      <div key={i} className="h-16 animate-pulse bg-muted rounded-lg" />
                     ))}
                   </div>
                 ) : !purchaseOrders.length ? (
                   <div className="p-12 text-center text-muted-foreground">
                     <FileCheck className="size-10 mx-auto opacity-30 mb-2" />
-                    <p className="text-sm font-medium">No purchase orders issued yet</p>
+                    <p className="text-sm font-medium text-foreground">No purchase orders issued yet</p>
                   </div>
                 ) : (
                   <>
@@ -1234,7 +1233,7 @@ function VendorsPage() {
                               </span>
                               <Badge
                                 variant="outline"
-                                className="text-[10px] bg-emerald-500/10 text-emerald-600 border-transparent capitalize"
+                                className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 capitalize"
                               >
                                 {po.status}
                               </Badge>
@@ -1243,13 +1242,13 @@ function VendorsPage() {
                               Vendor: {po.vendorName}
                             </div>
                             {po.notes && (
-                              <p className="text-[11px] text-muted-foreground">{po.notes}</p>
+                              <p className="text-xs text-muted-foreground">{po.notes}</p>
                             )}
                           </div>
 
                           <div className="text-right">
                             <div className="text-[10px] text-muted-foreground">PO Amount</div>
-                            <div className="font-serif font-bold text-base">
+                            <div className="font-serif font-bold text-base text-foreground">
                               {formatCurrency(po.amount)}
                             </div>
                             <div className="text-[10px] text-muted-foreground">{po.createdAt}</div>
@@ -1259,63 +1258,52 @@ function VendorsPage() {
                     </div>
 
                     {poTotalPages > 1 && (
-                      <div className="flex items-center justify-between border-t border-border/40 pt-4 mt-6">
-                        <p className="text-xs text-muted-foreground">
-                          Showing{" "}
-                          <span className="font-medium text-foreground">
-                            {(poPage - 1) * poItemsPerPage + 1}
-                          </span>{" "}
-                          to{" "}
-                          <span className="font-medium text-foreground">
-                            {Math.min(poPage * poItemsPerPage, purchaseOrders.length)}
-                          </span>{" "}
-                          of{" "}
-                          <span className="font-medium text-foreground">
-                            {purchaseOrders.length}
-                          </span>{" "}
-                          purchase orders
-                        </p>
-                        <div className="flex items-center gap-1">
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t p-4 bg-muted/10">
+                        <span className="text-xs text-muted-foreground">
+                          Showing {(poPage - 1) * poItemsPerPage + 1} &ndash;{" "}
+                          {Math.min(poPage * poItemsPerPage, purchaseOrders.length)} of{" "}
+                          {purchaseOrders.length} purchase orders
+                        </span>
+                        <div className="flex items-center gap-1.5">
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setPoPage((p) => Math.max(1, p - 1))}
                             disabled={poPage === 1}
-                            className="h-8 text-xs"
+                            className="h-8 px-2.5 text-xs bg-background"
                           >
-                            Previous
+                            &larr; Prev
                           </Button>
-                          {getPageNumbers(poPage, poTotalPages).map((pageNum, idx) => {
-                            if (pageNum === "...") {
-                              return (
-                                <span
-                                  key={`ell-${idx}`}
-                                  className="text-muted-foreground px-1.5 text-xs select-none"
-                                >
-                                  ...
-                                </span>
-                              );
-                            }
-                            return (
+                          {getPageNumbers(poPage, poTotalPages).map((pageNum, idx) =>
+                            pageNum === "..." ? (
+                              <span key={`ell-${idx}`} className="px-2 text-muted-foreground text-xs select-none">
+                                …
+                              </span>
+                            ) : (
                               <Button
-                                key={pageNum}
+                                key={`po-pg-${pageNum}`}
                                 variant={poPage === pageNum ? "default" : "outline"}
                                 size="sm"
                                 onClick={() => setPoPage(pageNum as number)}
-                                className="h-8 w-8 text-xs p-0"
+                                className={cn(
+                                  "h-8 w-8 p-0 text-xs",
+                                  poPage === pageNum
+                                    ? "bg-primary text-primary-foreground font-semibold"
+                                    : "bg-background hover:bg-muted"
+                                )}
                               >
                                 {pageNum}
                               </Button>
-                            );
-                          })}
+                            )
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setPoPage((p) => Math.min(poTotalPages, p + 1))}
                             disabled={poPage === poTotalPages}
-                            className="h-8 text-xs"
+                            className="h-8 px-2.5 text-xs bg-background"
                           >
-                            Next
+                            Next &rarr;
                           </Button>
                         </div>
                       </div>
@@ -1662,12 +1650,12 @@ function VendorsPage() {
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Select RFQ" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[300px]">
                   {rfqs
                     .filter((r) => r.status === "draft" || r.status === "sent")
-                    .map((r: { id: string; title: string }) => (
+                    .map((r: { id: string; title: string; budgetAmount: number }) => (
                       <SelectItem key={r.id} value={r.id} className="text-xs">
-                        {r.title}
+                        {r.title} {r.budgetAmount > 0 ? `(Budget: ${formatCurrency(r.budgetAmount)})` : ""}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -1680,10 +1668,10 @@ function VendorsPage() {
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Select Vendor" />
                 </SelectTrigger>
-                <SelectContent>
-                  {vendors.map((v: { id: string; name: string }) => (
+                <SelectContent className="max-h-[300px]">
+                  {vendors.map((v) => (
                     <SelectItem key={v.id} value={v.id} className="text-xs">
-                      {v.name}
+                      {v.name} &bull; {CATEGORIES.find((c) => c.value === v.category)?.label ?? v.category} {v.address ? `(${v.address})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1864,10 +1852,10 @@ function VendorsPage() {
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="Select Vendor" />
                 </SelectTrigger>
-                <SelectContent>
-                  {vendors.map((v: { id: string; name: string }) => (
+                <SelectContent className="max-h-[300px]">
+                  {vendors.map((v) => (
                     <SelectItem key={v.id} value={v.id} className="text-xs">
-                      {v.name}
+                      {v.name} &bull; {CATEGORIES.find((c) => c.value === v.category)?.label ?? v.category} {v.address ? `(${v.address})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

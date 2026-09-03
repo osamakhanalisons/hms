@@ -11,6 +11,11 @@ import {
   getTenantScoping,
 } from "./auth-helper";
 import { requirePermission } from "./permissions";
+import { createNotification, NOTIFICATION_TYPES } from "../services/notification-service";
+import {
+  analyzeComplaintTextInternal,
+  detectDuplicateInternal,
+} from "./ai-complaints";
 
 export const getComplaintsFn = createServerFn({ method: "GET" })
   .validator(
@@ -143,6 +148,51 @@ export const createComplaintFn = createServerFn({ method: "POST" })
       ],
     );
 
+    // ── AI COMPLAINTS INTELLIGENCE HOOK ──
+    try {
+      // Check tenant settings
+      const [settingsRows] = (await db.query(
+        "SELECT auto_categorize, auto_priority, dup_threshold FROM ai_complaint_settings WHERE tenant_id = ? LIMIT 1",
+        [tenantId],
+      )) as any[];
+      const autoCat = settingsRows.length ? Boolean(settingsRows[0].auto_categorize) : true;
+      const autoPri = settingsRows.length ? Boolean(settingsRows[0].auto_priority) : true;
+      const dupThreshold = settingsRows.length ? Number(settingsRows[0].dup_threshold) : 85;
+
+      const aiResult = analyzeComplaintTextInternal(data.title, data.description);
+      const dupResult = await detectDuplicateInternal(
+        db,
+        tenantId,
+        data.unitId,
+        data.title,
+        data.description,
+        dupThreshold,
+        id,
+      );
+
+      await db.query(
+        `UPDATE complaints
+         SET ai_category = ?,
+             ai_priority_suggestion = ?,
+             ai_confidence = ?,
+             is_duplicate = ?,
+             duplicate_of_id = ?,
+             similarity_score = ?
+         WHERE id = ?`,
+        [
+          autoCat ? aiResult.suggestedCategory : null,
+          autoPri ? aiResult.suggestedPriority : null,
+          aiResult.confidence,
+          dupResult.isDuplicate ? 1 : 0,
+          dupResult.duplicateOfId,
+          dupResult.similarityScore,
+          id,
+        ],
+      );
+    } catch (aiErr) {
+      console.warn("[Complaints:AI] Non-blocking AI analysis error:", aiErr);
+    }
+
     return { id };
   });
 
@@ -164,10 +214,32 @@ export const assignComplaintFn = createServerFn({ method: "POST" })
     }
 
     const db = getDb();
+
+    // Fetch complaint info to notify resident
+    const [cRows] = (await db.query(
+      "SELECT submitted_by, title FROM complaints WHERE id = ? AND tenant_id = ?",
+      [data.complaintId, tenantId],
+    )) as any[];
+
     await db.query(
       "UPDATE complaints SET assigned_to = ?, status = 'assigned' WHERE id = ? AND tenant_id = ?",
       [data.assignedTo, data.complaintId, tenantId],
     );
+
+    if (cRows.length > 0 && cRows[0].submitted_by) {
+      try {
+        await createNotification({
+          userId: cRows[0].submitted_by,
+          tenantId,
+          type: NOTIFICATION_TYPES.MAINTENANCE_UPDATE,
+          title: "Maintenance Request Assigned",
+          message: `Your maintenance request "${cRows[0].title}" has been assigned to a technician.`,
+          data: { complaintId: data.complaintId, status: "assigned", assignedTo: data.assignedTo },
+        });
+      } catch (notifErr) {
+        console.error("[ComplaintNotification] Error notifying resident of assignment:", notifErr);
+      }
+    }
 
     return { success: true };
   });
@@ -207,6 +279,38 @@ export const updateComplaintStatusFn = createServerFn({ method: "POST" })
     query += " WHERE id = ? AND tenant_id = ?";
     params.push(data.complaintId, tenantId);
 
+    // Fetch complaint info before update
+    const [cRows] = (await db.query(
+      "SELECT submitted_by, title FROM complaints WHERE id = ? AND tenant_id = ?",
+      [data.complaintId, tenantId],
+    )) as any[];
+
     await db.query(query, params);
+
+    if (cRows.length > 0 && cRows[0].submitted_by) {
+      try {
+        let notifTitle = "Maintenance Request Updated";
+        let notifMessage = `Your maintenance request "${cRows[0].title}" status has been updated to ${data.status}.`;
+        if (data.status === "in_progress") {
+          notifTitle = "Maintenance Work Started";
+          notifMessage = `Work has started on your maintenance request "${cRows[0].title}".`;
+        } else if (data.status === "resolved" || data.status === "closed") {
+          notifTitle = "Maintenance Request Completed";
+          notifMessage = `Your maintenance request "${cRows[0].title}" has been completed.`;
+        }
+
+        await createNotification({
+          userId: cRows[0].submitted_by,
+          tenantId,
+          type: NOTIFICATION_TYPES.MAINTENANCE_UPDATE,
+          title: notifTitle,
+          message: notifMessage,
+          data: { complaintId: data.complaintId, status: data.status },
+        });
+      } catch (notifErr) {
+        console.error("[ComplaintNotification] Error notifying resident of status change:", notifErr);
+      }
+    }
+
     return { success: true };
   });

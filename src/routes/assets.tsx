@@ -50,6 +50,7 @@ import {
   updateAssetAmcFn,
   type AssetItem,
 } from "@/lib/api/assets";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/assets")({
   head: () => ({
@@ -104,27 +105,27 @@ function KpiCard({
   loading?: boolean;
 }) {
   const toneClass = {
-    default: "text-primary bg-primary/10",
-    success: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-    destructive: "text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-    warning: "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
-    info: "text-blue-600 bg-blue-50 dark:bg-blue-950/30",
+    default: "text-primary bg-primary/10 border-primary/20",
+    success: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
+    destructive: "text-rose-600 bg-rose-500/10 border-rose-500/20",
+    warning: "text-amber-600 bg-amber-500/10 border-amber-500/20",
+    info: "text-sky-600 bg-sky-500/10 border-sky-500/20",
   }[tone];
   return (
-    <Card className="border-border/70 shadow-soft">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-            {loading ? (
-              <div className="mt-2 h-7 w-24 animate-pulse rounded-md bg-muted" />
-            ) : (
-              <p className="mt-1 font-serif text-2xl font-bold tracking-tight">{value}</p>
-            )}
-          </div>
-          <div className={`rounded-lg p-2.5 ${toneClass}`}>
-            <Icon className="size-5" />
-          </div>
+    <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden">
+      <CardContent className="p-4 sm:p-5 flex items-center justify-between gap-3">
+        <div className="space-y-1 min-w-0 flex-1">
+          <p className="text-xs font-medium text-muted-foreground truncate" title={label}>{label}</p>
+          {loading ? (
+            <div className="mt-1 h-7 w-20 animate-pulse rounded-md bg-muted" />
+          ) : (
+            <p className="font-serif text-lg sm:text-xl lg:text-[1.35rem] font-bold tracking-tight text-foreground truncate" title={value}>
+              {value}
+            </p>
+          )}
+        </div>
+        <div className={cn("grid size-10 sm:size-11 place-items-center rounded-xl border shrink-0", toneClass)}>
+          <Icon className="size-4 sm:size-5" />
         </div>
       </CardContent>
     </Card>
@@ -354,41 +355,52 @@ function AssetsPage() {
     <AppShell
       title="Asset Register"
       subtitle="Equipment, warranty tracking and AMC contract management"
-      actions={
-        <div className="flex items-center gap-2">
-          {canManage && (
-            <Button size="sm" className="gap-1.5 h-8 text-xs" onClick={() => setAddOpen(true)}>
-              <Plus className="size-3.5" /> Register Asset
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs"
-            onClick={() => refetch()}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={`size-3 text-muted-foreground ${isRefetching ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-      }
     >
-      <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-8 sm:py-10">
-        {/* Page header */}
-        <header className="flex items-center gap-3">
-          <div className="grid size-11 place-items-center rounded-md bg-surface border border-border/60">
-            <Package className="size-5 text-primary" />
-          </div>
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-              Operations · Equipment
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-8 sm:py-8">
+        {/* Page Header & Action Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+          <div className="flex items-center gap-3">
+            <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+              <Package className="size-5" />
             </div>
-            <h1 className="font-serif text-2xl font-bold tracking-tight sm:text-3xl">
-              Society Asset Register
-            </h1>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-serif text-2xl font-bold tracking-tight text-foreground">
+                  Society Asset Register
+                </h1>
+                <Badge variant="secondary" className="font-mono text-xs font-normal">
+                  {assets.length} assets
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Equipment, warranty tracking and AMC contract management
+              </p>
+            </div>
           </div>
-        </header>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs bg-background"
+              onClick={() => refetch()}
+              disabled={isRefetching}
+            >
+              <RefreshCw className={cn("size-3.5", isRefetching && "animate-spin")} />
+              <span>Refresh</span>
+            </Button>
+            {canManage && (
+              <Button
+                size="sm"
+                className="gap-1.5 h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus className="size-4" />
+                <span>Register Asset</span>
+              </Button>
+            )}
+          </div>
+        </div>
 
         {/* Error banner */}
         {isError && (
@@ -403,7 +415,7 @@ function AssetsPage() {
         )}
 
         {/* KPI Cards */}
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <KpiCard label="Total Assets" value={String(summary?.totalAssets ?? 0)} icon={Package} loading={isLoading} />
           <KpiCard label="Active Equipment" value={String(summary?.activeAssets ?? 0)} icon={CheckCircle2} tone="success" loading={isLoading} />
           <KpiCard label="Under Maintenance" value={String(summary?.underMaintenanceAssets ?? 0)} icon={Wrench} tone={(summary?.underMaintenanceAssets ?? 0) > 0 ? "warning" : "default"} loading={isLoading} />
@@ -412,20 +424,20 @@ function AssetsPage() {
         </section>
 
         {/* Filters */}
-        <Card className="border-border/70 shadow-soft p-4">
+        <Card className="border-border/70 shadow-sm p-4 bg-card">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search asset name, serial, location..."
-                className="h-9 pl-9 text-xs"
+                className="h-9 pl-9 text-xs bg-background"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-9 w-44 text-xs">
+              <SelectTrigger className="h-9 w-44 text-xs bg-background">
                 <Filter className="mr-1.5 size-3.5 text-muted-foreground" />
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
@@ -438,7 +450,7 @@ function AssetsPage() {
             </Select>
 
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 w-40 text-xs">
+              <SelectTrigger className="h-9 w-40 text-xs bg-background">
                 <Sliders className="mr-1.5 size-3.5 text-muted-foreground" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -452,7 +464,7 @@ function AssetsPage() {
             </Select>
 
             <Select value={amcFilter} onValueChange={setAmcFilter}>
-              <SelectTrigger className="h-9 w-40 text-xs">
+              <SelectTrigger className="h-9 w-40 text-xs bg-background">
                 <Settings2 className="mr-1.5 size-3.5 text-muted-foreground" />
                 <SelectValue placeholder="AMC Status" />
               </SelectTrigger>
@@ -631,19 +643,26 @@ function AssetsPage() {
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-serif text-lg">Register Society Asset</DialogTitle>
-            <DialogDescription className="text-xs">Add equipment to the asset register with warranty and AMC details.</DialogDescription>
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                <Package className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="font-serif text-lg font-bold">Register Society Asset</DialogTitle>
+                <DialogDescription className="text-xs">Add equipment to the asset register with warranty and AMC details.</DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <form onSubmit={handleRegisterAsset} className="space-y-4">
+          <form onSubmit={handleRegisterAsset} className="space-y-4 pt-2">
             {addError && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{addError}</div>}
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Asset Name *</Label>
+                <Label className="text-xs font-medium">Asset Name *</Label>
                 <Input placeholder="e.g. Generator Unit 1, Elevator Motor" className="h-9 text-xs" value={addName} onChange={(e) => setAddName(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Category</Label>
+                <Label className="text-xs font-medium">Category</Label>
                 <Select value={addCategory} onValueChange={setAddCategory}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -655,82 +674,104 @@ function AssetsPage() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-xs">Location</Label>
-                <Input placeholder="e.g. Basement, Rooftop" className="h-9 text-xs" value={addLocation} onChange={(e) => setAddLocation(e.target.value)} />
+                <Label className="text-xs font-medium">Location</Label>
+                <Input placeholder="e.g. Basement 1, Rooftop Power Room" className="h-9 text-xs" value={addLocation} onChange={(e) => setAddLocation(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Serial Number</Label>
-                <Input placeholder="Manufacturer serial" className="h-9 text-xs font-mono" value={addSerial} onChange={(e) => setAddSerial(e.target.value)} />
+                <Label className="text-xs font-medium">Serial Number</Label>
+                <Input placeholder="e.g. GEN-ASK-001" className="h-9 text-xs font-mono" value={addSerial} onChange={(e) => setAddSerial(e.target.value)} />
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Purchase Date</Label>
+                <Label className="text-xs font-medium">Purchase Date</Label>
                 <Input type="date" className="h-9 text-xs" value={addPurchaseDate} onChange={(e) => setAddPurchaseDate(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Purchase Cost (₹)</Label>
-                <Input type="number" step="0.01" className="h-9 text-xs font-mono" value={addPurchaseCost} onChange={(e) => setAddPurchaseCost(e.target.value)} />
+                <Label className="text-xs font-medium">Purchase Cost (₨)</Label>
+                <Input type="number" step="0.01" placeholder="0.00" className="h-9 text-xs font-mono" value={addPurchaseCost} onChange={(e) => setAddPurchaseCost(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Current Valuation (₹)</Label>
-                <Input type="number" step="0.01" className="h-9 text-xs font-mono" value={addCurrentVal} onChange={(e) => setAddCurrentVal(e.target.value)} />
+                <Label className="text-xs font-medium">Current Valuation (₨)</Label>
+                <Input type="number" step="0.01" placeholder="0.00" className="h-9 text-xs font-mono" value={addCurrentVal} onChange={(e) => setAddCurrentVal(e.target.value)} />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Warranty Expiry Date</Label>
+              <Label className="text-xs font-medium">Warranty Expiry Date</Label>
               <Input type="date" className="h-9 text-xs" value={addWarrantyExpiry} onChange={(e) => setAddWarrantyExpiry(e.target.value)} />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Notes</Label>
-              <Input placeholder="Optional notes about this asset" className="h-9 text-xs" value={addNotes} onChange={(e) => setAddNotes(e.target.value)} />
+              <Label className="text-xs font-medium">Notes & Remarks</Label>
+              <Input placeholder="Optional specifications or operational notes" className="h-9 text-xs" value={addNotes} onChange={(e) => setAddNotes(e.target.value)} />
             </div>
 
             {/* AMC Section */}
-            <div className="rounded-lg border border-border/60 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="addHasAmc"
-                  checked={addHasAmc}
-                  onChange={(e) => setAddHasAmc(e.target.checked)}
-                  className="rounded border-border"
-                />
-                <label htmlFor="addHasAmc" className="text-sm font-semibold">Annual Maintenance Contract (AMC)</label>
+            <div className="rounded-xl border border-border/70 p-4 space-y-3 bg-muted/20">
+              <div
+                onClick={() => setAddHasAmc(!addHasAmc)}
+                className="flex items-center justify-between cursor-pointer select-none"
+              >
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-foreground">Annual Maintenance Contract (AMC)</p>
+                  <p className="text-[11px] text-muted-foreground">Attach recurring maintenance vendor coverage</p>
+                </div>
+                <div
+                  className={cn(
+                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out",
+                    addHasAmc ? "bg-primary" : "bg-muted-foreground/30",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "pointer-events-none inline-block size-4 rounded-full bg-background shadow-lg ring-0 transition duration-200 ease-in-out",
+                      addHasAmc ? "translate-x-4" : "translate-x-0",
+                    )}
+                  />
+                </div>
               </div>
               {addHasAmc && (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">AMC Vendor</Label>
+                <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-medium">AMC Vendor</Label>
                     <Select value={addAmcVendorId} onValueChange={setAddAmcVendorId}>
                       <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Vendor" /></SelectTrigger>
-                      <SelectContent>
-                        {vendors.map((v) => <SelectItem key={v.id} value={v.id} className="text-xs">{v.name}</SelectItem>)}
+                      <SelectContent className="max-h-[300px]">
+                        {vendors.map((v) => (
+                          <SelectItem key={v.id} value={v.id} className="text-xs">
+                            <span className="font-medium">{v.name}</span>
+                            {(v.category || v.address) && (
+                              <span className="text-muted-foreground ml-1.5">
+                                &bull; {CATEGORIES.find((c) => c.value === v.category)?.label ?? v.category}
+                                {v.address ? ` (${v.address})` : ""}
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Annual AMC Cost (₹)</Label>
-                    <Input type="number" step="0.01" className="h-9 text-xs font-mono" value={addAmcCost} onChange={(e) => setAddAmcCost(e.target.value)} />
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-medium">Annual AMC Cost (₨)</Label>
+                    <Input type="number" step="0.01" placeholder="0.00" className="h-9 text-xs font-mono" value={addAmcCost} onChange={(e) => setAddAmcCost(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">AMC Start Date</Label>
+                    <Label className="text-xs font-medium">AMC Start Date</Label>
                     <Input type="date" className="h-9 text-xs" value={addAmcStartDate} onChange={(e) => setAddAmcStartDate(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">AMC Expiry Date</Label>
+                    <Label className="text-xs font-medium">AMC Expiry Date</Label>
                     <Input type="date" className="h-9 text-xs" value={addAmcExpiresAt} onChange={(e) => setAddAmcExpiresAt(e.target.value)} />
                   </div>
                 </div>
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="pt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setAddOpen(false)} disabled={isAddSubmitting}>Cancel</Button>
-              <Button type="submit" size="sm" disabled={isAddSubmitting}>{isAddSubmitting ? "Registering..." : "Register Asset"}</Button>
+              <Button type="submit" size="sm" disabled={isAddSubmitting} className="bg-primary text-primary-foreground">{isAddSubmitting ? "Registering..." : "Register Asset"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -740,26 +781,35 @@ function AssetsPage() {
       <Dialog open={!!statusAsset} onOpenChange={(o) => !o && setStatusAsset(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-serif text-lg">Change Equipment Status</DialogTitle>
-            <DialogDescription className="text-xs">Asset: <span className="font-semibold">{statusAsset?.name}</span></DialogDescription>
+            <div className="flex items-center gap-3">
+              <div className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary border border-primary/20 shrink-0">
+                <FileEdit className="size-4" />
+              </div>
+              <div>
+                <DialogTitle className="font-serif text-base font-bold">Equipment Status</DialogTitle>
+                <DialogDescription className="text-xs truncate max-w-[240px]">
+                  {statusAsset?.name}
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
-          <form onSubmit={handleStatusUpdate} className="space-y-4">
+          <form onSubmit={handleStatusUpdate} className="space-y-4 pt-1">
             {statusError && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{statusError}</div>}
             <div className="space-y-1.5">
-              <Label className="text-xs">New Status</Label>
+              <Label className="text-xs font-medium">Select Operational State</Label>
               <Select value={newStatus} onValueChange={(v) => setNewStatus(v as AssetItem["status"])}>
                 <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active" className="text-xs">✅ Active</SelectItem>
-                  <SelectItem value="under_maintenance" className="text-xs">🔧 Under Maintenance</SelectItem>
-                  <SelectItem value="decommissioned" className="text-xs">📦 Decommissioned</SelectItem>
-                  <SelectItem value="scrapped" className="text-xs">🗑️ Scrapped</SelectItem>
+                  <SelectItem value="active" className="text-xs">Active / Operational</SelectItem>
+                  <SelectItem value="under_maintenance" className="text-xs">Under Maintenance</SelectItem>
+                  <SelectItem value="decommissioned" className="text-xs">Decommissioned</SelectItem>
+                  <SelectItem value="scrapped" className="text-xs">Scrapped / Disposed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <DialogFooter>
+            <DialogFooter className="pt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setStatusAsset(null)} disabled={isStatusSubmitting}>Cancel</Button>
-              <Button type="submit" size="sm" disabled={isStatusSubmitting}>{isStatusSubmitting ? "Updating..." : "Update Status"}</Button>
+              <Button type="submit" size="sm" disabled={isStatusSubmitting} className="bg-primary text-primary-foreground">{isStatusSubmitting ? "Updating..." : "Update Status"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -767,53 +817,91 @@ function AssetsPage() {
 
       {/* Manage AMC Dialog */}
       <Dialog open={!!amcAsset} onOpenChange={(o) => !o && setAmcAsset(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-serif text-lg">Manage AMC Contract</DialogTitle>
-            <DialogDescription className="text-xs">Asset: <span className="font-semibold">{amcAsset?.name}</span></DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAmcUpdate} className="space-y-3">
-            {amcError && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{amcError}</div>}
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="amcEnabled"
-                checked={amcEnabled}
-                onChange={(e) => setAmcEnabled(e.target.checked)}
-                className="rounded border-border"
-              />
-              <label htmlFor="amcEnabled" className="text-sm font-semibold">AMC Contract Active</label>
+            <div className="flex items-center gap-3">
+              <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                <Settings2 className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="font-serif text-lg font-bold">Manage AMC Contract</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Asset: <span className="font-semibold text-foreground">{amcAsset?.name}</span>
+                </DialogDescription>
+              </div>
             </div>
+          </DialogHeader>
+          <form onSubmit={handleAmcUpdate} className="space-y-4 pt-2">
+            {amcError && <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">{amcError}</div>}
+
+            <div
+              onClick={() => setAmcEnabled(!amcEnabled)}
+              className={cn(
+                "flex items-center justify-between p-3.5 rounded-xl border cursor-pointer select-none transition-colors",
+                amcEnabled
+                  ? "bg-primary/5 border-primary/30"
+                  : "bg-muted/30 border-border/70",
+              )}
+            >
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-foreground">Annual Maintenance Contract (AMC)</p>
+                <p className="text-[11px] text-muted-foreground">Active recurring servicing & warranty contract</p>
+              </div>
+              <div
+                className={cn(
+                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out",
+                  amcEnabled ? "bg-primary" : "bg-muted-foreground/30",
+                )}
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block size-4 rounded-full bg-background shadow-lg ring-0 transition duration-200 ease-in-out",
+                    amcEnabled ? "translate-x-4" : "translate-x-0",
+                  )}
+                />
+              </div>
+            </div>
+
             {amcEnabled && (
-              <>
+              <div className="space-y-3 pt-1">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">AMC Vendor</Label>
+                  <Label className="text-xs font-medium">AMC Vendor</Label>
                   <Select value={amcVendorId} onValueChange={setAmcVendorId}>
                     <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Vendor" /></SelectTrigger>
-                    <SelectContent>
-                      {vendors.map((v) => <SelectItem key={v.id} value={v.id} className="text-xs">{v.name}</SelectItem>)}
+                    <SelectContent className="max-h-[300px]">
+                      {vendors.map((v) => (
+                        <SelectItem key={v.id} value={v.id} className="text-xs">
+                          <span className="font-medium">{v.name}</span>
+                          {(v.category || v.address) && (
+                            <span className="text-muted-foreground ml-1.5">
+                              &bull; {CATEGORIES.find((c) => c.value === v.category)?.label ?? v.category}
+                              {v.address ? ` (${v.address})` : ""}
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Annual AMC Cost (₹)</Label>
-                  <Input type="number" step="0.01" className="h-9 text-xs font-mono" value={amcCost} onChange={(e) => setAmcCost(e.target.value)} />
+                  <Label className="text-xs font-medium">Annual AMC Cost (₨)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00" className="h-9 text-xs font-mono" value={amcCost} onChange={(e) => setAmcCost(e.target.value)} />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">AMC Start Date</Label>
+                    <Label className="text-xs font-medium">AMC Start Date</Label>
                     <Input type="date" className="h-9 text-xs" value={amcStartDate} onChange={(e) => setAmcStartDate(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs">AMC Expiry Date</Label>
+                    <Label className="text-xs font-medium">AMC Expiry Date</Label>
                     <Input type="date" className="h-9 text-xs" value={amcExpiresAt} onChange={(e) => setAmcExpiresAt(e.target.value)} />
                   </div>
                 </div>
-              </>
+              </div>
             )}
-            <DialogFooter>
+            <DialogFooter className="pt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setAmcAsset(null)} disabled={isAmcSubmitting}>Cancel</Button>
-              <Button type="submit" size="sm" disabled={isAmcSubmitting}>{isAmcSubmitting ? "Saving..." : "Save AMC"}</Button>
+              <Button type="submit" size="sm" disabled={isAmcSubmitting} className="bg-primary text-primary-foreground">{isAmcSubmitting ? "Saving..." : "Save AMC Contract"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

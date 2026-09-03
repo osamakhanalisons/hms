@@ -468,7 +468,8 @@ export const updateUnitFn = createServerFn({ method: "POST" })
       bedrooms: z.number().int().optional(),
     })
   )
-  .handler(async ({ data, request }) => {
+  .handler(async (ctx: any) => {
+    const { data, request } = ctx;
     const { tenantId } = await requirePermission(request, "property", "edit");
     const db = getDb();
 
