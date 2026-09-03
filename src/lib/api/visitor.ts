@@ -317,7 +317,7 @@ export const getVisitorOverviewFn = createServerFn({ method: "GET" })
     // Units List for Pre-registration (limited to top 100 for fast select performance)
     let unitsQuery = `
       SELECT u.id, u.unit_number, p.full_name AS resident_name,
-             CONCAT_WS(' › ', s.name, bl.name, b.name, CONCAT('Unit ', u.unit_number)) AS full_path
+             CONCAT_WS(' › ', IF(s.city IS NOT NULL AND s.city != '', CONCAT(s.name, ' (', s.city, ')'), s.name), bl.name, b.name, CONCAT('Unit ', u.unit_number)) AS full_path
       FROM units u
       LEFT JOIN residents r ON r.unit_id = u.id AND r.is_current = TRUE
       LEFT JOIN persons p ON p.id = r.person_id

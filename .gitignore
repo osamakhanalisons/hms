@@ -8,8 +8,13 @@ pnpm-debug.log*
 lerna-debug.log*
 .env
 .env.*
-db_export.sql
-at_bms_backup.sql
+db_export.sql*
+at_bms_backup.sql*
+db_export.zip
+at_bms_backup.zip
+at_bms_dump.sql
+docs.md
+docs.txt
 
 node_modules
 dist
@@ -35,3 +40,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+at_bms_dump.sql

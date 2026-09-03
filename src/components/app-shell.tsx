@@ -148,7 +148,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                     <option value="all">All Societies (Platform-wide)</option>
                     {societies.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name} ({s.code ?? "no-code"})
+                        {s.name} {s.address ? `(${s.address})` : s.code ? `(${s.code})` : ""}
                       </option>
                     ))}
                   </select>
@@ -163,7 +163,7 @@ export function AppShell({ title, subtitle, actions, children }: AppShellProps) 
                   >
                     {assignedSocieties.map((s: any) => (
                       <option key={s.id} value={s.id}>
-                        {s.name} ({s.code ?? "no-code"})
+                        {s.name} {s.address ? `(${s.address})` : s.code ? `(${s.code})` : ""}
                       </option>
                     ))}
                   </select>

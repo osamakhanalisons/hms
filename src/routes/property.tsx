@@ -198,7 +198,7 @@ function PropertyPage() {
 
       return {
         id: s.id,
-        name: s.name,
+        name: s.city ? `${s.name} (${s.city})` : s.name,
         type: "society",
         children: [apartmentAreaNode, houseVillaAreaNode],
       };
@@ -278,11 +278,13 @@ function PropertyPage() {
 
   const handleEditNode = () => {
     if (!selectedNode) return;
-    setNewName(selectedNode.unitNumber || selectedNode.name || "");
     if (selectedNode.type === "society") {
       const soc = treeData.societies.find((s: any) => s.id === selectedNode.id);
+      setNewName(soc?.name || selectedNode.name || "");
       setAddress(soc?.address || "");
       setCity(soc?.city || "");
+    } else {
+      setNewName(selectedNode.unitNumber || selectedNode.name || "");
     }
     if (selectedNode.type === "unit") {
       const un = treeData.units.find((u: any) => u.id === selectedNode.id);
@@ -479,6 +481,36 @@ function PropertyPage() {
                       </p>
                     </div>
                   </div>
+
+                  {selectedNode.type === "society" && (() => {
+                    const soc = treeData.societies.find((s: any) => s.id === selectedNode.id);
+                    const socBlocks = treeData.blocks.filter((b: any) => b.society_id === selectedNode.id);
+                    const socUnits = treeData.units.filter((u: any) => u.society_id === selectedNode.id);
+                    return (
+                      <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                        {soc?.city && (
+                          <div>
+                            <div className="text-xs text-muted-foreground">City</div>
+                            <div className="text-sm font-semibold">{soc.city}</div>
+                          </div>
+                        )}
+                        {soc?.address && (
+                          <div>
+                            <div className="text-xs text-muted-foreground">Address</div>
+                            <div className="text-sm font-semibold">{soc.address}</div>
+                          </div>
+                        )}
+                        <div>
+                          <div className="text-xs text-muted-foreground">Total Blocks</div>
+                          <div className="text-sm font-semibold">{socBlocks.length}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Total Units</div>
+                          <div className="text-sm font-semibold">{socUnits.length}</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {selectedNode.type === "unit" && (() => {
                     const un = treeData.units.find((u: any) => u.id === selectedNode.id);

@@ -55,8 +55,8 @@ export const getUnitsFn = createServerFn({ method: "GET" })
 
     let query = `
       SELECT DISTINCT u.id, u.tenant_id, u.society_id, u.block_id, u.building_id, u.floor_id, u.unit_number, u.unit_type, u.area_sqft, u.bedrooms, u.status, 
-             s.name AS society_name, bl.name AS block_name, b.name AS building_name, f.floor_number,
-             CONCAT_WS(' › ', s.name, bl.name, b.name, CONCAT('Unit ', u.unit_number)) AS full_path
+             IF(s.city IS NOT NULL AND s.city != '', CONCAT(s.name, ' (', s.city, ')'), s.name) AS society_name, bl.name AS block_name, b.name AS building_name, f.floor_number,
+             CONCAT_WS(' › ', IF(s.city IS NOT NULL AND s.city != '', CONCAT(s.name, ' (', s.city, ')'), s.name), bl.name, b.name, CONCAT('Unit ', u.unit_number)) AS full_path
       FROM units u
       LEFT JOIN societies s ON s.id = u.society_id
       LEFT JOIN blocks bl ON bl.id = u.block_id

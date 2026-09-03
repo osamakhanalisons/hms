@@ -499,7 +499,14 @@ function SocietiesAdmin() {
                           {society.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-sm leading-tight">{society.name}</h3>
+                          <h3 className="font-semibold text-sm leading-tight">
+                            {society.name}
+                            {society.address && (
+                              <span className="text-muted-foreground font-normal text-xs ml-1.5">
+                                ({society.address})
+                              </span>
+                            )}
+                          </h3>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <code className="rounded bg-muted px-1.5 py-0.2 text-[9px] font-mono text-muted-foreground">
                               {society.code ?? "no-code"}
@@ -1153,7 +1160,7 @@ function SocietiesAdmin() {
                           className="size-4 rounded border-gray-300 text-primary focus:ring-primary"
                         />
                         <span>
-                          {s.name} <span className="text-muted-foreground font-mono text-[10px]">({s.code})</span>
+                          {s.name} {s.address ? <span className="text-muted-foreground text-[10px]">({s.address})</span> : s.code ? <span className="text-muted-foreground font-mono text-[10px]">({s.code})</span> : null}
                         </span>
                       </label>
                     );
